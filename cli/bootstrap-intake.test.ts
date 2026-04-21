@@ -106,7 +106,7 @@ test("buildBootstrapEvidenceBlock includes company name, warnings, and relevant 
     "# Pricing\n\nOur pricing uses annual retainers and premium strategy consulting.",
   );
   const report = await collectBootstrapIntake(repoRoot, "PulseOS");
-  const block = buildBootstrapEvidenceBlock(report, "102_Corporate_Strategy_and_Foundation/102.5_Pricing_Analysis.md");
+  const block = buildBootstrapEvidenceBlock(report, "000_Company_Memory/102_Corporate_Strategy_and_Foundation/102.5_Pricing_Analysis.md");
 
   assert.match(block, /Company Name:\*\* PulseOS/);
   assert.match(block, /Relevant Source Excerpts/);

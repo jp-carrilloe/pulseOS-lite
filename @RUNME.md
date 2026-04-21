@@ -23,7 +23,7 @@ It works like this:
 2. `bootstrap` reads that material and seeds the documents
 3. `chat` or daemon startup creates the SQL index and runs vectorization
 4. `@ARK` acts as the master orchestrator
-5. the system writes canonical company knowledge into the correct domain folders
+5. the system writes canonical company knowledge into the correct domain folders inside `000_Company_Memory`
 
 `@ARK` is the master agent for the repo.
 
@@ -36,6 +36,10 @@ Each major folder also has its own specialist agent:
 - Delivery owns delivery folders
 
 That is what bootstrap is doing behind the scenes: it is seeding the company brain into the correct agent-owned folders.
+
+The source intake area is `001_Source_Intake`.
+
+The canonical company brain is `000_Company_Memory`.
 
 ---
 
@@ -153,7 +157,7 @@ Those can be added later as additional source material or references when you wa
 You can also preserve useful AI working-session memory after bootstrap.
 
 Use this folder for durable project decisions, AI conversation summaries, and cross-project memory notes:
-- [501_Agents_and_Workflows/501.1_Company_Memory_and_Conversation_Logs](./501_Agents_and_Workflows/501.1_Company_Memory_and_Conversation_Logs)
+- [000_Company_Memory/501_Agents_and_Workflows/501.1_Company_Memory_and_Conversation_Logs](./000_Company_Memory/501_Agents_and_Workflows/501.1_Company_Memory_and_Conversation_Logs)
 
 This is useful when Codex, ChatGPT, Claude, Gemini, or another cloud AI workspace is helping you work on projects and you want important decisions or context to become part of the long-term company brain.
 
@@ -191,7 +195,7 @@ Bootstrap now checks for this before it starts generation.
 Meeting transcripts should **not** live in source intake by default.
 
 They should live here instead:
-- [103_Corporate_Operations/103.5_Internal_Meeting_Transcripts](./103_Corporate_Operations/103.5_Internal_Meeting_Transcripts)
+- [000_Company_Memory/103_Corporate_Operations/103.5_Internal_Meeting_Transcripts](./000_Company_Memory/103_Corporate_Operations/103.5_Internal_Meeting_Transcripts)
 
 Why:
 - `001_Source_Intake` is for bootstrap input

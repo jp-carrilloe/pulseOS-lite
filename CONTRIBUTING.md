@@ -30,8 +30,8 @@ Contributions are welcome — bug fixes, new domain templates, agent improvement
 ## Agent conventions
 
 - Every new domain folder needs a canonical agent file.
-- Any new agent must be registered in `501_Agents_and_Workflows/agent_registry.yaml` and the swarm index `README_Agent_Registry.md`.
-- Stubs in `502_Execution_Engine/agents/` are read-only pointers — edit the canonical in the domain folder.
+- Any new agent must be registered in `000_Company_Memory/501_Agents_and_Workflows/agent_registry.yaml` and the swarm index `README_Agent_Registry.md`.
+- Shortcuts in `000_Company_Memory/000_Agent_Shortcuts/` are read-only pointers — edit the canonical agent file in the domain folder.
 
 ## CLI conventions
 

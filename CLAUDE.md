@@ -79,19 +79,19 @@ When a request maps to a domain, load the canonical agent file before responding
 
 | Mention / Domain | Canonical Agent File |
 |:---|:---|
-| `@ARK`, cross-domain, orchestration | `101_System_Overview/Ark_Master_Agent/ARK_Master_Orchestrator.md` |
-| `@Strategy`, mission, vision, brand, pricing | `102_Corporate_Strategy_and_Foundation/102_Strategy_Agent.md` |
-| `@Operations`, SOPs, HR, vendors, processes | `103_Corporate_Operations/103_Operations_Agent.md` |
-| `@Finance`, budgets, models, forecasts | `104_Finance_and_Financial_Planning/104_Finance_Agent.md` |
-| `@Infrastructure`, architecture, APIs, security, compliance | `105_Technical_Infrastructure_and_Security/105_Infrastructure_Agent.md` |
-| `@Legal`, contracts, risk, regulatory | `106_Legal_and_Compliance/106_Legal_Agent.md` |
-| `@MarketIntel`, ICP, research, competitive | `201_Market_Intelligence_and_ICP/201_Market_Intel_Agent.md` |
-| `@GTM`, go-to-market, positioning, campaigns | `202_Go-to-Market_Strategy/202_GTM_Strategy_Agent.md` |
-| `@Sales`, enablement, sequences, outreach | `203_Sales_Enablement_Hub/203_Sales_Enablement_Agent.md` |
-| `@Delivery`, onboarding, client ops | `301_Client_Delivery_and_Onboarding/301_Delivery_Agent.md` |
-| `@Analytics`, reporting, KPIs, performance | `302_Analytics_and_Performance_Intelligence/302_Analytics_Agent.md` |
-| `@Partnerships`, BD, alliances | `401_Strategic_Partnerships/401_Partnership_Agent.md` |
-| `@Fundraising`, investors, decks, diligence | `402_Fundraising/402_Fundraising_Agent.md` |
+| `@ARK`, cross-domain, orchestration | `000_Company_Memory/101_System_Overview/Ark_Master_Agent/ARK_Master_Orchestrator.md` |
+| `@Strategy`, mission, vision, brand, pricing | `000_Company_Memory/102_Corporate_Strategy_and_Foundation/102_Strategy_Agent.md` |
+| `@Operations`, SOPs, HR, vendors, processes | `000_Company_Memory/103_Corporate_Operations/103_Operations_Agent.md` |
+| `@Finance`, budgets, models, forecasts | `000_Company_Memory/104_Finance_and_Financial_Planning/104_Finance_Agent.md` |
+| `@Infrastructure`, architecture, APIs, security, compliance | `000_Company_Memory/105_Technical_Infrastructure_and_Security/105_Infrastructure_Agent.md` |
+| `@Legal`, contracts, risk, regulatory | `000_Company_Memory/106_Legal_and_Compliance/106_Legal_Agent.md` |
+| `@MarketIntel`, ICP, research, competitive | `000_Company_Memory/201_Market_Intelligence_and_ICP/201_Market_Intel_Agent.md` |
+| `@GTM`, go-to-market, positioning, campaigns | `000_Company_Memory/202_Go-to-Market_Strategy/202_GTM_Strategy_Agent.md` |
+| `@Sales`, enablement, sequences, outreach | `000_Company_Memory/203_Sales_Enablement_Hub/203_Sales_Enablement_Agent.md` |
+| `@Delivery`, onboarding, client ops | `000_Company_Memory/301_Client_Delivery_and_Onboarding/301_Delivery_Agent.md` |
+| `@Analytics`, reporting, KPIs, performance | `000_Company_Memory/302_Analytics_and_Performance_Intelligence/302_Analytics_Agent.md` |
+| `@Partnerships`, BD, alliances | `000_Company_Memory/401_Strategic_Partnerships/401_Partnership_Agent.md` |
+| `@Fundraising`, investors, decks, diligence | `000_Company_Memory/402_Fundraising/402_Fundraising_Agent.md` |
 
 ---
 
@@ -100,15 +100,15 @@ When a request maps to a domain, load the canonical agent file before responding
 We use a **Double Link** system to ensure every agent is accessible both centrally and locally:
 
 1. **Canonical Source:** The authoritative agent file lives in its domain folder.
-   - e.g., `102_Corporate_Strategy_and_Foundation/102_Strategy_Agent.md`
+   - e.g., `000_Company_Memory/102_Corporate_Strategy_and_Foundation/102_Strategy_Agent.md`
 
-2. **Hub Link:** All agents are symlinked into `502_Execution_Engine/agents/` for central orchestration.
-   - e.g., `502_Execution_Engine/agents/Strategy_Agent.md` -> canonical
+2. **Shortcut Link:** Domain agents are symlinked into `000_Company_Memory/000_Agent_Shortcuts/` for central access.
+   - e.g., `000_Company_Memory/000_Agent_Shortcuts/102_Strategy.md` -> canonical
 
 3. **Local Link:** Every domain folder contains an `AGENT.md` symlink pointing to its canonical file.
-   - e.g., `102_Corporate_Strategy_and_Foundation/AGENT.md` -> `102_Strategy_Agent.md`
+   - e.g., `000_Company_Memory/102_Corporate_Strategy_and_Foundation/AGENT.md` -> `102_Strategy_Agent.md`
 
-4. **Priority Access:** Strategic agents have symlinks in the root `/agents/` folder (e.g., `agents/102_Strategy.md`) for high-priority terminal access.
+4. **Execution Tooling:** `000_Company_Memory/502_Execution_Engine/` contains local daemon and integration scaffolding. It does not contain private task-scoped agent prompt files.
 
 **Rule:** Always edit the **canonical source**. Symlinks will update automatically.
 

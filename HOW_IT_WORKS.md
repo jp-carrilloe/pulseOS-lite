@@ -11,6 +11,10 @@ The goal of this repo is simple:
 - `@ARK` routes the information into the correct domain folders
 - the domain agents then own and maintain those folders over time
 
+The two most important top-level folders are:
+- `001_Source_Intake` — where raw source material goes before seeding or ingestion
+- `000_Company_Memory` — where canonical, durable company knowledge lives after seeding or review
+
 ---
 
 ## Simple Recommended Flow
@@ -160,14 +164,14 @@ Examples:
 Each major folder has its own canonical agent.
 
 Examples:
-- `102_Corporate_Strategy_and_Foundation` is owned by `@Strategy`
-- `103_Corporate_Operations` is owned by `@Operations`
-- `104_Finance_and_Financial_Planning` is owned by `@Finance`
-- `105_Technical_Infrastructure_and_Security` is owned by `@Infrastructure`
-- `201_Market_Intelligence_and_ICP` is owned by `@MarketIntel`
-- `202_Go-to-Market_Strategy` is owned by `@GTM`
-- `203_Sales_Enablement_Hub` is owned by `@Sales`
-- `301_Client_Delivery_and_Onboarding` is owned by `@Delivery`
+- `000_Company_Memory/102_Corporate_Strategy_and_Foundation` is owned by `@Strategy`
+- `000_Company_Memory/103_Corporate_Operations` is owned by `@Operations`
+- `000_Company_Memory/104_Finance_and_Financial_Planning` is owned by `@Finance`
+- `000_Company_Memory/105_Technical_Infrastructure_and_Security` is owned by `@Infrastructure`
+- `000_Company_Memory/201_Market_Intelligence_and_ICP` is owned by `@MarketIntel`
+- `000_Company_Memory/202_Go-to-Market_Strategy` is owned by `@GTM`
+- `000_Company_Memory/203_Sales_Enablement_Hub` is owned by `@Sales`
+- `000_Company_Memory/301_Client_Delivery_and_Onboarding` is owned by `@Delivery`
 
 This matters because bootstrap does not write information randomly. It writes canonical outputs into the folders those agents own.
 
@@ -237,7 +241,7 @@ These should not be treated as default bootstrap intake:
 - internal meeting transcripts you want to preserve as records
 
 Meeting transcripts should live here instead:
-- [103_Corporate_Operations/103.5_Internal_Meeting_Transcripts](./103_Corporate_Operations/103.5_Internal_Meeting_Transcripts)
+- [000_Company_Memory/103_Corporate_Operations/103.5_Internal_Meeting_Transcripts](./000_Company_Memory/103_Corporate_Operations/103.5_Internal_Meeting_Transcripts)
 
 Why:
 - source intake is meant to seed the company brain
@@ -738,21 +742,21 @@ It is also not the step that creates the local SQL index or runs vectorization.
 Here is a simple mental model for where generated knowledge usually lands.
 
 - strategy, mission, positioning, pricing:
-  `102_Corporate_Strategy_and_Foundation`
+  `000_Company_Memory/102_Corporate_Strategy_and_Foundation`
 - operations, SOPs, internal process, meeting records:
-  `103_Corporate_Operations`
+  `000_Company_Memory/103_Corporate_Operations`
 - finance, budgets, financial planning:
-  `104_Finance_and_Financial_Planning`
+  `000_Company_Memory/104_Finance_and_Financial_Planning`
 - infrastructure, systems, security, technical operations:
-  `105_Technical_Infrastructure_and_Security`
+  `000_Company_Memory/105_Technical_Infrastructure_and_Security`
 - market research and ICP:
-  `201_Market_Intelligence_and_ICP`
+  `000_Company_Memory/201_Market_Intelligence_and_ICP`
 - GTM strategy:
-  `202_Go-to-Market_Strategy`
+  `000_Company_Memory/202_Go-to-Market_Strategy`
 - sales assets and enablement:
-  `203_Sales_Enablement_Hub`
+  `000_Company_Memory/203_Sales_Enablement_Hub`
 - delivery and onboarding:
-  `301_Client_Delivery_and_Onboarding`
+  `000_Company_Memory/301_Client_Delivery_and_Onboarding`
 
 If a piece of source material spans several areas, `@ARK` coordinates that routing.
 
@@ -865,7 +869,7 @@ Recommended pattern:
 6. Periodically route reviewed memories into the correct canonical domain folders.
 
 Use this folder for durable AI/project conversation memory:
-- [501_Agents_and_Workflows/501.1_Company_Memory_and_Conversation_Logs](./501_Agents_and_Workflows/501.1_Company_Memory_and_Conversation_Logs)
+- [000_Company_Memory/501_Agents_and_Workflows/501.1_Company_Memory_and_Conversation_Logs](./000_Company_Memory/501_Agents_and_Workflows/501.1_Company_Memory_and_Conversation_Logs)
 
 Example instruction for another project:
 
