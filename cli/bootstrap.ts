@@ -49,10 +49,11 @@ const SECTION_ORDER: Record<string, number> = {
   "402": 12,
   "501": 13,
   "502": 14,
+  "600": 15,
 };
 
 function sectionOrder(relativePath: string): number {
-  const match = relativePath.match(/^(\d{3})/);
+  const match = relativePath.match(/(?:^|\/)(\d{3})/);
   if (!match) return 99;
   return SECTION_ORDER[match[1]] ?? 99;
 }
@@ -104,7 +105,7 @@ interface BootstrapProvider {
 // Only numbered content docs (e.g. 102.1_Mission.md, 203.2_Sales.md)
 // Skip: agent files, READMEs, system docs, cli dir
 const CONTENT_FILE_PATTERN = /\/\d+\.\d+[^/]*\.md$/;
-const SKIP_DIRS = new Set(["node_modules", ".git", "cli"]);
+const SKIP_DIRS = new Set(["node_modules", ".git", "cli", "600_Projects"]);
 
 async function findTemplateFiles(dir: string, base: string, results: TemplateFile[]): Promise<void> {
   let entries: any[];

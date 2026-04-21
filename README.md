@@ -50,7 +50,7 @@ We don't do "templates." we do **Alpha**. Every file in this repo is a living co
 
    After bootstrap, you can keep enriching the company brain with additional information from external systems such as databases, CRM exports, email threads, and chat conversations.
 
-   Internal meeting transcripts should not be part of source intake by default. Store them under [`103_Corporate_Operations/103.5_Internal_Meeting_Transcripts`](./103_Corporate_Operations/103.5_Internal_Meeting_Transcripts/) when they become part of the operating system.
+   Internal meeting transcripts should not be part of source intake by default. Store them under [`000_Company_Memory/103_Corporate_Operations/103.5_Internal_Meeting_Transcripts`](./000_Company_Memory/103_Corporate_Operations/103.5_Internal_Meeting_Transcripts/) when they become part of the operating system.
 
 3. **Install and Bootstrap:**
    ```bash
@@ -61,6 +61,8 @@ We don't do "templates." we do **Alpha**. Every file in this repo is a living co
    ```bash
    npm run chat
    ```
+
+Canonical company memory lives under [`000_Company_Memory`](./000_Company_Memory/). Bootstrap and direct LLM seeding use the raw source material in `001_Source_Intake`, then write durable company knowledge into the numbered folders inside `000_Company_Memory`.
 
 Bootstrap now asks only for the company name, but only after it has confirmed that real source material exists. It then reads:
 - local files from [`001_Source_Intake/Data_Souces_Folder`](./001_Source_Intake/Data_Souces_Folder/)
@@ -152,7 +154,7 @@ Recommended pattern:
 - save important project decisions and conversation summaries back into the repo so the company memory improves over time
 
 Use this folder for durable AI/project conversation memory:
-- [`501_Agents_and_Workflows/501.1_Company_Memory_and_Conversation_Logs`](./501_Agents_and_Workflows/501.1_Company_Memory_and_Conversation_Logs/)
+- [`000_Company_Memory/501_Agents_and_Workflows/501.1_Company_Memory_and_Conversation_Logs`](./000_Company_Memory/501_Agents_and_Workflows/501.1_Company_Memory_and_Conversation_Logs/)
 
 Important:
 - cloud AI workspace access can read and update the Markdown company brain
@@ -168,28 +170,35 @@ For the full setup flow, process explanation, and agent structure, read **[@RUNM
 
 ## 🏗️ The Hybrid 100s Framework
 
+All core memory folders are grouped inside [`000_Company_Memory`](./000_Company_Memory/) so the repo root stays focused on onboarding, source intake, and local tooling.
+
 | Layer | Domain | canonical Agent |
 |:---|:---|:---|
-| **101** | [System Control](101_System_Overview/) | **@ARK** (Chief of Staff) |
-| **102** | [Corporate Strategy](102_Corporate_Strategy_and_Foundation/) | **@Strategy** |
-| **103** | [Operations Hub](103_Corporate_Operations/) | **@Operations** |
-| **104** | [Finance & Economy](104_Finance_and_Financial_Planning/) | **@Finance** |
-| **105** | [Tech & Infrastructure](105_Technical_Infrastructure_and_Security/) | **@Infrastructure** |
-| **106** | [Legal & Compliance](106_Legal_and_Compliance/) | **@Legal** |
-| **201** | [Market Intel](201_Market_Intelligence_and_ICP/) | **@MarketIntel** |
-| **202** | [GTM Strategy](202_Go-to-Market_Strategy/) | **@GTM** |
-| **203** | [Sales Enablement](203_Sales_Enablement_Hub/) | **@Sales** |
-| **502** | [Execution Engine](502_Execution_Engine/) | **@AUTONOMOUS** |
+| **101** | [System Control](000_Company_Memory/101_System_Overview/) | **@ARK** (Chief of Staff) |
+| **102** | [Corporate Strategy](000_Company_Memory/102_Corporate_Strategy_and_Foundation/) | **@Strategy** |
+| **103** | [Operations Hub](000_Company_Memory/103_Corporate_Operations/) | **@Operations** |
+| **104** | [Finance & Economy](000_Company_Memory/104_Finance_and_Financial_Planning/) | **@Finance** |
+| **105** | [Tech & Infrastructure](000_Company_Memory/105_Technical_Infrastructure_and_Security/) | **@Infrastructure** |
+| **106** | [Legal & Compliance](000_Company_Memory/106_Legal_and_Compliance/) | **@Legal** |
+| **201** | [Market Intel](000_Company_Memory/201_Market_Intelligence_and_ICP/) | **@MarketIntel** |
+| **202** | [GTM Strategy](000_Company_Memory/202_Go-to-Market_Strategy/) | **@GTM** |
+| **203** | [Sales Enablement](000_Company_Memory/203_Sales_Enablement_Hub/) | **@Sales** |
+| **301** | [Client Delivery](000_Company_Memory/301_Client_Delivery_and_Onboarding/) | **@Delivery** |
+| **302** | [Analytics](000_Company_Memory/302_Analytics_and_Performance_Intelligence/) | **@Analytics** |
+| **401** | [Partnerships](000_Company_Memory/401_Strategic_Partnerships/) | **@Partnerships** |
+| **402** | [Fundraising](000_Company_Memory/402_Fundraising/) | **@Fundraising** |
+| **502** | [Execution Engine](000_Company_Memory/502_Execution_Engine/) | **@AUTONOMOUS** |
+| **600** | [Projects](000_Company_Memory/600_Projects/) | **@ARK** |
 
 ---
 
 ## 🤖 The "Double Link" Agent Network
 
 We use a **Double Link** architecture to ensure agents are never more than one click away:
-- **Fast Call:** All domain agents are collected in the root [`/agents/`](./agents/) folder for instant terminal reference.
+- **Fast Call:** Domain agent shortcuts live in [`000_Company_Memory/000_Agent_Shortcuts/`](./000_Company_Memory/000_Agent_Shortcuts/) for instant terminal reference.
 - **Local Context:** Every domain folder has an `AGENT.md` link for local orchestration.
-- **Central Mesh:** All agents are indexed in [`502_Execution_Engine/agents/`](./502_Execution_Engine/agents/) for automated execution loops.
-- **Machine Registry:** A strictly formatted [`agent_registry.yaml`](./501_Agents_and_Workflows/agent_registry.yaml) acts as a machine-readable dictionary, enabling non-LLM external pipelines (like Make.com, local Python scripts, or GitHub Actions) to query and route exactly which agents exist without having to parse complex Markdown text.
+- **Execution Tooling:** [`000_Company_Memory/502_Execution_Engine/`](./000_Company_Memory/502_Execution_Engine/) holds execution infrastructure and integration scaffolding, not private task-agent prompts.
+- **Machine Registry:** A strictly formatted [`agent_registry.yaml`](./000_Company_Memory/501_Agents_and_Workflows/agent_registry.yaml) acts as a machine-readable dictionary, enabling non-LLM external pipelines (like Make.com, local Python scripts, or GitHub Actions) to query and route exactly which agents exist without having to parse complex Markdown text.
 
 ### The Lazy-Loader Libraries
 To prevent prompt-bloat, the system inherently supports separating actionable knowledge into dynamic registries:

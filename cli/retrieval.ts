@@ -516,8 +516,11 @@ function extractOwnerAgent(content: string): string | null {
 }
 
 function inferTaxonomyDomain(relativePath: string): string {
-  const [topLevel = "root"] = relativePath.split("/");
-  return topLevel;
+  const segments = relativePath.split("/");
+  if (segments[0] === "000_Company_Memory" && segments[1]) {
+    return segments[1];
+  }
+  return segments[0] || "root";
 }
 
 function buildSummary(title: string, content: string): string {

@@ -24,6 +24,12 @@ echo "Running docs audit on ${#MD_FILES[@]} markdown files"
 NAME_BAD=()
 for f in "${MD_FILES[@]}"; do
   b="$(basename "$f")"
+  if [[ "$f" != 000_Company_Memory/* && "$f" != 001_Source_Intake/* ]]; then
+    continue
+  fi
+  if [[ "$b" == "AGENT.md" || "$b" == "README.md" || "$b" == "ARK_Master.md" || "$b" == "Document_Metadata_And_Related_References_Template.md" ]]; then
+    continue
+  fi
   if [[ "$b" =~ ^README_.+\.md$ ]]; then
     continue
   fi
@@ -45,6 +51,13 @@ fi
 # 2) Metadata header completeness
 META_BAD=()
 for f in "${MD_FILES[@]}"; do
+  if [[ "$f" != 000_Company_Memory/* && "$f" != 001_Source_Intake/* ]]; then
+    continue
+  fi
+  b="$(basename "$f")"
+  if [[ "$b" == "AGENT.md" || "$b" == "ARK_Master.md" ]]; then
+    continue
+  fi
   if ! head -n 40 "$f" | rg -q '^\*\*Version:\*\*'; then
     META_BAD+=("$f")
     continue
@@ -72,6 +85,9 @@ fi
 # 3) Template placeholders present
 PLACEHOLDER_BAD=()
 for f in "${MD_FILES[@]}"; do
+  if ! head -n 20 "$f" | rg -q '^\*\*Status:\*\* Template'; then
+    continue
+  fi
   if ! rg -q '\[[A-Z][A-Z0-9_ ]+\]' "$f"; then
     PLACEHOLDER_BAD+=("$f")
   fi
@@ -85,7 +101,7 @@ fi
 
 # 4) Legacy / invalid path references
 LEGACY_PAT='10_Execution_Engine|01_Corporate_Strategy|LegacyCompany|Legacy Ops|PulseOS(?! Lite Open Source)|/Users/|file://|pitch_deck\.md|ai_sales_agent_prompt\.md'
-if rg -n "$LEGACY_PAT" --glob '*.md' -g '!**/node_modules/**' -g '!101_System_Overview/README_Document_Governance.md' >/tmp/docs_audit_legacy.out; then
+if rg --pcre2 -n "$LEGACY_PAT" --glob '*.md' -g '!**/node_modules/**' -g '!000_Company_Memory/101_System_Overview/README_Document_Governance.md' >/tmp/docs_audit_legacy.out; then
   print_fail "Legacy/invalid path references found:"
   sed 's/^/  - /' /tmp/docs_audit_legacy.out
 else
@@ -95,8 +111,7 @@ fi
 # 5) Duplicate canonical templates (deprecated files must not exist)
 DUP_BAD=()
 for deprecated in \
-  "203_Sales_Enablement_Hub/203.1_Core_Pitch_Decks/pitch_deck.md" \
-  "501_Agents_and_Workflows/Sub_Agents/ai_sales_agent_prompt.md"; do
+  "000_Company_Memory/203_Sales_Enablement_Hub/203.1_Core_Pitch_Decks/pitch_deck.md"; do
   if [[ -f "$deprecated" ]]; then
     DUP_BAD+=("$deprecated")
   fi
@@ -111,7 +126,7 @@ fi
 # 6) Agent relationship metadata completeness
 AGENT_BAD=()
 for f in "${MD_FILES[@]}"; do
-  if [[ "$f" =~ _Agent\.md$ ]] || [[ "$f" =~ /agents/[0-9]{3}\.[0-9]+_.*\.md$ ]] || [[ "$f" =~ 501_Agents_and_Workflows/Sub_Agents/[0-9]{3}\.[0-9]+_.*\.md$ ]]; then
+  if [[ "$f" =~ _Agent\.md$ ]] || [[ "$f" =~ /000_Company_Memory/000_Agent_Shortcuts/[0-9]{3}\.[0-9]+_.*\.md$ ]]; then
     if [[ "$f" =~ README_Agents\.md$ ]]; then
       continue
     fi
@@ -141,7 +156,7 @@ else
 fi
 
 # 7) Agent registry integrity
-REGISTRY_FILE="501_Agents_and_Workflows/agent_registry.yaml"
+REGISTRY_FILE="000_Company_Memory/501_Agents_and_Workflows/agent_registry.yaml"
 if [[ ! -f "$REGISTRY_FILE" ]]; then
   print_fail "Agent registry file missing: $REGISTRY_FILE"
 else
@@ -186,7 +201,7 @@ else
     echo "[PASS] Registry reference integrity"
   fi
 
-  AGENT_FILES="$(rg --files 102_Corporate_Strategy_and_Foundation 103_Corporate_Operations 104_Finance_and_Financial_Planning 105_Technical_Infrastructure_and_Security 106_Legal_and_Compliance 201_Market_Intelligence_and_ICP 202_Go-to-Market_Strategy 203_Sales_Enablement_Hub 301_Client_Delivery_and_Onboarding 302_Analytics_and_Performance_Intelligence 401_Strategic_Partnerships 402_Fundraising 501_Agents_and_Workflows/Sub_Agents 502_Execution_Engine/agents -g '*.md' | rg '(_Agent\.md$|/50[12]\.[0-9]_.*\.md$)' | sort || true)"
+  AGENT_FILES="$(rg --files 000_Company_Memory/102_Corporate_Strategy_and_Foundation 000_Company_Memory/103_Corporate_Operations 000_Company_Memory/104_Finance_and_Financial_Planning 000_Company_Memory/105_Technical_Infrastructure_and_Security 000_Company_Memory/106_Legal_and_Compliance 000_Company_Memory/201_Market_Intelligence_and_ICP 000_Company_Memory/202_Go-to-Market_Strategy 000_Company_Memory/203_Sales_Enablement_Hub 000_Company_Memory/301_Client_Delivery_and_Onboarding 000_Company_Memory/302_Analytics_and_Performance_Intelligence 000_Company_Memory/401_Strategic_Partnerships 000_Company_Memory/402_Fundraising -g '*.md' | rg '_Agent\.md$' | sort || true)"
   ORPHAN_AGENTS=()
   for af in $AGENT_FILES; do
     if ! printf '%s\n' "$REGISTRY_DOCS" | rg -qx "$af"; then

@@ -9,12 +9,12 @@ import { KnowledgeBaseIndex } from "./retrieval.js";
 
 async function createTempRepo() {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "company-ops-kb-"));
-  await fsp.mkdir(path.join(root, "102_Corporate_Strategy_and_Foundation"), { recursive: true });
+  await fsp.mkdir(path.join(root, "000_Company_Memory", "102_Corporate_Strategy_and_Foundation"), { recursive: true });
   await fsp.mkdir(path.join(root, "202_Go-to-Market_Strategy"), { recursive: true });
   await fsp.mkdir(path.join(root, "001_Source_Intake", "Data_Souces_Folder"), { recursive: true });
 
   await fsp.writeFile(
-    path.join(root, "102_Corporate_Strategy_and_Foundation", "102.5_Pricing_Analysis.md"),
+    path.join(root, "000_Company_Memory", "102_Corporate_Strategy_and_Foundation", "102.5_Pricing_Analysis.md"),
     `# Pricing Analysis
 
 **Status:** Active
@@ -54,7 +54,7 @@ test("indexes curated markdown docs and excludes source intake", async () => {
   const result = await index.sync();
   assert.equal(result.fileCount, 2);
   assert.deepEqual(index.listFiles(), [
-    "102_Corporate_Strategy_and_Foundation/102.5_Pricing_Analysis.md",
+    "000_Company_Memory/102_Corporate_Strategy_and_Foundation/102.5_Pricing_Analysis.md",
     "202_Go-to-Market_Strategy/202.1_GTM_Strategy.md",
   ]);
 
@@ -73,7 +73,7 @@ test("reindex updates documents without duplicating rows", async () => {
 
   await index.sync();
   await fsp.writeFile(
-    path.join(repoRoot, "102_Corporate_Strategy_and_Foundation", "102.5_Pricing_Analysis.md"),
+    path.join(repoRoot, "000_Company_Memory", "102_Corporate_Strategy_and_Foundation", "102.5_Pricing_Analysis.md"),
     `# Pricing Analysis
 
 **Status:** Active
@@ -101,7 +101,7 @@ test("heuristic retrieval finds the most relevant KB document", async () => {
   await index.ensureCurrent();
   const matches = await index.retrieve("How does our pricing and packaging work?");
 
-  assert.equal(matches[0]?.document.relativePath, "102_Corporate_Strategy_and_Foundation/102.5_Pricing_Analysis.md");
+  assert.equal(matches[0]?.document.relativePath, "000_Company_Memory/102_Corporate_Strategy_and_Foundation/102.5_Pricing_Analysis.md");
   assert.ok(matches[0]?.score >= matches[1]?.score);
 
   index.close();
