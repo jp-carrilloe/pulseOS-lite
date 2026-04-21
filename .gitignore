@@ -8,7 +8,17 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Production
+build/
 dist
+dist/
 dist-ssr
 *.local
 
@@ -22,3 +32,16 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Coding Agent State
+.claude/
+.codex/
+.gstack/
+cli/.pulseos-cli-state/
+cli/.pulseos-lite-cli-state/
+cli/.pulseos-lite-open-source-cli-state/
