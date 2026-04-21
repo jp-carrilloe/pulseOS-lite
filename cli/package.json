@@ -1,0 +1,32 @@
+{
+  "name": "pulseos-lite-open-source-cli",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "PulseOS Lite Open Source repo daemon — chat with your repo via Claude, OpenAI, or Gemini",
+  "scripts": {
+    "start": "node --import tsx/esm index.ts",
+    "chat": "node --import tsx/esm index.ts chat",
+    "chat:claude": "node --import tsx/esm index.ts chat --model claude",
+    "chat:openai": "node --import tsx/esm index.ts chat --model openai",
+    "chat:gemini": "node --import tsx/esm index.ts chat --model gemini",
+    "index": "node --import tsx/esm index-kb.ts",
+    "status": "node --import tsx/esm index.ts status",
+    "daemon:start": "node --import tsx/esm index.ts daemon start",
+    "daemon:stop": "node --import tsx/esm index.ts daemon stop",
+    "daemon:status": "node --import tsx/esm index.ts daemon status",
+    "bootstrap": "node --import tsx/esm bootstrap.ts",
+    "test": "node --import tsx/esm --test *.test.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@google/generative-ai": "^0.24.0",
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.7.9",
+    "openai": "^4.82.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
