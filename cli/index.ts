@@ -36,7 +36,7 @@ async function main(argv = process.argv.slice(2), env: NodeJS.ProcessEnv = proce
     switch (`${command ?? ""} ${subcommand ?? ""}`.trim()) {
       case "daemon start":
         await ensureRuntime(env);
-        process.stdout.write("Daemon started. It will create or refresh the SQL index and run vectorization in the background.\n");
+        process.stdout.write("Daemon started. It will use the existing SQLite index immediately. Run `npm run index` or `:reload` only when you want to refresh indexing/vectorization.\n");
         break;
       case "daemon stop":
         await stopDaemon(env);
@@ -73,7 +73,7 @@ pulseos-lite-open-source-cli — Chat with your PulseOS Lite Open Source repo us
 
 Workflow:
   npm run bootstrap          — seed the markdown documents
-  npm run chat               — start the daemon, create the SQL index, and run vectorization
+  npm run chat               — start the daemon and use the existing SQLite index
   npm run graph              — build and open the PulseOS Company Memory UI
 
 Usage:
@@ -87,7 +87,7 @@ Usage:
 Chat commands (type while in REPL):
   :model openai|claude|gemini  — switch AI model
   :reset                       — clear conversation history
-  :reload                      — re-index repo files and re-run vectorization
+  :reload                      — manually re-index repo files and re-run vectorization
   :files                       — list indexed files
   :status                      — daemon status
   :help                        — show this help
@@ -294,7 +294,7 @@ async function printWorkflowStatus(env: NodeJS.ProcessEnv): Promise<void> {
 async function printGraphUrl(env: NodeJS.ProcessEnv): Promise<void> {
   process.stdout.write("Building and starting the PulseOS Company Memory UI...\n");
   const state = await ensureRuntime(env);
-  const url = `http://127.0.0.1:${state.port}/graph?token=${encodeURIComponent(state.token)}`;
+  const url = `http://127.0.0.1:${state.port}/graph`;
   process.stdout.write(
     [
       "PulseOS Company Memory UI is ready.",
@@ -309,7 +309,7 @@ async function printGraphUrl(env: NodeJS.ProcessEnv): Promise<void> {
       "- Interaction: pan, zoom, fit, reset, and drag graph nodes without changing layout data.",
       "",
       "Saving a document refreshes the SQLite documents table and summary vectors so chat and graph retrieval stay current.",
-      "The URL includes a temporary token so unrelated local processes cannot casually read the graph or document endpoints.",
+      "The graph URL is a plain localhost page now, so you can refresh it directly while the daemon is running.",
     ].join("\n") + "\n",
   );
 }
@@ -332,7 +332,7 @@ async function runInteractiveChat(
 
   process.stdout.write("Starting pulseos-lite-open-source-cli daemon...\n");
   const state = await ensureRuntime(env);
-  process.stdout.write("Connected. The daemon creates or refreshes the SQL index and runs vectorization before chat is ready.\n\n");
+  process.stdout.write("Connected. The daemon is using the existing SQLite index. Run :reload only when you want to refresh indexing/vectorization.\n\n");
 
   const sessionId = "main";
 
@@ -457,7 +457,7 @@ async function handleReplCommand(
 function printWelcome(model: ModelName) {
   process.stdout.write("🚢 PulseOS Lite Open Source — Strategic Growth Engine\n");
   process.stdout.write(`Vibe: JP Standard | Model: ${model}\n`);
-  process.stdout.write("Workflow: bootstrap seeds documents; chat/daemon creates the SQL index and runs vectorization.\n");
+  process.stdout.write("Workflow: bootstrap seeds documents; chat/daemon reads the existing SQL index; :reload or npm run index refresh indexing/vectorization manually.\n");
   process.stdout.write("─".repeat(60) + "\n");
 }
 

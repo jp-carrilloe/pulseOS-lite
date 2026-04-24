@@ -21,9 +21,10 @@ This repo is a structured company brain.
 It works like this:
 1. you add real company source material
 2. `bootstrap` reads that material and seeds the documents
-3. `chat` or daemon startup creates the SQL index and runs vectorization
-4. `@ARK` acts as the master orchestrator
-5. the system writes canonical company knowledge into the correct domain folders
+3. `chat` or daemon startup uses the existing SQL index
+4. `npm run index` or `:reload` manually refreshes indexing and vectorization when you want it
+5. `@ARK` acts as the master orchestrator
+6. the system writes canonical company knowledge into the correct domain folders
 
 `@ARK` is the master agent for the repo.
 
@@ -243,7 +244,8 @@ If you want the CLI to use its local retrieval layer after the repo is created:
 - make sure your local API key is configured
 - then run the CLI locally
 - `bootstrap` seeds the documents
-- `chat` or daemon startup creates the SQL index and runs vectorization
+- `chat` or daemon startup uses the existing SQL index
+- `npm run index` or `:reload` manually refreshes indexing and vectorization
 - the SQL index and vector-based retrieval are part of the local CLI workflow, not just the cloud seeding workflow
 
 The local SQL/vector layer stores:
@@ -284,7 +286,7 @@ The graph UI has two focused modes:
 - **Company Ontology** shows the `000_Company_Memory` folder hierarchy only
 - **Document Relationships** shows indexed Markdown documents and direct Markdown references only
 
-The private graph URL includes a temporary token. This keeps the local graph data endpoint from being casually read by unrelated local processes, browser tabs, extensions, or webpages while the daemon is running.
+The graph URL is now a plain localhost page. If the daemon is running, you can open or refresh the same `/graph` URL directly without any token or first-open handshake.
 
 The graph is interactive: pan, zoom, fit, reset, and drag nodes to make the view easier to inspect. Those graph movements are visual only. Saving a Markdown document from the right editor updates that file inside `000_Company_Memory` and refreshes the SQLite/vector index.
 

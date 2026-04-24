@@ -70,7 +70,8 @@ Bootstrap now asks only for the company name, but only after it has confirmed th
 
 In simple terms:
 - `bootstrap` seeds the documents
-- `chat` or daemon startup creates the SQL index and runs vectorization
+- `chat` or daemon startup uses the existing SQL index
+- `npm run index` or `:reload` manually refreshes indexing and vectorization
 
 The bootstrap engine now auto-detects your available model provider and prefers `OPENAI_API_KEY` first, then Anthropic, then Gemini.
 
@@ -117,17 +118,17 @@ Commands:
 - `npm run bootstrap`
   seeds the markdown documents only
 - `npm run chat`
-  starts the daemon, creates or refreshes the SQL index, and runs vectorization
+  starts the daemon and uses the existing SQLite index immediately
 - `npm run graph`
-  builds the local React graph workspace, starts the daemon, and prints a private local browser URL. The URL opens the `000_Company_Memory` explorer, graph, reader, and basic Markdown editor. It includes a temporary token so other local processes, browser tabs, or webpages cannot casually read the graph/data endpoints while the daemon is running.
+  builds the local React graph workspace, starts the daemon, and prints a plain localhost browser URL. The UI opens the `000_Company_Memory` explorer, graph, reader, and basic Markdown editor, and you can refresh that URL directly while the daemon is running.
 - `npm run index`
   manually creates the SQLite database, creates the SQL tables if needed, and runs indexing/vectorization without starting chat
 - `npm run status`
   checks bootstrap status, intake readiness, daemon state, SQL table creation, and the latest indexing/vectorization status
 - `npm run daemon:start`
-  starts the daemon directly and also creates or refreshes the SQL index plus vectorization
+  starts the daemon directly and uses the existing SQLite index immediately
 - `:reload`
-  re-indexes the repo and re-runs vectorization from inside chat
+  manually re-indexes the repo and re-runs vectorization from inside chat
 
 ### Manual Fallback for Terminal-Based LLMs
 

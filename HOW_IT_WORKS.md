@@ -478,7 +478,7 @@ Useful commands inside chat:
 - `:reset`
 - `:exit`
 
-Use `:reload` after you manually add or edit repo files and want the CLI to refresh its indexed view.
+Use `:reload` only when you manually add or edit repo files and want the CLI to refresh its indexed view and vectors.
 
 To inspect the company-memory structure visually, run:
 
@@ -495,7 +495,7 @@ The graph has two intentionally separate views so the company brain does not bec
 - **Company Ontology** shows only the `000_Company_Memory` folder hierarchy
 - **Document Relationships** shows only indexed Markdown documents and direct Markdown links between them
 
-The private graph URL includes a temporary token. This is a lightweight local access guard: the daemon is still an HTTP server on `127.0.0.1`, so the token prevents unrelated local processes, browser tabs, extensions, or webpages from casually calling the graph data endpoint while the daemon is running.
+The graph URL is now a plain localhost page. If the daemon is running, you can open or refresh the same `/graph` URL directly without any token or first-open handshake.
 
 The graph is interactive. You can drag nodes, pan the canvas, zoom in or out, fit the graph to the viewport, and reset to the generated default layout. Graph movements are visual only and do not persist layout changes. If you edit and save a Markdown document in the right panel, the daemon writes that file and refreshes the SQLite index/vector layer so chat and graph retrieval stay current.
 

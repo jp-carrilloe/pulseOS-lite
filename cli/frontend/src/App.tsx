@@ -7,7 +7,23 @@ import type { ApiKnowledgeGraphSnapshot, DocumentReadResponse, FileTreeNode, Gra
 
 type ViewMode = "ontology" | "documents";
 
-function toGraphSnapshot(source: ApiKnowledgeGraphSnapshot | null, mode: ViewMode): GraphSnapshot {
+function getFolderChildren(source: ApiKnowledgeGraphSnapshot, folderId: string, childType: "folder" | "document") {
+  const nodesById = new Map(source.nodes.map((node) => [node.id, node]));
+  return source.edges
+    .filter((edge) => edge.type === "CONTAINS" && edge.source === folderId)
+    .map((edge) => nodesById.get(edge.target))
+    .filter((node): node is NonNullable<typeof node> => Boolean(node) && node.type === childType);
+}
+
+function getParentFoldersForDocument(source: ApiKnowledgeGraphSnapshot, documentId: string) {
+  const nodesById = new Map(source.nodes.map((node) => [node.id, node]));
+  return source.edges
+    .filter((edge) => edge.type === "CONTAINS" && edge.target === documentId)
+    .map((edge) => nodesById.get(edge.source))
+    .filter((node): node is NonNullable<typeof node> => Boolean(node) && node.type === "folder");
+}
+
+function toGraphSnapshot(source: ApiKnowledgeGraphSnapshot | null, mode: ViewMode, focusedNodeId?: string | null): GraphSnapshot {
   if (!source) {
     return {
       nodes: [],
@@ -17,11 +33,66 @@ function toGraphSnapshot(source: ApiKnowledgeGraphSnapshot | null, mode: ViewMod
     };
   }
 
-  const includedNodeIds = new Set(
-    source.nodes
-      .filter((node) => (mode === "ontology" ? node.type === "folder" : node.type === "document"))
-      .map((node) => node.id),
-  );
+  const nodesById = new Map(source.nodes.map((node) => [node.id, node]));
+  let includedNodeIds: Set<string>;
+  let includedEdgeIds: Set<string>;
+
+  if (mode === "documents") {
+    includedNodeIds = new Set(source.nodes.filter((node) => node.type === "document").map((node) => node.id));
+    includedEdgeIds = new Set(source.edges.filter((edge) => {
+      if (!includedNodeIds.has(edge.source) || !includedNodeIds.has(edge.target)) return false;
+      return edge.type === "REFERENCES";
+    }).map((edge) => edge.id));
+  } else {
+    includedNodeIds = new Set(source.nodes.filter((node) => node.type === "folder").map((node) => node.id));
+    includedEdgeIds = new Set(
+      source.edges
+        .filter((edge) => {
+          if (edge.type !== "CONTAINS") return false;
+          return nodesById.get(edge.source)?.type === "folder" && nodesById.get(edge.target)?.type === "folder";
+        })
+        .map((edge) => edge.id),
+    );
+
+    const includeDocument = (documentId: string) => {
+      const documentNode = nodesById.get(documentId);
+      if (documentNode?.type !== "document") return;
+      includedNodeIds.add(documentId);
+      source.edges
+        .filter((edge) => edge.type === "CONTAINS" && edge.target === documentId && nodesById.get(edge.source)?.type === "folder")
+        .forEach((edge) => {
+          includedNodeIds.add(edge.source);
+          includedEdgeIds.add(edge.id);
+        });
+    };
+
+    const includeReferenceNeighborhood = (documentIds: Iterable<string>) => {
+      const seedIds = new Set(documentIds);
+      source.edges
+        .filter((edge) => edge.type === "REFERENCES" && (seedIds.has(edge.source) || seedIds.has(edge.target)))
+        .forEach((edge) => {
+          includeDocument(edge.source);
+          includeDocument(edge.target);
+          includedEdgeIds.add(edge.id);
+        });
+    };
+
+    const focusedNode = focusedNodeId ? nodesById.get(focusedNodeId) : null;
+    if (focusedNode?.type === "folder") {
+      const localDocuments = getFolderChildren(source, focusedNode.id, "document");
+      localDocuments.forEach((documentNode) => includeDocument(documentNode.id));
+      includeReferenceNeighborhood(localDocuments.map((documentNode) => documentNode.id));
+    } else if (focusedNode?.type === "document") {
+      includeDocument(focusedNode.id);
+      const parentFolders = getParentFoldersForDocument(source, focusedNode.id);
+      parentFolders
+        .flatMap((folderNode) => getFolderChildren(source, folderNode.id, "document"))
+        .forEach((documentNode) => includeDocument(documentNode.id));
+      includeReferenceNeighborhood([focusedNode.id]);
+    }
+
+    includedEdges = source.edges.filter((edge) => includedEdgeIds.has(edge.id));
+  }
 
   const nodes: GraphNode[] = source.nodes
     .filter((node) => includedNodeIds.has(node.id))
@@ -46,10 +117,7 @@ function toGraphSnapshot(source: ApiKnowledgeGraphSnapshot | null, mode: ViewMod
     }));
 
   const edges: GraphEdge[] = source.edges
-    .filter((edge) => {
-      if (!includedNodeIds.has(edge.source) || !includedNodeIds.has(edge.target)) return false;
-      return mode === "ontology" ? edge.type === "CONTAINS" : edge.type === "REFERENCES";
-    })
+    .filter((edge) => includedEdgeIds.has(edge.id))
     .map((edge) => ({
       id: edge.id,
       source: edge.source,
@@ -116,12 +184,30 @@ export function App() {
     setLoading(true);
     setError(null);
     try {
-      const [nextGraph, nextTree] = await Promise.all([api.getGraph(), api.getFileTree()]);
-      setGraphData(nextGraph);
-      setTree(nextTree);
-      setOpenFolderPaths((current) => new Set([...current, nextTree.path]));
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Could not load the Company Memory workspace.");
+      const treePromise = api
+        .getFileTree()
+        .then((nextTree) => {
+          setTree(nextTree);
+          setOpenFolderPaths((current) => new Set([...current, nextTree.path]));
+        })
+        .catch((nextError) => {
+          setError((current) =>
+            current ?? (nextError instanceof Error ? nextError.message : "Could not load the Company Memory folders."),
+          );
+        });
+
+      const graphPromise = api
+        .getGraph()
+        .then((nextGraph) => {
+          setGraphData(nextGraph);
+        })
+        .catch((nextError) => {
+          setError((current) =>
+            current ?? (nextError instanceof Error ? nextError.message : "Could not load the Company Memory graph."),
+          );
+        });
+
+      await Promise.allSettled([treePromise, graphPromise]);
     } finally {
       setLoading(false);
     }
@@ -180,7 +266,7 @@ export function App() {
     };
   }, [sidebarResizing]);
 
-  const graphSnapshot = useMemo(() => toGraphSnapshot(graphData, mode), [graphData, mode]);
+  const graphSnapshot = useMemo(() => toGraphSnapshot(graphData, mode, selectedNode?.id), [graphData, mode, selectedNode?.id]);
   const selectedTreeNode = useMemo(
     () => (selectedDocumentPath ? findTreeNode(tree, selectedDocumentPath) : null),
     [selectedDocumentPath, tree],
@@ -256,7 +342,7 @@ export function App() {
   return (
     <main
       className={sidebarResizing ? "company-memory-workspace sidebar-resizing" : "company-memory-workspace"}
-      style={{ gridTemplateColumns: `${sidebarWidth}px minmax(0, 1fr)` }}
+      style={{ gridTemplateColumns: `${sidebarWidth}px 10px minmax(0, 1fr)` }}
     >
       <aside className="workspace-sidebar" style={{ width: `${sidebarWidth}px` }}>
         <div className="brand-block">

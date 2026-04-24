@@ -109,6 +109,7 @@ interface EmbeddingProvider {
 
 export class KnowledgeBaseIndex {
   private readonly db: DatabaseSync;
+  private graphSnapshotCache: KnowledgeGraphSnapshot | null = null;
 
   constructor(
     private readonly options: {
@@ -301,6 +302,8 @@ export class KnowledgeBaseIndex {
         )
         .run(indexedAt, files.length, files.length, runId);
 
+      this.graphSnapshotCache = null;
+
       return {
         fileCount: files.length,
         charCount,
@@ -491,6 +494,10 @@ export class KnowledgeBaseIndex {
   }
 
   async buildGraphSnapshot(): Promise<KnowledgeGraphSnapshot> {
+    if (this.graphSnapshotCache) {
+      return this.graphSnapshotCache;
+    }
+
     const rows = this.db.prepare(
       `SELECT
          id,
@@ -624,7 +631,7 @@ export class KnowledgeBaseIndex {
     });
     const graphEdges = Array.from(edges.values()).sort((left, right) => left.id.localeCompare(right.id));
 
-    return {
+    const snapshot = {
       generatedAt: new Date().toISOString(),
       stats: {
         documents: rows.length,
@@ -634,6 +641,9 @@ export class KnowledgeBaseIndex {
       nodes: graphNodes,
       edges: graphEdges,
     };
+
+    this.graphSnapshotCache = snapshot;
+    return snapshot;
   }
 
   private snapshotFromDb(): SyncIndexResult {
