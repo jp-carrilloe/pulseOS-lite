@@ -19,7 +19,7 @@ export interface IndexedDocumentRecord {
   relativePath: string;
   title: string;
   summary: string;
-  taxonomyDomain: string;
+  ontologyDomain: string;
   status: string | null;
   ownerAgent: string | null;
   contentHash: string;
@@ -49,6 +49,41 @@ export interface IndexStatusSummary {
   embeddingModel: string | null;
   embeddingMode: "provider" | "heuristic";
   indexedCharCount: number;
+}
+
+export type KnowledgeGraphNodeType = "folder" | "document";
+export type KnowledgeGraphEdgeType = "CONTAINS" | "REFERENCES";
+
+export interface KnowledgeGraphNode {
+  id: string;
+  type: KnowledgeGraphNodeType;
+  label: string;
+  path: string;
+  parentId: string | null;
+  ontologyDomain?: string;
+  status?: string | null;
+  ownerAgent?: string | null;
+  summary?: string;
+  documentCount?: number;
+}
+
+export interface KnowledgeGraphEdge {
+  id: string;
+  type: KnowledgeGraphEdgeType;
+  source: string;
+  target: string;
+  label: string;
+}
+
+export interface KnowledgeGraphSnapshot {
+  generatedAt: string;
+  stats: {
+    documents: number;
+    folders: number;
+    references: number;
+  };
+  nodes: KnowledgeGraphNode[];
+  edges: KnowledgeGraphEdge[];
 }
 
 export interface SyncIndexResult {
@@ -93,7 +128,7 @@ export class KnowledgeBaseIndex {
         relative_path TEXT NOT NULL UNIQUE,
         title TEXT NOT NULL,
         summary TEXT NOT NULL,
-        taxonomy_domain TEXT NOT NULL,
+        ontology_domain TEXT NOT NULL,
         status TEXT,
         owner_agent TEXT,
         content_hash TEXT NOT NULL,
@@ -121,10 +156,49 @@ export class KnowledgeBaseIndex {
         error TEXT
       );
 
+      CREATE TABLE IF NOT EXISTS crm_objects (
+        id TEXT PRIMARY KEY,
+        provider TEXT NOT NULL,
+        object_type TEXT NOT NULL,
+        provider_object_id TEXT NOT NULL,
+        name TEXT,
+        email TEXT,
+        company_name TEXT,
+        lifecycle_stage TEXT,
+        pipeline_stage TEXT,
+        owner_name TEXT,
+        amount REAL,
+        currency TEXT,
+        close_date TEXT,
+        raw_json TEXT NOT NULL,
+        last_synced_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(provider, object_type, provider_object_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS crm_sync_runs (
+        id TEXT PRIMARY KEY,
+        provider TEXT NOT NULL,
+        sync_type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        objects_seen INTEGER NOT NULL DEFAULT 0,
+        objects_upserted INTEGER NOT NULL DEFAULT 0,
+        error TEXT
+      );
+
       CREATE INDEX IF NOT EXISTS idx_documents_relative_path ON documents(relative_path);
       CREATE INDEX IF NOT EXISTS idx_vectors_owner ON knowledge_vectors(owner_type, owner_id);
       CREATE INDEX IF NOT EXISTS idx_index_runs_started_at ON index_runs(started_at);
+      CREATE INDEX IF NOT EXISTS idx_crm_objects_provider_type ON crm_objects(provider, object_type);
+      CREATE INDEX IF NOT EXISTS idx_crm_objects_email ON crm_objects(email);
+      CREATE INDEX IF NOT EXISTS idx_crm_objects_company_name ON crm_objects(company_name);
+      CREATE INDEX IF NOT EXISTS idx_crm_objects_pipeline_stage ON crm_objects(pipeline_stage);
+      CREATE INDEX IF NOT EXISTS idx_crm_sync_runs_started_at ON crm_sync_runs(started_at);
     `);
+    this.migrateDocumentsOntologyColumn();
   }
 
   close() {
@@ -158,13 +232,13 @@ export class KnowledgeBaseIndex {
           this.db
             .prepare(
               `INSERT INTO documents (
-                 id, relative_path, title, summary, taxonomy_domain, status, owner_agent, content_hash, updated_at, indexed_at
+                 id, relative_path, title, summary, ontology_domain, status, owner_agent, content_hash, updated_at, indexed_at
                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(relative_path) DO UPDATE SET
                  id = excluded.id,
                  title = excluded.title,
                  summary = excluded.summary,
-                 taxonomy_domain = excluded.taxonomy_domain,
+                 ontology_domain = excluded.ontology_domain,
                  status = excluded.status,
                  owner_agent = excluded.owner_agent,
                  content_hash = excluded.content_hash,
@@ -176,7 +250,7 @@ export class KnowledgeBaseIndex {
               parsed.relativePath,
               parsed.title,
               parsed.summary,
-              parsed.taxonomyDomain,
+              parsed.ontologyDomain,
               parsed.status,
               parsed.ownerAgent,
               parsed.contentHash,
@@ -321,7 +395,7 @@ export class KnowledgeBaseIndex {
          d.relative_path,
          d.title,
          d.summary,
-         d.taxonomy_domain,
+         d.ontology_domain,
          d.status,
          d.owner_agent,
          d.content_hash,
@@ -338,7 +412,7 @@ export class KnowledgeBaseIndex {
       relative_path: string;
       title: string;
       summary: string;
-      taxonomy_domain: string;
+      ontology_domain: string;
       status: string | null;
       owner_agent: string | null;
       content_hash: string;
@@ -354,7 +428,7 @@ export class KnowledgeBaseIndex {
           relativePath: row.relative_path,
           title: row.title,
           summary: row.summary,
-          taxonomyDomain: row.taxonomy_domain,
+          ontologyDomain: row.ontology_domain,
           status: row.status,
           ownerAgent: row.owner_agent,
           contentHash: row.content_hash,
@@ -381,7 +455,7 @@ export class KnowledgeBaseIndex {
       const bits = [
         `${index + 1}. ${match.document.title} (${match.document.relativePath})`,
         `   Summary: ${match.document.summary}`,
-        `   Taxonomy: ${match.document.taxonomyDomain}`,
+        `   Ontology: ${match.document.ontologyDomain}`,
       ];
       if (match.document.ownerAgent) bits.push(`   Owner: ${match.document.ownerAgent}`);
       if (match.document.status) bits.push(`   Status: ${match.document.status}`);
@@ -416,6 +490,152 @@ export class KnowledgeBaseIndex {
     return context;
   }
 
+  async buildGraphSnapshot(): Promise<KnowledgeGraphSnapshot> {
+    const rows = this.db.prepare(
+      `SELECT
+         id,
+         relative_path,
+         title,
+         summary,
+         ontology_domain,
+         status,
+         owner_agent
+       FROM documents
+       ORDER BY relative_path`,
+    ).all() as Array<{
+      id: string;
+      relative_path: string;
+      title: string;
+      summary: string;
+      ontology_domain: string;
+      status: string | null;
+      owner_agent: string | null;
+    }>;
+
+    const nodes = new Map<string, KnowledgeGraphNode>();
+    const edges = new Map<string, KnowledgeGraphEdge>();
+    const documentPathToNodeId = new Map<string, string>();
+    const folderDocumentCounts = new Map<string, number>();
+
+    const addFolder = (folderPath: string): string => {
+      const normalizedPath = folderPath || ".";
+      const id = buildFolderNodeId(normalizedPath);
+      if (nodes.has(id)) return id;
+
+      const parentPath = normalizedPath === "." ? null : path.posix.dirname(normalizedPath);
+      const normalizedParent = parentPath && parentPath !== "." ? parentPath : parentPath === "." ? "." : null;
+      const parentId = normalizedPath === "." ? null : buildFolderNodeId(normalizedParent ?? ".");
+
+      if (parentId && !nodes.has(parentId)) addFolder(normalizedParent ?? ".");
+
+      nodes.set(id, {
+        id,
+        type: "folder",
+        label: normalizedPath === "." ? "Knowledge Base" : path.posix.basename(normalizedPath),
+        path: normalizedPath,
+        parentId,
+        documentCount: 0,
+      });
+
+      if (parentId) {
+        const edgeId = `contains:${parentId}->${id}`;
+        edges.set(edgeId, {
+          id: edgeId,
+          type: "CONTAINS",
+          source: parentId,
+          target: id,
+          label: "contains",
+        });
+      }
+
+      return id;
+    };
+
+    addFolder(".");
+
+    for (const row of rows) {
+      const documentId = buildDocumentNodeId(row.relative_path);
+      const folderPath = path.posix.dirname(row.relative_path);
+      const parentFolderPath = folderPath === "." ? "." : folderPath;
+      const parentId = addFolder(parentFolderPath);
+
+      for (const ancestorPath of getFolderAncestors(parentFolderPath)) {
+        folderDocumentCounts.set(ancestorPath, (folderDocumentCounts.get(ancestorPath) ?? 0) + 1);
+      }
+
+      nodes.set(documentId, {
+        id: documentId,
+        type: "document",
+        label: row.title,
+        path: row.relative_path,
+        parentId,
+        ontologyDomain: row.ontology_domain,
+        status: row.status,
+        ownerAgent: row.owner_agent,
+        summary: row.summary,
+      });
+      documentPathToNodeId.set(row.relative_path, documentId);
+
+      const edgeId = `contains:${parentId}->${documentId}`;
+      edges.set(edgeId, {
+        id: edgeId,
+        type: "CONTAINS",
+        source: parentId,
+        target: documentId,
+        label: "contains",
+      });
+    }
+
+    for (const [folderPath, count] of folderDocumentCounts.entries()) {
+      const folder = nodes.get(buildFolderNodeId(folderPath));
+      if (folder) folder.documentCount = count;
+    }
+
+    for (const row of rows) {
+      const sourceId = documentPathToNodeId.get(row.relative_path);
+      if (!sourceId) continue;
+
+      let content = "";
+      try {
+        content = await fsp.readFile(path.join(this.options.repoRoot, row.relative_path), "utf8");
+      } catch {
+        continue;
+      }
+
+      for (const link of extractMarkdownLinks(content)) {
+        const targetPath = resolveMarkdownLink(row.relative_path, link, documentPathToNodeId);
+        if (!targetPath || targetPath === row.relative_path) continue;
+        const targetId = documentPathToNodeId.get(targetPath);
+        if (!targetId) continue;
+        const edgeId = `references:${sourceId}->${targetId}`;
+        edges.set(edgeId, {
+          id: edgeId,
+          type: "REFERENCES",
+          source: sourceId,
+          target: targetId,
+          label: "references",
+        });
+      }
+    }
+
+    const graphNodes = Array.from(nodes.values()).sort((left, right) => {
+      if (left.type !== right.type) return left.type === "folder" ? -1 : 1;
+      return left.path.localeCompare(right.path);
+    });
+    const graphEdges = Array.from(edges.values()).sort((left, right) => left.id.localeCompare(right.id));
+
+    return {
+      generatedAt: new Date().toISOString(),
+      stats: {
+        documents: rows.length,
+        folders: graphNodes.filter((node) => node.type === "folder").length,
+        references: graphEdges.filter((edge) => edge.type === "REFERENCES").length,
+      },
+      nodes: graphNodes,
+      edges: graphEdges,
+    };
+  }
+
   private snapshotFromDb(): SyncIndexResult {
     const status = this.getStatus();
     return {
@@ -432,6 +652,15 @@ export class KnowledgeBaseIndex {
       `SELECT model FROM knowledge_vectors WHERE owner_type = ? ORDER BY created_at DESC LIMIT 1`,
     ).get(SUMMARY_VECTOR_OWNER_TYPE) as { model: string } | undefined;
     return row?.model ?? null;
+  }
+
+  private migrateDocumentsOntologyColumn(): void {
+    const legacyDomainColumn = "tax" + "onomy_domain";
+    const columns = this.db.prepare(`PRAGMA table_info(documents)`).all() as Array<{ name: string }>;
+    const columnNames = new Set(columns.map((column) => column.name));
+    if (columnNames.has(legacyDomainColumn) && !columnNames.has("ontology_domain")) {
+      this.db.exec(`ALTER TABLE documents RENAME COLUMN ${legacyDomainColumn} TO ontology_domain;`);
+    }
   }
 }
 
@@ -453,7 +682,7 @@ export async function scanKnowledgeBaseMarkdown(repoRoot: string): Promise<Scann
       const fullPath = path.join(currentDir, entry.name);
       const relativePath = path.relative(repoRoot, fullPath).replaceAll(path.sep, "/");
 
-      if (relativePath === "001_Source_Intake" || relativePath.startsWith("001_Source_Intake/")) {
+      if (isNonKnowledgeBasePath(relativePath)) {
         continue;
       }
 
@@ -479,18 +708,29 @@ export async function scanKnowledgeBaseMarkdown(repoRoot: string): Promise<Scann
   return results;
 }
 
+function isNonKnowledgeBasePath(relativePath: string): boolean {
+  return (
+	    relativePath === "001_Data_Souces" ||
+	    relativePath.startsWith("001_Data_Souces/") ||
+	    relativePath === "001_Source_Intake" ||
+	    relativePath.startsWith("001_Source_Intake/") ||
+	    relativePath === "000_Acme_Sample_Company_Memory" ||
+	    relativePath.startsWith("000_Acme_Sample_Company_Memory/")
+	  );
+	}
+
 function summarizeMarkdown(relativePath: string, content: string, updatedAt: string, indexedAt: string) {
   const title = extractTitle(relativePath, content);
   const status = extractMetadataField(content, "Status");
   const ownerAgent = extractOwnerAgent(content);
-  const taxonomyDomain = inferTaxonomyDomain(relativePath);
+  const ontologyDomain = inferOntologyDomain(relativePath);
   const summary = buildSummary(title, content);
   return {
     id: buildDocumentId(relativePath),
     relativePath,
     title,
     summary,
-    taxonomyDomain,
+    ontologyDomain,
     status,
     ownerAgent,
     contentHash: hashText(content),
@@ -515,12 +755,72 @@ function extractOwnerAgent(content: string): string | null {
   return extractMetadataField(content, "Owner Agent") ?? extractMetadataField(content, "Owner");
 }
 
-function inferTaxonomyDomain(relativePath: string): string {
+function inferOntologyDomain(relativePath: string): string {
   const segments = relativePath.split("/");
   if (segments[0] === "000_Company_Memory" && segments[1]) {
     return segments[1];
   }
   return segments[0] || "root";
+}
+
+function buildFolderNodeId(folderPath: string): string {
+  return `folder:${folderPath || "."}`;
+}
+
+function buildDocumentNodeId(relativePath: string): string {
+  return `document:${relativePath}`;
+}
+
+function getFolderAncestors(folderPath: string): string[] {
+  const normalized = folderPath === "." ? "." : folderPath;
+  const ancestors = new Set<string>(["."]);
+  if (normalized === ".") return Array.from(ancestors);
+
+  const segments = normalized.split("/").filter(Boolean);
+  for (let index = 1; index <= segments.length; index++) {
+    ancestors.add(segments.slice(0, index).join("/"));
+  }
+  return Array.from(ancestors);
+}
+
+function extractMarkdownLinks(content: string): string[] {
+  const links: string[] = [];
+  const pattern = /(?<!!)\[[^\]]+\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(content))) {
+    const raw = match[1]?.trim();
+    if (raw) links.push(raw);
+  }
+  return links;
+}
+
+function resolveMarkdownLink(
+  sourceRelativePath: string,
+  rawLink: string,
+  documentPathToNodeId: Map<string, string>,
+): string | null {
+  const withoutFragment = rawLink.split("#")[0]?.trim();
+  if (!withoutFragment) return null;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(withoutFragment)) return null;
+
+  const sourceDir = path.posix.dirname(sourceRelativePath);
+  const decoded = decodeMarkdownPath(withoutFragment);
+  const normalized = path.posix.normalize(path.posix.join(sourceDir === "." ? "" : sourceDir, decoded));
+
+  if (documentPathToNodeId.has(normalized)) return normalized;
+  if (!normalized.endsWith(".md") && documentPathToNodeId.has(`${normalized}.md`)) return `${normalized}.md`;
+  if (documentPathToNodeId.has(path.posix.join(normalized, "README.md"))) {
+    return path.posix.join(normalized, "README.md");
+  }
+  return null;
+}
+
+function decodeMarkdownPath(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function buildSummary(title: string, content: string): string {

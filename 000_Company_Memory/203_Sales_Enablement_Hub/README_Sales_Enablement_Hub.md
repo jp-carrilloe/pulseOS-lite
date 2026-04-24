@@ -40,6 +40,10 @@ The **Sales Enablement Hub** is the operational domain responsible for bridging 
 - **Purpose:** Internal reference library for technical and operational support.
 - **Owner:** 203_Sales_Enablement_Agent
 
+### [203.8 CRM and Revenue Data](./203.8_CRM_and_Revenue_Data/)
+- **Purpose:** Provider-neutral CRM sync model, revenue object definitions, and local SQLite landing-table governance.
+- **Owner:** 203_Sales_Enablement_Agent
+
 ---
 
 ## 🤖 Governance & Agency

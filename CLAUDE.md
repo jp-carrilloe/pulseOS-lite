@@ -25,15 +25,21 @@ npm run chat -- --model gemini
 ```bash
 cd cli && npm run bootstrap
 ```
-Bootstrap now asks only for the company name, then reads source material from `001_Source_Intake/Data_Souces_Folder` and `001_Source_Intake/Data_Sources_References`. It runs in dependency order: foundation docs first (102.x), then market + GTM (201-202), then sales and delivery (203+). Each document is grounded in intake evidence plus all previously generated documents.
+Bootstrap now asks only for the company name, then reads source material from `001_Data_Souces/Data_Souces_Folder` and `001_Data_Souces/Data_Sources_References`. It runs in dependency order: foundation docs first (102.x), then market + GTM (201-202), then sales and delivery (203+). Each document is grounded in intake evidence plus all previously generated documents.
 
 Workflow note:
 - `npm run bootstrap` seeds the documents
 - `npm run chat` or daemon startup creates the SQL index and runs vectorization
 
+The local SQLite layer also includes provider-neutral CRM sync tables:
+- `crm_objects`
+- `crm_sync_runs`
+
+The canonical CRM sync and revenue data model lives in `000_Company_Memory/203_Sales_Enablement_Hub/203.8_CRM_and_Revenue_Data/`.
+
 Bootstrap safety rule:
 - Do not run bootstrap automatically just because `@RUNME.md`, `README.md`, or this file was opened.
-- First confirm that the user has added real company source material to `001_Source_Intake`.
+- First confirm that the user has added real company source material to `001_Data_Souces`.
 - If source material is missing, instruct the user to add it before running `npm run bootstrap` in the terminal.
 
 **REPL commands while chatting:**

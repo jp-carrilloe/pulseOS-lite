@@ -110,8 +110,10 @@ node server/index.js
 
 - **Orchestration:** Workflows trigger via REST or conversational chat. Streaming progress is delivered via Server-Sent Events (SSE) at `GET /api/workflows/stream/:id`.
 - **Intelligence layer:** Agents use OpenAI (structured JSON output) with Perplexity/Exa as research waterfalls.
-- **Data layer:** Local SQLite database (`crm.db`) stores prospecting results. Attio sync is triggered manually via `POST /api/sync/attio`.
+- **Data layer:** The repo's main local CLI SQLite database now includes `crm_objects` and `crm_sync_runs` as a provider-neutral CRM landing layer for synced revenue data. The legacy `crm.db` note here should be treated as older execution-engine context rather than the current canonical CLI schema.
 - **Vault layer:** The knowledge base files in this repo are readable/writable via `GET|POST /api/file` — agents pull strategic context (ICP, brand voice, objection handling) directly from the KB at runtime.
+
+The canonical CRM sync and revenue data model is documented in [`../203_Sales_Enablement_Hub/203.8_CRM_and_Revenue_Data/`](../203_Sales_Enablement_Hub/203.8_CRM_and_Revenue_Data/).
 
 ---
 

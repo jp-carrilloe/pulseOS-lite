@@ -6,6 +6,7 @@ When an Agent needs to use an external system (e.g., a CRM, an API, or a web scr
 
 ### Example Tools to add here:
 - `hubspot_ingestion.md` - Schema and rules for updating the CRM
+- `crm_sync_mapping.md` - Provider-to-generic field mapping rules for `crm_objects` and `crm_sync_runs`
 - `crunchbase_query.md` - Parameters for searching startup databases
 - `slack_notification.md` - Formatting rules for reporting back to human executives
 

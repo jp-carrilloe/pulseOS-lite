@@ -26,7 +26,7 @@ The root of the repo stays focused on onboarding, source intake, and local tooli
 - `106_Legal_and_Compliance` — contracts, legal frameworks, compliance, and risk.
 - `201_Market_Intelligence_and_ICP` — ICP, competitive intelligence, and market signals.
 - `202_Go-to-Market_Strategy` — GTM foundation, channels, offers, and experiments.
-- `203_Sales_Enablement_Hub` — pitch assets, playbooks, outreach, and enablement.
+- `203_Sales_Enablement_Hub` — pitch assets, playbooks, outreach, enablement, and CRM/revenue data governance.
 - `301_Client_Delivery_and_Onboarding` — implementation, onboarding, and delivery.
 - `302_Analytics_and_Performance_Intelligence` — KPIs, reporting, and optimization.
 - `401_Strategic_Partnerships` — partnerships, alliances, and channel relationships.
@@ -38,7 +38,7 @@ The root of the repo stays focused on onboarding, source intake, and local tooli
 ---
 
 ## Usage Rules
-- Keep raw unreviewed source material in `../001_Source_Intake`.
+- Keep raw unreviewed source material in `../001_Data_Souces`.
 - Keep durable company knowledge in this folder.
 - Use `@ARK` for cross-domain routing.
 - Use the domain owner agents before making specialist edits.

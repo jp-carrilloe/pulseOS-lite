@@ -154,7 +154,7 @@ export async function getAvailablePort(): Promise<number> {
 }
 
 export function getDaemonVersion(): string {
-  return "1.0.0";
+  return "1.7.0";
 }
 
 export function delay(ms: number): Promise<void> {

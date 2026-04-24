@@ -47,6 +47,9 @@ async function main(argv = process.argv.slice(2), env: NodeJS.ProcessEnv = proce
       case "status":
         await printWorkflowStatus(env);
         break;
+      case "graph":
+        await printGraphUrl(env);
+        break;
       case "chat":
       case "":
         await runInteractiveChat(args.flags, env);
@@ -71,9 +74,11 @@ pulseos-lite-open-source-cli — Chat with your PulseOS Lite Open Source repo us
 Workflow:
   npm run bootstrap          — seed the markdown documents
   npm run chat               — start the daemon, create the SQL index, and run vectorization
+  npm run graph              — build and open the PulseOS Company Memory UI
 
 Usage:
   npm run chat [-- --model <openai|claude|gemini>]
+  npm run graph
   npm run status
   npm run daemon:start
   npm run daemon:stop
@@ -284,6 +289,29 @@ async function printWorkflowStatus(env: NodeJS.ProcessEnv): Promise<void> {
   lines.push(`- Vectorization completed: ${vectorCount > 0 ? "yes" : "no"}`);
 
   process.stdout.write(lines.join("\n") + "\n");
+}
+
+async function printGraphUrl(env: NodeJS.ProcessEnv): Promise<void> {
+  process.stdout.write("Building and starting the PulseOS Company Memory UI...\n");
+  const state = await ensureRuntime(env);
+  const url = `http://127.0.0.1:${state.port}/graph?token=${encodeURIComponent(state.token)}`;
+  process.stdout.write(
+    [
+      "PulseOS Company Memory UI is ready.",
+      "",
+      "Open this local URL in your browser:",
+      url,
+      "",
+      "What it shows:",
+      "- Left explorer: folders and Markdown documents inside 000_Company_Memory only.",
+      "- Center graph: Company Ontology and Document Relationships views backed by SQLite.",
+      "- Right panel: read and save Markdown documents inside 000_Company_Memory.",
+      "- Interaction: pan, zoom, fit, reset, and drag graph nodes without changing layout data.",
+      "",
+      "Saving a document refreshes the SQLite documents table and summary vectors so chat and graph retrieval stay current.",
+      "The URL includes a temporary token so unrelated local processes cannot casually read the graph or document endpoints.",
+    ].join("\n") + "\n",
+  );
 }
 
 async function daemonCommand<T>(state: DaemonState, name: string, args: Record<string, unknown>): Promise<T> {

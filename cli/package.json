@@ -10,6 +10,9 @@
     "chat:openai": "node --import tsx/esm index.ts chat --model openai",
     "chat:gemini": "node --import tsx/esm index.ts chat --model gemini",
     "index": "node --import tsx/esm index-kb.ts",
+    "graph:build": "vite build --config frontend/vite.config.ts",
+    "graph:dev": "vite --config frontend/vite.config.ts",
+    "graph": "npm run graph:build && node --import tsx/esm index.ts graph",
     "status": "node --import tsx/esm index.ts status",
     "daemon:start": "node --import tsx/esm index.ts daemon start",
     "daemon:stop": "node --import tsx/esm index.ts daemon stop",
@@ -21,10 +24,19 @@
     "@anthropic-ai/sdk": "^0.39.0",
     "@google/generative-ai": "^0.24.0",
     "@hono/node-server": "^1.13.7",
+    "@vitejs/plugin-react": "^4.3.4",
+    "cytoscape": "^3.30.4",
+    "cytoscape-fcose": "^2.2.0",
     "hono": "^4.7.9",
-    "openai": "^4.82.0"
+    "openai": "^4.82.0",
+    "react": "^19.0.0",
+    "react-cytoscapejs": "^2.0.0",
+    "react-dom": "^19.0.0",
+    "vite": "^6.0.7"
   },
   "devDependencies": {
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
     "@types/node": "^22.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
