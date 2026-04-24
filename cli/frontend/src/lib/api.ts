@@ -4,18 +4,16 @@ interface Envelope<T> {
   data: T;
 }
 
-const token = new URLSearchParams(window.location.search).get("token") ?? "";
-
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const separator = path.includes("?") ? "&" : "?";
   const headers = new Headers(init?.headers ?? undefined);
   if (init?.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(`${path}${separator}token=${encodeURIComponent(token)}`, {
+  const response = await fetch(path, {
     ...init,
     headers,
+    credentials: "same-origin",
   });
   const payload = (await response.json()) as Envelope<T> | { error?: { message?: string } };
   if (!response.ok || !("data" in payload)) {

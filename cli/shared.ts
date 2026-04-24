@@ -57,6 +57,11 @@ export function getDaemonIdleMs(env: NodeJS.ProcessEnv = process.env): number {
   return Number.isFinite(parsed) && parsed >= 1000 ? parsed : 60 * 60 * 1000;
 }
 
+export function getPreferredDaemonPort(env: NodeJS.ProcessEnv = process.env): number {
+  const parsed = Number(env.PULSEOS_LITE_OPEN_SOURCE_CLI_PORT ?? env.PULSEOS_CLI_PORT ?? 50464);
+  return Number.isInteger(parsed) && parsed >= 1024 && parsed <= 65535 ? parsed : 50464;
+}
+
 export async function writeDaemonState(state: DaemonState, env: NodeJS.ProcessEnv = process.env): Promise<void> {
   const filePath = getDaemonStateFilePath(env);
   await fsp.mkdir(path.dirname(filePath), { recursive: true });
@@ -137,7 +142,17 @@ export async function fetchDaemonJson<T>(
   return payload?.data as T;
 }
 
-export async function getAvailablePort(): Promise<number> {
+async function canListenOnPort(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.listen(port, "127.0.0.1", () => {
+      server.close((err) => resolve(!err));
+    });
+    server.on("error", () => resolve(false));
+  });
+}
+
+async function findEphemeralPort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
     server.listen(0, "127.0.0.1", () => {
@@ -153,8 +168,16 @@ export async function getAvailablePort(): Promise<number> {
   });
 }
 
+export async function getAvailablePort(env: NodeJS.ProcessEnv = process.env): Promise<number> {
+  const preferredPort = getPreferredDaemonPort(env);
+  if (await canListenOnPort(preferredPort)) {
+    return preferredPort;
+  }
+  return findEphemeralPort();
+}
+
 export function getDaemonVersion(): string {
-  return "1.7.0";
+  return "1.8.0";
 }
 
 export function delay(ms: number): Promise<void> {

@@ -10,6 +10,11 @@ const RING: Record<string, { width: number; style: string; opacity: number }> = 
   document: { width: 1, style: "solid", opacity: 0.7 },
 };
 
+const EDGE_COLORS: Record<string, string> = {
+  CONTAINS: "rgba(242, 194, 106, 0.46)",
+  REFERENCES: "rgba(148, 163, 184, 0.62)",
+};
+
 function buildTypeSelectors(): cytoscape.StylesheetStyle[] {
   return Object.entries(RING).map(([type, ring]) => ({
     selector: `node[type="${type}"]`,
@@ -159,15 +164,15 @@ export const cognitiveStylesheet: cytoscape.StylesheetStyle[] = [
       "target-arrow-color": "data(color)",
       "target-arrow-shape": "triangle",
       "curve-style": "bezier",
-      "line-opacity": 0.4,
-      "arrow-scale": 0.8,
+      "line-opacity": 0.58,
+      "arrow-scale": 0.72,
       label: "data(label)",
       "font-size": "7px",
-      color: "#64748b",
+      color: "#cbd5e1",
       "text-opacity": 0,
       "text-rotation": "autorotate",
       "text-background-color": "#020617",
-      "text-background-opacity": 0.8,
+      "text-background-opacity": 0.9,
       "text-background-padding": 2,
       "transition-property": "line-opacity, width, text-opacity, opacity",
       "transition-duration": "250ms",
@@ -175,19 +180,38 @@ export const cognitiveStylesheet: cytoscape.StylesheetStyle[] = [
     } as unknown as cytoscape.Css.Edge,
   },
   {
+    selector: 'edge[type="REFERENCES"]',
+    style: {
+      width: 1.2,
+      "line-style": "solid",
+      "target-arrow-shape": "none",
+      "curve-style": "straight",
+      "line-opacity": 0.68,
+    } as unknown as cytoscape.Css.Edge,
+  },
+  {
+    selector: 'edge[type="CONTAINS"]',
+    style: {
+      width: 1,
+      "line-style": "solid",
+      "line-opacity": 0.34,
+      "target-arrow-shape": "triangle",
+    } as unknown as cytoscape.Css.Edge,
+  },
+  {
     selector: "edge.highlight",
     style: {
-      width: 2,
-      opacity: 0.9,
-      "line-opacity": 0.9,
+      width: 2.2,
+      opacity: 0.96,
+      "line-opacity": 0.96,
       "text-opacity": 0.85,
     } as unknown as cytoscape.Css.Edge,
   },
   {
     selector: "edge.dimmed",
     style: {
-      "line-opacity": 0.08,
-      opacity: 0.3,
+      "line-opacity": 0.05,
+      opacity: 0.2,
       "text-opacity": 0,
     } as unknown as cytoscape.Css.Edge,
   },
@@ -282,7 +306,7 @@ export function computeNodeSize(
 }
 
 function computeEdgeWidth(confidence: number): number {
-  return 0.45 + confidence * 0.9;
+  return 0.7 + confidence * 1;
 }
 
 export const GRAPH_LAYOUTS = [
@@ -348,17 +372,17 @@ export function getLayoutOptions(
       quality: largeGraph ? "default" : "proof",
       randomize,
       nodeDimensionsIncludeLabels: false,
-      idealEdgeLength: largeGraph ? 190 : mediumGraph ? 165 : 135,
-      nodeRepulsion: largeGraph ? 18000 : mediumGraph ? 14000 : 9500,
+      idealEdgeLength: largeGraph ? 240 : mediumGraph ? 205 : 170,
+      nodeRepulsion: largeGraph ? 28000 : mediumGraph ? 22000 : 16000,
       edgeElasticity: largeGraph ? 0.08 : 0.18,
-      gravity: largeGraph ? 0.08 : mediumGraph ? 0.12 : 0.18,
-      gravityCompound: 0.65,
-      gravityRange: largeGraph ? 9.5 : 7.5,
+      gravity: largeGraph ? 0.05 : mediumGraph ? 0.08 : 0.11,
+      gravityCompound: 0.55,
+      gravityRange: largeGraph ? 11.5 : 9.2,
       numIter: largeGraph ? 1400 : mediumGraph ? 1800 : 2800,
       fit: true,
-      padding: 48,
-      nodeOverlap: 90,
-      nodeSeparation: largeGraph ? 86 : mediumGraph ? 74 : 60,
+      padding: 64,
+      nodeOverlap: 120,
+      nodeSeparation: largeGraph ? 120 : mediumGraph ? 100 : 86,
     } as unknown as cytoscape.LayoutOptions;
   }
 
@@ -435,16 +459,16 @@ export function getIncrementalLayoutOptions(
       randomize: false,
       fit: false,
       nodeDimensionsIncludeLabels: true,
-      idealEdgeLength: largeGraph ? 150 : mediumGraph ? 132 : 114,
-      nodeRepulsion: largeGraph ? 12000 : mediumGraph ? 9500 : 7200,
+      idealEdgeLength: largeGraph ? 185 : mediumGraph ? 168 : 146,
+      nodeRepulsion: largeGraph ? 18500 : mediumGraph ? 14500 : 11000,
       edgeElasticity: 0.16,
-      gravity: denseSubset ? 0.18 : 0.22,
-      gravityCompound: 0.75,
-      gravityRange: 6.5,
+      gravity: denseSubset ? 0.12 : 0.15,
+      gravityCompound: 0.68,
+      gravityRange: 7.4,
       numIter: denseSubset ? 320 : 240,
-      nodeOverlap: denseSubset ? 84 : 64,
-      nodeSeparation: denseSubset ? 70 : 52,
-      padding: 8,
+      nodeOverlap: denseSubset ? 96 : 78,
+      nodeSeparation: denseSubset ? 88 : 70,
+      padding: 14,
     } as unknown as cytoscape.LayoutOptions;
   }
 
@@ -517,16 +541,16 @@ export function getMicroRelaxationLayoutOptions(
     randomize: false,
     fit: false,
     nodeDimensionsIncludeLabels: true,
-    idealEdgeLength: denseSubset ? 118 : 96,
-    nodeRepulsion: denseSubset ? 9000 : 6200,
+    idealEdgeLength: denseSubset ? 146 : 124,
+    nodeRepulsion: denseSubset ? 12800 : 9200,
     edgeElasticity: 0.14,
-    gravity: 0.24,
-    gravityCompound: 0.8,
-    gravityRange: 5.5,
+    gravity: 0.16,
+    gravityCompound: 0.72,
+    gravityRange: 6.5,
     numIter: 160,
-    nodeOverlap: 70,
-    nodeSeparation: denseSubset ? 58 : 42,
-    padding: 6,
+    nodeOverlap: 84,
+    nodeSeparation: denseSubset ? 74 : 58,
+    padding: 10,
   } as unknown as cytoscape.LayoutOptions;
 }
 
@@ -615,11 +639,7 @@ export function mapGraphSnapshotToElements(
       target: edge.target,
       label: edge.type,
       type: edge.type,
-      color: colorForType(
-        visibleNodes.find((node) => node.id === edge.source)?.type ??
-          visibleNodes.find((node) => node.id === edge.target)?.type ??
-          "unknown",
-      ),
+      color: EDGE_COLORS[edge.type] ?? "rgba(148, 163, 184, 0.52)",
       width: computeEdgeWidth(edge.confidence),
       graphLayer: edge.graphLayer,
       confidence: edge.confidence,

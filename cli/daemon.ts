@@ -170,19 +170,11 @@ export function createDaemonApp(options: {
   app.use("/shutdown", auth);
 
   app.get("/graph", (ctx) => {
-    const queryToken = ctx.req.query("token");
-    if (queryToken !== token) {
-      return ctx.html(renderGraphUnauthorizedPage(), 401);
-    }
     resetIdleTimer();
     return serveGraphIndex(ctx);
   });
 
   app.get("/ui", (ctx) => {
-    const queryToken = ctx.req.query("token");
-    if (queryToken !== token) {
-      return ctx.html(renderGraphUnauthorizedPage(), 401);
-    }
     resetIdleTimer();
     return serveGraphIndex(ctx);
   });
@@ -193,43 +185,19 @@ export function createDaemonApp(options: {
   });
 
   app.get("/api/graph-data", async (ctx) => {
-    const queryToken = ctx.req.query("token");
-    if (queryToken !== token) {
-      return ctx.json(
-        {
-          error: {
-            code: "unauthorized",
-            message: "This graph request is missing the current daemon token. Run `npm run graph` again and open the printed local URL.",
-          },
-        },
-        401,
-      );
-    }
     resetIdleTimer();
-    await awaitReady();
+    if (kbIndex.getDocumentCount() === 0) {
+      await awaitReady();
+    }
     return ctx.json({ data: scopeGraphToCompanyMemory(await kbIndex.buildGraphSnapshot()) });
   });
 
   app.get("/api/files/tree", async (ctx) => {
-    const queryToken = ctx.req.query("token");
-    if (queryToken !== token) {
-      return ctx.json(
-        { error: { code: "unauthorized", message: "Open the current tokenized graph URL from `npm run graph`." } },
-        401,
-      );
-    }
     resetIdleTimer();
     return ctx.json({ data: await buildCompanyMemoryTree(REPO_ROOT) });
   });
 
   app.get("/api/files/read", async (ctx) => {
-    const queryToken = ctx.req.query("token");
-    if (queryToken !== token) {
-      return ctx.json(
-        { error: { code: "unauthorized", message: "Open the current tokenized graph URL from `npm run graph`." } },
-        401,
-      );
-    }
     const requestedPath = ctx.req.query("path") ?? "";
     try {
       const resolved = resolveCompanyMemoryMarkdownPath(requestedPath);
@@ -250,13 +218,6 @@ export function createDaemonApp(options: {
   });
 
   app.post("/api/files/write", async (ctx) => {
-    const queryToken = ctx.req.query("token");
-    if (queryToken !== token) {
-      return ctx.json(
-        { error: { code: "unauthorized", message: "Open the current tokenized graph URL from `npm run graph`." } },
-        401,
-      );
-    }
     const body = (await ctx.req.json()) as { path?: string; content?: unknown };
     try {
       const resolved = resolveCompanyMemoryMarkdownPath(String(body.path ?? ""));
@@ -281,20 +242,10 @@ export function createDaemonApp(options: {
   });
 
   app.get("/graph-data", async (ctx) => {
-    const queryToken = ctx.req.query("token");
-    if (queryToken !== token) {
-      return ctx.json(
-        {
-          error: {
-            code: "unauthorized",
-            message: "This graph request is missing the current daemon token. Run `npm run graph` again and open the printed local URL.",
-          },
-        },
-        401,
-      );
-    }
     resetIdleTimer();
-    await awaitReady();
+    if (kbIndex.getDocumentCount() === 0) {
+      await awaitReady();
+    }
     return ctx.json({ data: await kbIndex.buildGraphSnapshot() });
   });
 
@@ -460,28 +411,6 @@ async function handleCommand(
     default:
       throw new Error(`The daemon does not recognize the command "${name}".`);
   }
-}
-
-function renderGraphUnauthorizedPage(): string {
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PulseOS Lite Graph</title>
-  <style>
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f5efe2; color: #211b14; font: 16px/1.5 Georgia, "Times New Roman", serif; }
-    main { max-width: 640px; padding: 32px; background: #fffaf0; border: 1px solid #d8c7aa; box-shadow: 0 22px 60px rgba(66, 47, 21, 0.12); }
-    code { background: #efe3cb; padding: 2px 6px; border-radius: 6px; }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>Graph link expired or incomplete</h1>
-    <p>Run <code>npm run graph</code> from <code>cli/</code> and open the local URL it prints. The URL includes a short-lived daemon token so the graph stays private to your machine.</p>
-  </main>
-</body>
-</html>`;
 }
 
 async function serveGraphIndex(ctx: Context) {
@@ -2032,7 +1961,7 @@ function buildRetrievalQuery(messages: ChatMessage[], latestMessage: string): st
 export async function startDaemonServer(env: NodeJS.ProcessEnv = process.env): Promise<void> {
   await loadRepoEnv(env);
 
-  process.stdout.write("[pulseos-lite-open-source-cli] Indexing repository...\n");
+  process.stdout.write("[pulseos-lite-open-source-cli] Loading existing SQLite knowledge base...\n");
   const kbIndex = new KnowledgeBaseIndex({
     repoRoot: REPO_ROOT,
     dbPath: getCliDbPath(env),
@@ -2096,21 +2025,21 @@ export async function startDaemonServer(env: NodeJS.ProcessEnv = process.env): P
   process.on("SIGTERM", () => void shutdown());
 
   await writeDaemonState(state, env);
-  indexingPromise = kbIndex
-    .ensureCurrent()
-    .then((indexResult) => {
-      readyState.ready = true;
-      readyState.error = null;
-      indexingError = null;
-      process.stdout.write(
-        `[pulseos-lite-open-source-cli] Created or refreshed the SQL index and ran vectorization for ${indexResult.fileCount} files (${indexResult.charCount.toLocaleString()} chars) via ${indexResult.embeddingModel}\n`,
-      );
-    })
-    .catch((error) => {
-      readyState.ready = false;
-      readyState.error = error instanceof Error ? error.message : String(error);
-      indexingError = error instanceof Error ? error : new Error(String(error));
-    });
+  indexingPromise = Promise.resolve();
+  readyState.ready = true;
+  readyState.error = null;
+  indexingError = null;
+
+  const existingCount = kbIndex.getDocumentCount();
+  if (existingCount > 0) {
+    process.stdout.write(
+      `[pulseos-lite-open-source-cli] Using existing SQLite index with ${existingCount} documents. Run :reload or npm run index only when you want to refresh indexing/vectorization.\n`,
+    );
+  } else {
+    process.stdout.write(
+      "[pulseos-lite-open-source-cli] No indexed documents are available yet. Run npm run index or :reload to build the SQL index and vectors manually.\n",
+    );
+  }
   resetIdleTimer();
 }
 
