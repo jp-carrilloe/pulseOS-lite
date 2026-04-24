@@ -33,7 +33,7 @@ We don't do "templates." we do **Alpha**. Every file in this repo is a living co
    That is the main onboarding document and the right place for a new user to begin.
 
 2. **Add Source Material First:**
-   Put company knowledge base material into [`001_Source_Intake`](./001_Source_Intake/).
+   Put company knowledge base material into [`001_Data_Souces`](./001_Data_Souces/).
 
    Good inputs include:
    - strategy docs
@@ -46,7 +46,7 @@ We don't do "templates." we do **Alpha**. Every file in this repo is a living co
 
    You can provide that material in two ways:
    - through the CLI bootstrap flow, which reads local intake files and external folder references
-   - by opening your preferred LLM directly in this repo and asking it to seed the company brain from `001_Source_Intake`
+   - by opening your preferred LLM directly in this repo and asking it to seed the company brain from `001_Data_Souces`
 
    After bootstrap, you can keep enriching the company brain with additional information from external systems such as databases, CRM exports, email threads, and chat conversations.
 
@@ -62,11 +62,11 @@ We don't do "templates." we do **Alpha**. Every file in this repo is a living co
    npm run chat
    ```
 
-Canonical company memory lives under [`000_Company_Memory`](./000_Company_Memory/). Bootstrap and direct LLM seeding use the raw source material in `001_Source_Intake`, then write durable company knowledge into the numbered folders inside `000_Company_Memory`.
+Canonical company memory lives under [`000_Company_Memory`](./000_Company_Memory/). Bootstrap and direct LLM seeding use the raw source material in `001_Data_Souces`, then write durable company knowledge into the numbered folders inside `000_Company_Memory`.
 
 Bootstrap now asks only for the company name, but only after it has confirmed that real source material exists. It then reads:
-- local files from [`001_Source_Intake/Data_Souces_Folder`](./001_Source_Intake/Data_Souces_Folder/)
-- external folder references from [`001_Source_Intake/Data_Sources_References`](./001_Source_Intake/Data_Sources_References/)
+- local files from [`001_Data_Souces/Data_Souces_Folder`](./001_Data_Souces/Data_Souces_Folder/)
+- external folder references from [`001_Data_Souces/Data_Sources_References`](./001_Data_Souces/Data_Sources_References/)
 
 In simple terms:
 - `bootstrap` seeds the documents
@@ -87,15 +87,24 @@ By default it lives at:
 
 The main tables are:
 - `documents`
-  one row per indexed knowledge-base markdown document
+  one row per indexed knowledge-base markdown document, including its title, summary, owner, status, and `ontology_domain`
 - `knowledge_vectors`
   one embedding per document summary
 - `index_runs`
   one row per indexing/vectorization run
+- `crm_objects`
+  a provider-neutral CRM mirror for contacts, companies, deals, activities, tickets, and custom records, with normalized fields plus `raw_json`
+- `crm_sync_runs`
+  one row per CRM sync attempt, including provider, status, row counts, and error text
+
+The `ontology_domain` is the document's structural placement in the company brain. For files inside `000_Company_Memory`, it is inferred from the numbered domain folder, such as `102_Corporate_Strategy_and_Foundation`, `203_Sales_Enablement_Hub`, or `600_Projects`. In v1, this is the basic ontology layer: it lets the CLI and graph understand where each document belongs before any richer organization, department, project, or people ontology is added.
 
 What uses this database today:
 - the local CLI chat flow (`npm run chat`) uses the SQLite database and stored vectors to retrieve relevant company-brain documents before answering
 - the local daemon uses the same database, so a different terminal can access the same indexed company brain as long as it runs from this repo's `cli/` folder
+- the local graph UI (`npm run graph`) opens the Company Memory workspace backed by the same SQLite index: a left explorer for `000_Company_Memory`, a central interactive graph, and a right reader/editor for Markdown documents
+- the graph workspace has two focused views: Company Ontology for the `000_Company_Memory` folder hierarchy, and Document Relationships for direct Markdown reference links; the graph can be panned, zoomed, fitted, reset, and manually rearranged by dragging nodes
+- the browser editor can only read and save Markdown inside `000_Company_Memory`; source intake, CLI files, repo config, generated assets, and hidden/system folders are outside the editor scope
 - `npm run index` can create or refresh the same database without opening chat
 - `npm run status` checks whether the database, tables, and latest indexing/vectorization run are healthy
 
@@ -109,6 +118,8 @@ Commands:
   seeds the markdown documents only
 - `npm run chat`
   starts the daemon, creates or refreshes the SQL index, and runs vectorization
+- `npm run graph`
+  builds the local React graph workspace, starts the daemon, and prints a private local browser URL. The URL opens the `000_Company_Memory` explorer, graph, reader, and basic Markdown editor. It includes a temporary token so other local processes, browser tabs, or webpages cannot casually read the graph/data endpoints while the daemon is running.
 - `npm run index`
   manually creates the SQLite database, creates the SQL tables if needed, and runs indexing/vectorization without starting chat
 - `npm run status`
@@ -130,7 +141,7 @@ npm run index
 
 That command:
 - creates `knowledge-base.sqlite` if it does not exist
-- creates the `documents`, `knowledge_vectors`, and `index_runs` tables if they do not exist
+- creates the `documents`, `knowledge_vectors`, `index_runs`, `crm_objects`, and `crm_sync_runs` tables if they do not exist
 - scans the curated markdown knowledge base
 - writes document metadata into `documents`
 - writes embeddings into `knowledge_vectors`
@@ -189,6 +200,8 @@ All core memory folders are grouped inside [`000_Company_Memory`](./000_Company_
 | **402** | [Fundraising](000_Company_Memory/402_Fundraising/) | **@Fundraising** |
 | **502** | [Execution Engine](000_Company_Memory/502_Execution_Engine/) | **@AUTONOMOUS** |
 | **600** | [Projects](000_Company_Memory/600_Projects/) | **@ARK** |
+
+Inside `203_Sales_Enablement_Hub`, the CRM sync and revenue data model now lives in [`203.8_CRM_and_Revenue_Data`](./000_Company_Memory/203_Sales_Enablement_Hub/203.8_CRM_and_Revenue_Data/). That section defines the provider-neutral CRM landing shape used by the local SQLite layer for future HubSpot, Attio, Salesforce, or CSV syncs.
 
 ---
 

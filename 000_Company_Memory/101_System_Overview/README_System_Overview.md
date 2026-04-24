@@ -121,7 +121,7 @@ Strategic coherence is enforced through a mandatory sequential planning process.
 4.  **[203_Sales_Enablement](../203_Sales_Enablement_Hub):** Build high-conversion assets and internal agent logic.
 5.  **[501/502_Execution](../502_Execution_Engine):** Deploy high-velocity autonomous workflows.
 
-**Shortcut:** Run `cd cli && npm run bootstrap` to execute this sequence automatically. Bootstrap now asks only for the company name, then uses source material from `001_Source_Intake` to fill every template document in the order above, with each document grounded in intake evidence and the output of all prior generated documents.
+**Shortcut:** Run `cd cli && npm run bootstrap` to execute this sequence automatically. Bootstrap now asks only for the company name, then uses source material from `001_Data_Souces` to fill every template document in the order above, with each document grounded in intake evidence and the output of all prior generated documents.
 
 ---
 
@@ -133,7 +133,7 @@ The [`cli/`](../cli/) directory is a local AI daemon that connects this repo to 
 ```bash
 cd cli
 npm install              # first time only
-npm run bootstrap        # seed all templates from 001_Source_Intake (one run)
+npm run bootstrap        # seed all templates from 001_Data_Souces (one run)
 npm run chat             # interactive REPL (starts daemon automatically)
 ```
 

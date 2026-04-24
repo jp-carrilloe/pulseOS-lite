@@ -57,6 +57,9 @@ Agents may read from this folder, extract relevant context, and update the compa
 ### `Data_Sources_References/`
 Store lightweight Markdown reference files here that point agents to folders that live elsewhere on your machine or in synced storage.
 
+> [!TIP]
+> **Drag & Drop References:** You can drag and drop a folder from your local machine (Finder/Explorer) directly into a Markdown file in this folder. This automatically adds the absolute path as a reference. This allows you to link external material while keeping the files in their original source location, avoiding unnecessary duplication.
+
 Each reference file should include:
 - the absolute folder path
 - what the folder contains
@@ -64,6 +67,7 @@ Each reference file should include:
 - any privacy or usage constraints
 
 Agents may use these references to inspect external folders and update intake or downstream domain docs while keeping the original external directories unchanged.
+
 
 ---
 
@@ -86,7 +90,7 @@ Agents may use these references to inspect external folders and update intake or
 ---
 
 ## Example Prompt
-`@ARK, use the contents of 001_Source_Intake to ingest source material, organize the findings into the correct canonical company-brain documents, and keep all originals in place.`
+`@ARK, use the contents of 001_Data_Souces to ingest source material, organize the findings into the correct canonical company-brain documents, and keep all originals in place.`
 
 ## External Reference Note Example
 

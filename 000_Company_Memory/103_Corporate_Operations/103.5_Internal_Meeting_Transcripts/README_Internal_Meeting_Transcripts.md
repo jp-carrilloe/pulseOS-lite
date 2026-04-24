@@ -21,4 +21,4 @@ Use this folder when:
 - the material belongs to the Operations domain
 - the information is no longer just temporary intake context
 
-Do not use this folder as the initial intake drop zone for bootstrap. Initial bootstrap source material should go into `001_Source_Intake`.
+Do not use this folder as the initial intake drop zone for bootstrap. Initial bootstrap source material should go into `001_Data_Souces`.

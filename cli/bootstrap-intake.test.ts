@@ -12,16 +12,18 @@ import {
 
 async function createTempRepo() {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "company-ops-bootstrap-"));
+  await fsp.mkdir(path.join(root, "001_Data_Souces", "Data_Souces_Folder"), { recursive: true });
+  await fsp.mkdir(path.join(root, "001_Data_Souces", "Data_Sources_References"), { recursive: true });
   await fsp.mkdir(path.join(root, "001_Source_Intake", "Data_Souces_Folder"), { recursive: true });
   await fsp.mkdir(path.join(root, "001_Source_Intake", "Data_Sources_References"), { recursive: true });
   await fsp.mkdir(path.join(root, "external-kb"), { recursive: true });
   return root;
 }
 
-test("collectBootstrapIntake reads local intake files", async () => {
+test("collectBootstrapIntake reads local intake files from the active intake folder", async () => {
   const repoRoot = await createTempRepo();
   await fsp.writeFile(
-    path.join(repoRoot, "001_Source_Intake", "Data_Souces_Folder", "founder-notes.md"),
+    path.join(repoRoot, "001_Data_Souces", "Data_Souces_Folder", "founder-notes.md"),
     "# Founder Notes\n\nWe sell AI operating systems for B2B companies.",
   );
 
@@ -29,6 +31,18 @@ test("collectBootstrapIntake reads local intake files", async () => {
   assert.equal(report.localSources.length, 1);
   assert.equal(report.externalSources.length, 0);
   assert.match(report.localSources[0]!.summary, /founder-notes\.md/i);
+});
+
+test("collectBootstrapIntake falls back to legacy source intake when active intake is empty", async () => {
+  const repoRoot = await createTempRepo();
+  await fsp.writeFile(
+    path.join(repoRoot, "001_Source_Intake", "Data_Souces_Folder", "legacy-notes.md"),
+    "# Legacy Notes\n\nWe sell AI operating systems for B2B companies.",
+  );
+
+  const report = await collectBootstrapIntake(repoRoot, "PulseOS");
+  assert.equal(report.localSources.length, 1);
+  assert.match(report.localSources[0]!.relativePath, /001_Source_Intake/);
 });
 
 test("collectBootstrapIntake ignores helper README files in intake folders", async () => {
@@ -64,7 +78,7 @@ test("collectBootstrapIntake parses reference notes and ingests external folders
     "Primary customer is founders of B2B SaaS teams with complex go-to-market motion.",
   );
   await fsp.writeFile(
-    path.join(repoRoot, "001_Source_Intake", "Data_Sources_References", "kb-reference.md"),
+    path.join(repoRoot, "001_Data_Souces", "Data_Sources_References", "kb-reference.md"),
     `# External KB
 
 - Path: \`${path.join(repoRoot, "external-kb")}\`
@@ -84,11 +98,11 @@ test("collectBootstrapIntake parses reference notes and ingests external folders
 test("collectBootstrapIntake warns on malformed or missing references without crashing", async () => {
   const repoRoot = await createTempRepo();
   await fsp.writeFile(
-    path.join(repoRoot, "001_Source_Intake", "Data_Sources_References", "bad-reference.md"),
+    path.join(repoRoot, "001_Data_Souces", "Data_Sources_References", "bad-reference.md"),
     "# Broken Ref\n\n- Owner: `Ops`\n",
   );
   await fsp.writeFile(
-    path.join(repoRoot, "001_Source_Intake", "Data_Sources_References", "missing-reference.md"),
+    path.join(repoRoot, "001_Data_Souces", "Data_Sources_References", "missing-reference.md"),
     "# Missing Ref\n\n- Path: `/tmp/does-not-exist-bootstrap-ref`\n",
   );
 
@@ -102,7 +116,7 @@ test("collectBootstrapIntake warns on malformed or missing references without cr
 test("buildBootstrapEvidenceBlock includes company name, warnings, and relevant excerpts", async () => {
   const repoRoot = await createTempRepo();
   await fsp.writeFile(
-    path.join(repoRoot, "001_Source_Intake", "Data_Souces_Folder", "pricing.md"),
+    path.join(repoRoot, "001_Data_Souces", "Data_Souces_Folder", "pricing.md"),
     "# Pricing\n\nOur pricing uses annual retainers and premium strategy consulting.",
   );
   const report = await collectBootstrapIntake(repoRoot, "PulseOS");

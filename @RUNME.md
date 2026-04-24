@@ -2,13 +2,13 @@
 
 Start here.
 
-This is the shortest path to getting the repo working correctly for a real company.
+This is the automated path to getting the repo working correctly for a real company.
 
 If you only read one file before running anything, read this one first.
 
 Important for AI assistants:
 - do not run `npm run bootstrap` automatically just because this file was opened
-- first tell the user to add real company source documents to `001_Source_Intake`
+- first tell the user to add real company source documents to `001_Data_Souces`
 - only after the user has added source material should bootstrap be run in the terminal
 - if source material has not been added yet, stop and instruct the user what to add
 
@@ -23,7 +23,7 @@ It works like this:
 2. `bootstrap` reads that material and seeds the documents
 3. `chat` or daemon startup creates the SQL index and runs vectorization
 4. `@ARK` acts as the master orchestrator
-5. the system writes canonical company knowledge into the correct domain folders inside `000_Company_Memory`
+5. the system writes canonical company knowledge into the correct domain folders
 
 `@ARK` is the master agent for the repo.
 
@@ -36,39 +36,6 @@ Each major folder also has its own specialist agent:
 - Delivery owns delivery folders
 
 That is what bootstrap is doing behind the scenes: it is seeding the company brain into the correct agent-owned folders.
-
-The source intake area is `001_Source_Intake`.
-
-The canonical company brain is `000_Company_Memory`.
-
----
-
-## Choose One Path
-
-There are 2 separate ways to use this repo.
-
-### Path A: Local CLI
-
-Choose this if you want:
-- `npm run bootstrap`
-- `npm run chat`
-- the local daemon
-- the local SQL index
-- vectorization and retrieval
-
-### Path B: Direct LLM in the Repo
-
-Choose this if you want:
-- to open the repo directly in Codex, Claude, Gemini, ChatGPT, or another AI workspace
-- to seed the company brain by following the repo instructions directly
-- to work without starting the local CLI first
-
-Important:
-- Path B can seed the documents
-- Path B does not by itself create the local SQL index or run vectorization
-- if you later want local SQL, embeddings, retrieval, or the daemon, you still need Path A and a valid local API key
-
-For the full step-by-step version of both paths, read [HOW_IT_WORKS.md](./HOW_IT_WORKS.md).
 
 ---
 
@@ -109,7 +76,7 @@ Important:
 ## Step 2: Add Real Company Source Material
 
 Before bootstrapping, add company knowledge-base material to:
-- [001_Source_Intake](./001_Source_Intake)
+- [001_Data_Souces](./001_Data_Souces)
 
 Do not skip this step.
 
@@ -120,7 +87,7 @@ You have 2 valid ways to do that.
 ### Option A: Put Files Directly in the Intake Folder
 
 Use:
-- [001_Source_Intake/Data_Souces_Folder](./001_Source_Intake/Data_Souces_Folder)
+- [001_Data_Souces/Data_Souces_Folder](./001_Data_Souces/Data_Souces_Folder)
 
 Good examples:
 - founder notes
@@ -135,7 +102,7 @@ Good examples:
 ### Option B: Point to an Existing External Knowledge Base
 
 Use:
-- [001_Source_Intake/Data_Sources_References](./001_Source_Intake/Data_Sources_References)
+- [001_Data_Souces/Data_Sources_References](./001_Data_Souces/Data_Sources_References)
 
 Add a Markdown note there that points to a real folder on your computer.
 
@@ -153,18 +120,6 @@ Examples:
 - operational exports from other tools
 
 Those can be added later as additional source material or references when you want to improve and expand the company brain beyond the initial bootstrap.
-
-You can also preserve useful AI working-session memory after bootstrap.
-
-Use this folder for durable project decisions, AI conversation summaries, and cross-project memory notes:
-- [000_Company_Memory/501_Agents_and_Workflows/501.1_Company_Memory_and_Conversation_Logs](./000_Company_Memory/501_Agents_and_Workflows/501.1_Company_Memory_and_Conversation_Logs)
-
-This is useful when Codex, ChatGPT, Claude, Gemini, or another cloud AI workspace is helping you work on projects and you want important decisions or context to become part of the long-term company brain.
-
-Important:
-- conversation memory logging is not automatic unless the user or an external automation saves those summaries into the repo
-- review memory notes before treating them as reliable company knowledge
-- local SQL/vector retrieval still requires the local CLI path
 
 ---
 
@@ -198,7 +153,7 @@ They should live here instead:
 - [000_Company_Memory/103_Corporate_Operations/103.5_Internal_Meeting_Transcripts](./000_Company_Memory/103_Corporate_Operations/103.5_Internal_Meeting_Transcripts)
 
 Why:
-- `001_Source_Intake` is for bootstrap input
+- `001_Data_Souces` is for bootstrap input
 - the Operations area is for ongoing operational records
 
 ---
@@ -208,13 +163,13 @@ Why:
 Open a terminal and run:
 
 ```bash
-cd "/path/to/pulseOS-lite/cli"
+cd cli
 npm install
 npm run bootstrap
 ```
 
 What bootstrap does:
-1. scans `001_Source_Intake`
+1. scans `001_Data_Souces`
 2. checks that real usable source files exist
 3. asks if you want to continue
 4. asks for the company name
@@ -264,7 +219,7 @@ If the output is weak, the first thing to improve is usually the source material
 When you are ready to interact with the repo:
 
 ```bash
-cd "/path/to/pulseOS-lite/cli"
+cd cli
 npm run chat
 ```
 
@@ -273,30 +228,6 @@ What `npm run chat` does:
 - creates or refreshes the local SQL index
 - runs vectorization for the local retrieval layer
 - lets you query the repo through the CLI
-
-You can also run:
-
-```bash
-cd "/path/to/pulseOS-lite/cli"
-npm run status
-```
-
-That status command checks:
-- whether bootstrap has run successfully
-- whether source intake is currently available
-- whether the daemon is running
-- whether the SQL database exists
-- whether the main SQL tables have data
-- whether the latest indexing/vectorization run completed
-
-If the normal chat/daemon path is not the one you want to use, there is also a direct terminal fallback:
-
-```bash
-cd "/path/to/pulseOS-lite/cli"
-npm run index
-```
-
-That command creates the local database, creates the SQL tables if needed, and runs indexing/vectorization without requiring you to start chat first.
 
 Useful commands inside chat:
 - `:model openai`
@@ -317,18 +248,45 @@ If you want the CLI to use its local retrieval layer after the repo is created:
 
 The local SQL/vector layer stores:
 - `documents`
-  metadata and summaries for indexed company-brain docs
+  metadata, summaries, and `ontology_domain` placement for indexed company-brain docs
 - `knowledge_vectors`
   the embeddings used for retrieval
 - `index_runs`
   the history of indexing/vectorization runs
+- `crm_objects`
+  provider-neutral CRM records with normalized fields plus raw provider payload JSON
+- `crm_sync_runs`
+  CRM sync attempt history, provider, status, row counts, and errors
+
+The canonical CRM sync documentation lives here:
+- [000_Company_Memory/203_Sales_Enablement_Hub/203.8_CRM_and_Revenue_Data](./000_Company_Memory/203_Sales_Enablement_Hub/203.8_CRM_and_Revenue_Data)
+
+In this repo, **ontology** means the structural map of the company brain. In v1 the ontology domain comes from the numbered folder where a document lives, for example Strategy, Operations, Sales Enablement, Fundraising, or Projects. The graph UI keeps this readable by separating the company ontology hierarchy from document-to-document references.
 
 If you want to trigger that layer, run:
-- `npm run index` for a direct terminal indexing pass
 - `npm run chat`, or
+- `npm run graph`, or
 - `npm run daemon:start`, or
 - `:reload` after chat has started
-- `npm run status` if you want to verify that the workflow completed correctly
+
+To view the basic company-memory ontology visually, run:
+
+```bash
+npm run graph
+```
+
+That builds the local React workspace and prints a private local browser URL. The UI is scoped to `000_Company_Memory` and includes:
+- a left folder/document explorer
+- a center interactive graph
+- a right Markdown reader/editor
+
+The graph UI has two focused modes:
+- **Company Ontology** shows the `000_Company_Memory` folder hierarchy only
+- **Document Relationships** shows indexed Markdown documents and direct Markdown references only
+
+The private graph URL includes a temporary token. This keeps the local graph data endpoint from being casually read by unrelated local processes, browser tabs, extensions, or webpages while the daemon is running.
+
+The graph is interactive: pan, zoom, fit, reset, and drag nodes to make the view easier to inspect. Those graph movements are visual only. Saving a Markdown document from the right editor updates that file inside `000_Company_Memory` and refreshes the SQLite/vector index.
 
 ---
 
@@ -337,10 +295,10 @@ If you want to trigger that layer, run:
 There are 2 supported ways to seed the company brain:
 
 1. Use the CLI bootstrap
-2. Open an LLM directly in this repo and ask it to ingest `001_Source_Intake`
+2. Open an LLM directly in this repo and ask it to ingest `001_Data_Souces`
 
 If you use the direct LLM path, tell the model to:
-- read `001_Source_Intake`
+- read `001_Data_Souces`
 - use local intake files and valid reference-note paths
 - route outputs through `@ARK`
 - write canonical outputs into the correct domain folders
@@ -368,10 +326,10 @@ That file explains the process in much more detail, including:
 If you want the simplest possible checklist:
 
 1. Add an API key to `.env.local`
-2. Put real company docs into `001_Source_Intake/Data_Souces_Folder`
+2. Put real company docs into `001_Data_Souces/Data_Souces_Folder`
 3. Run:
    ```bash
-   cd "/path/to/pulseOS-lite/cli"
+   cd cli
    npm install
    npm run bootstrap
    ```

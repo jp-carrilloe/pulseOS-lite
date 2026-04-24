@@ -70,7 +70,7 @@ npm install
 npm run bootstrap
 ```
 
-Bootstrap asks only for the company name, then reads source material from `001_Source_Intake` and fills every template document in dependency order — foundation docs first, each subsequent document grounded in intake evidence and what was generated before it. Safe to re-run.
+Bootstrap asks only for the company name, then reads source material from `001_Data_Souces` and fills every template document in dependency order — foundation docs first, each subsequent document grounded in intake evidence and what was generated before it. Safe to re-run.
 
 ### Talk to the repo
 

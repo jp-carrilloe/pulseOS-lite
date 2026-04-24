@@ -30,7 +30,7 @@ If you need to preserve full internal meeting transcripts, use:
 - `103_Corporate_Operations/103.5_Internal_Meeting_Transcripts`
 
 If you need to seed the repo from source documents, use:
-- `001_Source_Intake`
+- `001_Data_Souces`
 
 ---
 

@@ -47,7 +47,7 @@ This template is designed for project docs, PRDs, specs, operating notes, and in
 ## Example
 ```markdown
 ## Related Documents
-- [PRD-001 — Data Model and Taxonomy](../02_PRDs/02.1_PRD_Data_Model_And_Taxonomy.md)
+- [PRD-001 — Data Model and ontology](../02_PRDs/02.1_PRD_Data_Model_And_ontology.md)
 - [Runtime Usage Guide](../05_Operations/05.3_Runtime_Usage_Guide.md)
 
 ## Operational Metadata

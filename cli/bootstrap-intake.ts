@@ -2,8 +2,10 @@ import fsp from "node:fs/promises";
 import fs from "node:fs";
 import path from "node:path";
 
-export const LOCAL_INTAKE_DIR = "001_Source_Intake/Data_Souces_Folder";
-export const REFERENCE_DIR = "001_Source_Intake/Data_Sources_References";
+export const LOCAL_INTAKE_DIR = "001_Data_Souces/Data_Souces_Folder";
+export const REFERENCE_DIR = "001_Data_Souces/Data_Sources_References";
+export const LEGACY_LOCAL_INTAKE_DIR = "001_Source_Intake/Data_Souces_Folder";
+export const LEGACY_REFERENCE_DIR = "001_Source_Intake/Data_Sources_References";
 const SUPPORTED_EXTENSIONS = new Set([".md", ".txt", ".json", ".csv"]);
 const SKIP_DIRS = new Set(["node_modules"]);
 const MAX_EXCERPT_LENGTH = 1600;
@@ -38,11 +40,8 @@ export interface IntakeReport {
 
 export async function collectBootstrapIntake(repoRoot: string, companyName: string): Promise<IntakeReport> {
   const warnings: string[] = [];
-  const localRoot = path.join(repoRoot, LOCAL_INTAKE_DIR);
-  const referenceRoot = path.join(repoRoot, REFERENCE_DIR);
-
-  const localSources = await collectSupportedFiles(localRoot, "local_intake", warnings, repoRoot);
-  const parsedReferences = await collectReferenceNotes(referenceRoot, repoRoot, warnings);
+  const localSources = await collectFirstAvailableLocalSources(repoRoot, warnings);
+  const parsedReferences = await collectFirstAvailableReferenceNotes(repoRoot, warnings);
   const externalSources: IntakeSource[] = [];
 
   for (const reference of parsedReferences) {
@@ -58,6 +57,22 @@ export async function collectBootstrapIntake(repoRoot: string, companyName: stri
     parsedReferences,
     warnings,
   };
+}
+
+async function collectFirstAvailableLocalSources(repoRoot: string, warnings: string[]): Promise<IntakeSource[]> {
+  const primaryRoot = path.join(repoRoot, LOCAL_INTAKE_DIR);
+  const legacyRoot = path.join(repoRoot, LEGACY_LOCAL_INTAKE_DIR);
+  const primarySources = await collectSupportedFiles(primaryRoot, "local_intake", warnings, repoRoot);
+  if (primarySources.length > 0 || !fs.existsSync(legacyRoot)) return primarySources;
+  return collectSupportedFiles(legacyRoot, "local_intake", warnings, repoRoot);
+}
+
+async function collectFirstAvailableReferenceNotes(repoRoot: string, warnings: string[]): Promise<ExternalReferenceNote[]> {
+  const primaryRoot = path.join(repoRoot, REFERENCE_DIR);
+  const legacyRoot = path.join(repoRoot, LEGACY_REFERENCE_DIR);
+  const primaryReferences = await collectReferenceNotes(primaryRoot, repoRoot, warnings);
+  if (primaryReferences.length > 0 || !fs.existsSync(legacyRoot)) return primaryReferences;
+  return collectReferenceNotes(legacyRoot, repoRoot, warnings);
 }
 
 async function collectSupportedFiles(

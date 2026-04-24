@@ -13,7 +13,7 @@ import fsp from "node:fs/promises";
 import fs from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -22,6 +22,7 @@ import { loadRepoEnv, writeBootstrapState } from "./shared.js";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TODAY = new Date().toISOString().split("T")[0];
+export const ACME_SAMPLE_MEMORY_DIR = "000_Acme_Sample_Company_Memory";
 
 // ── Dependency Order ──────────────────────────────────────────────────────────
 //
@@ -139,6 +140,14 @@ async function findTemplateFiles(dir: string, base: string, results: TemplateFil
   }
 }
 
+export async function cleanupAcmeSampleCompanyMemory(repoRoot: string = REPO_ROOT): Promise<boolean> {
+  const samplePath = path.join(repoRoot, ACME_SAMPLE_MEMORY_DIR);
+  if (!fs.existsSync(samplePath)) return false;
+
+  await fsp.rm(samplePath, { recursive: true, force: true });
+  return true;
+}
+
 // ── Intake Questionnaire ──────────────────────────────────────────────────────
 
 async function runIntake(rl: ReturnType<typeof createInterface>): Promise<BootstrapProfile> {
@@ -153,7 +162,7 @@ async function runIntake(rl: ReturnType<typeof createInterface>): Promise<Bootst
   process.stdout.write("\n" + "─".repeat(60) + "\n");
   process.stdout.write("Bootstrap Onboarding\n");
   process.stdout.write(
-    "Bootstrap now reads from 001_Source_Intake and uses those source materials to fill the repo.\nOnly the company name is required here; the rest is inferred from your intake documents.\n",
+    "Bootstrap now reads from 001_Data_Souces and uses those source materials to fill the repo.\nOnly the company name is required here; the rest is inferred from your intake documents.\n",
   );
   process.stdout.write("─".repeat(60) + "\n\n");
 
@@ -242,8 +251,12 @@ async function main() {
       "\npulseos-lite-open-source-cli bootstrap — Seed your PulseOS Lite Open Source repo with real content\n",
     );
     process.stdout.write(
-      "Bootstrap seeds documents in dependency order. It reads source material from 001_Source_Intake and keeps the originals in place.\n",
+      "Bootstrap seeds documents in dependency order. It reads source material from 001_Data_Souces and keeps the originals in place.\n",
     );
+
+    if (await cleanupAcmeSampleCompanyMemory(REPO_ROOT)) {
+      process.stdout.write("Removed disposable Acme sample company memory before bootstrap.\n");
+    }
 
     // Discover and sort template files
     process.stdout.write("\nScanning for unfilled template files...\n");
@@ -262,13 +275,13 @@ async function main() {
     }
 
     process.stdout.write(
-      "\nReviewing source material in `001_Source_Intake/Data_Souces_Folder` and `001_Source_Intake/Data_Sources_References` before bootstrap starts...\n",
+      "\nReviewing source material in `001_Data_Souces/Data_Souces_Folder` and `001_Data_Souces/Data_Sources_References` before bootstrap starts...\n",
     );
     const intakeReport = await collectBootstrapIntake(REPO_ROOT, "");
     const totalIntakeFiles = intakeReport.localSources.length + intakeReport.externalSources.length;
     if (totalIntakeFiles === 0) {
       process.stderr.write(
-        "\nBootstrap could not find any usable intake material.\nAdd source files to `001_Source_Intake/Data_Souces_Folder` or add valid reference notes in `001_Source_Intake/Data_Sources_References`, then run `npm run bootstrap` again.\n",
+        "\nBootstrap could not find any usable intake material.\nAdd source files to `001_Data_Souces/Data_Souces_Folder` or add valid reference notes in `001_Data_Souces/Data_Sources_References`, then run `npm run bootstrap` again.\n",
       );
       return;
     }
@@ -550,4 +563,6 @@ function loadEnvKey(key: string): string | undefined {
   return undefined;
 }
 
-await main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
+}

@@ -24,7 +24,7 @@ echo "Running docs audit on ${#MD_FILES[@]} markdown files"
 NAME_BAD=()
 for f in "${MD_FILES[@]}"; do
   b="$(basename "$f")"
-  if [[ "$f" != 000_Company_Memory/* && "$f" != 001_Source_Intake/* ]]; then
+  if [[ "$f" != 000_Company_Memory/* && "$f" != 001_Data_Souces/* ]]; then
     continue
   fi
   if [[ "$b" == "AGENT.md" || "$b" == "README.md" || "$b" == "ARK_Master.md" || "$b" == "Document_Metadata_And_Related_References_Template.md" ]]; then
@@ -51,7 +51,7 @@ fi
 # 2) Metadata header completeness
 META_BAD=()
 for f in "${MD_FILES[@]}"; do
-  if [[ "$f" != 000_Company_Memory/* && "$f" != 001_Source_Intake/* ]]; then
+  if [[ "$f" != 000_Company_Memory/* && "$f" != 001_Data_Souces/* ]]; then
     continue
   fi
   b="$(basename "$f")"
