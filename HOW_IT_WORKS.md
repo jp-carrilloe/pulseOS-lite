@@ -495,9 +495,11 @@ The graph has two intentionally separate views so the company brain does not bec
 - **Company Ontology** shows only the `000_Company_Memory` folder hierarchy
 - **Document Relationships** shows only indexed Markdown documents and direct Markdown links between them
 
-The graph URL is now a plain localhost page. If the daemon is running, you can open or refresh the same `/graph` URL directly without any token or first-open handshake.
+The printed graph URL uses a temporary token only for the first open. That first launch creates a local browser session and then redirects you to a clean localhost URL, so normal refresh works without keeping the token in the address bar. This is still a lightweight local access guard: the daemon is an HTTP server on `127.0.0.1`, so the one-time token plus local session help prevent unrelated local processes, browser tabs, extensions, or webpages from casually calling the graph data endpoint while the daemon is running.
 
 The graph is interactive. You can drag nodes, pan the canvas, zoom in or out, fit the graph to the viewport, and reset to the generated default layout. Graph movements are visual only and do not persist layout changes. If you edit and save a Markdown document in the right panel, the daemon writes that file and refreshes the SQLite index/vector layer so chat and graph retrieval stay current.
+
+The graph UI also includes a rebuild advisor. It compares the current Markdown documents to the indexed SQLite state, warns when the weekly refresh window has passed, and estimates whether a rebuild is likely to be cheap or more deliberate. The advisor view itself is read-only. It does not rewrite the rebuild change log on every refresh. The audit log is updated by daemon startup, MCP startup, or explicit rebuild/scan flows so the history reflects real maintenance events instead of simple page loads.
 
 The editor is intentionally narrow. It only reads and saves Markdown inside `000_Company_Memory`; source intake, CLI files, repo configuration, generated assets, and hidden/system folders are not editable from the graph UI.
 
@@ -565,9 +567,22 @@ Simple rule:
 
 If you want to use this repo through MCP-style tooling, the practical pattern is:
 1. keep this repo clean and up to date
-2. expose it as an accessible local workspace or filesystem context
+2. either expose it as an accessible local workspace/filesystem context or start the local MCP server with `cd cli && npm run mcp`
 3. tell the model explicitly that this repo is the company brain
 4. reference the relevant folders or docs when you want grounded output
+
+The local MCP server exposes a small tool surface:
+- `repo_status`
+- `rebuild_advisor`
+- `rebuild_now`
+- `list_files`
+- `retrieve_context`
+
+Important behavior:
+- `retrieve_context` is read-only by default
+- if the index is stale, callers should inspect `rebuild_advisor` first
+- if they intentionally want retrieval to refresh the index first, they can pass `refresh_if_stale: true`
+- if no index exists yet, `retrieve_context` tells the caller to run `rebuild_now` or opt into `refresh_if_stale`
 
 Example instruction:
 

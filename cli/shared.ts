@@ -119,6 +119,28 @@ export async function probeDaemonHealth(port: number, token: string): Promise<bo
   }
 }
 
+export async function probeGraphBootstrapUrl(port: number, token: string): Promise<boolean> {
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/graph?token=${encodeURIComponent(token)}`, {
+      redirect: "manual",
+    });
+    return response.status === 302 && response.headers.get("location") === "/graph";
+  } catch {
+    return false;
+  }
+}
+
+export async function probeUiCapabilities(port: number, token: string): Promise<boolean> {
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/ui-capabilities?token=${encodeURIComponent(token)}`);
+    if (!response.ok) return false;
+    const payload = (await response.json()) as { data?: { uiApiVersion?: number } };
+    return typeof payload.data?.uiApiVersion === "number";
+  } catch {
+    return false;
+  }
+}
+
 export async function fetchDaemonJson<T>(
   state: DaemonState,
   pathname: string,
@@ -177,7 +199,7 @@ export async function getAvailablePort(env: NodeJS.ProcessEnv = process.env): Pr
 }
 
 export function getDaemonVersion(): string {
-  return "1.8.0";
+  return "1.8.1";
 }
 
 export function delay(ms: number): Promise<void> {

@@ -94,3 +94,68 @@ export interface DocumentReadResponse {
   content: string;
   updatedAt: string;
 }
+
+export interface RebuildTrackedChange {
+  path: string;
+  changeType: "added" | "updated" | "deleted";
+  previousHash: string | null;
+  nextHash: string | null;
+  previousUpdatedAt: string | null;
+  nextUpdatedAt: string | null;
+  charDelta: number;
+}
+
+export interface RebuildChangeLogEntry extends RebuildTrackedChange {
+  id: string;
+  firstDetectedAt: string;
+  lastDetectedAt: string;
+  resolvedAt: string | null;
+}
+
+export interface RebuildAdvisorStatus {
+  checkedAt: string;
+  indexedDocuments: number;
+  indexedCharCount: number;
+  lastIndexedAt: string | null;
+  embeddingModel: string | null;
+  embeddingMode: "provider" | "heuristic";
+  needsRebuild: boolean;
+  reasons: string[];
+  suggestion: string;
+  suggestedAction: "none" | "review" | "rebuild";
+  weeklySchedule: {
+    intervalDays: number;
+    nextRecommendedAt: string | null;
+    overdue: boolean;
+    overdueDays: number;
+  };
+  pending: {
+    totalChanges: number;
+    added: number;
+    updated: number;
+    deleted: number;
+    changedCharacters: number;
+    changes: RebuildTrackedChange[];
+  };
+  cost: {
+    level: "none" | "low" | "medium" | "high";
+    likelyUsesProviderEmbeddings: boolean;
+    requiresFullReindex: boolean;
+    estimatedEmbeddingCalls: number;
+    summary: string;
+    warning: string | null;
+  };
+  recentLog: RebuildChangeLogEntry[];
+}
+
+export interface UiCapabilities {
+  daemonVersion: string;
+  uiApiVersion: number;
+  buildId: string;
+  features: {
+    terminalPanel: boolean;
+    rebuildAdvisor: boolean;
+    documentContext: boolean;
+    graphSessionCookie: boolean;
+  };
+}
