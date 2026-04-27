@@ -17,6 +17,8 @@ import {
   getDaemonVersion,
   getModelCredentialStatus,
   loadRepoEnv,
+  probeGraphBootstrapUrl,
+  probeUiCapabilities,
   probeDaemonHealth,
   readBootstrapState,
   readDaemonState,
@@ -294,7 +296,14 @@ async function printWorkflowStatus(env: NodeJS.ProcessEnv): Promise<void> {
 async function printGraphUrl(env: NodeJS.ProcessEnv): Promise<void> {
   process.stdout.write("Building and starting the PulseOS Company Memory UI...\n");
   const state = await ensureRuntime(env);
-  const url = `http://127.0.0.1:${state.port}/graph`;
+  const graphReady = await probeGraphBootstrapUrl(state.port, state.token);
+  const capabilitiesReady = await probeUiCapabilities(state.port, state.token);
+  if (!graphReady || !capabilitiesReady) {
+    throw new Error(
+      "The graph daemon started, but the UI compatibility handshake did not become ready.\nTry `npm run daemon:stop` and then `npm run graph` again.",
+    );
+  }
+  const url = `http://127.0.0.1:${state.port}/graph?token=${encodeURIComponent(state.token)}`;
   process.stdout.write(
     [
       "PulseOS Company Memory UI is ready.",
@@ -309,7 +318,7 @@ async function printGraphUrl(env: NodeJS.ProcessEnv): Promise<void> {
       "- Interaction: pan, zoom, fit, reset, and drag graph nodes without changing layout data.",
       "",
       "Saving a document refreshes the SQLite documents table and summary vectors so chat and graph retrieval stay current.",
-      "The graph URL is a plain localhost page now, so you can refresh it directly while the daemon is running.",
+      "Open the printed link once to create the local browser session. After that, the UI redirects to a clean localhost URL and normal refresh works.",
     ].join("\n") + "\n",
   );
 }

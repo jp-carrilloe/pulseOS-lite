@@ -13,6 +13,7 @@
     "graph:build": "vite build --config frontend/vite.config.ts",
     "graph:dev": "vite --config frontend/vite.config.ts",
     "graph": "npm run graph:build && node --import tsx/esm index.ts graph",
+    "mcp": "node --import tsx/esm mcp-server.ts",
     "status": "node --import tsx/esm index.ts status",
     "daemon:start": "node --import tsx/esm index.ts daemon start",
     "daemon:stop": "node --import tsx/esm index.ts daemon stop",

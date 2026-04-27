@@ -104,15 +104,17 @@ What uses this database today:
 - the local CLI chat flow (`npm run chat`) uses the SQLite database and stored vectors to retrieve relevant company-brain documents before answering
 - the local daemon uses the same database, so a different terminal can access the same indexed company brain as long as it runs from this repo's `cli/` folder
 - the local graph UI (`npm run graph`) opens the Company Memory workspace backed by the same SQLite index: a left explorer for `000_Company_Memory`, a central interactive graph, and a right reader/editor for Markdown documents
+- the graph UI now includes a rebuild advisor that tracks markdown drift, recommends a weekly refresh cadence, and warns when a manual rebuild is likely to trigger meaningful compute or embedding cost
+- the rebuild change log is updated by explicit scan/rebuild flows and daemon or MCP session startup, not by every status read, so the audit history reflects real maintenance events instead of page refreshes
 - the graph workspace has two focused views: Company Ontology for the `000_Company_Memory` folder hierarchy, and Document Relationships for direct Markdown reference links; the graph can be panned, zoomed, fitted, reset, and manually rearranged by dragging nodes
 - the browser editor can only read and save Markdown inside `000_Company_Memory`; source intake, CLI files, repo config, generated assets, and hidden/system folders are outside the editor scope
 - `npm run index` can create or refresh the same database without opening chat
 - `npm run status` checks whether the database, tables, and latest indexing/vectorization run are healthy
 
-What does not exist yet:
-- this repo does not currently ship a dedicated MCP server that exposes the SQL/vector database as an MCP tool
-- MCP-style usage today means giving an MCP-compatible assistant access to this repo as a local workspace or filesystem context
-- if that assistant needs the SQL/vector retrieval layer, it should call the CLI commands below from `cli/`
+MCP support today:
+- this repo now ships a lightweight stdio MCP server from `cli/`
+- MCP-compatible assistants can call repo status, rebuild advice, rebuild-now, file listing, and retrieval-context tools against this local workspace
+- `retrieve_context` is read-only by default; if the index is stale, callers should inspect `rebuild_advisor` or call `rebuild_now` first, or opt into `refresh_if_stale: true`
 
 Commands:
 - `npm run bootstrap`
@@ -120,7 +122,9 @@ Commands:
 - `npm run chat`
   starts the daemon and uses the existing SQLite index immediately
 - `npm run graph`
-  builds the local React graph workspace, starts the daemon, and prints a plain localhost browser URL. The UI opens the `000_Company_Memory` explorer, graph, reader, and basic Markdown editor, and you can refresh that URL directly while the daemon is running.
+  builds the local React graph workspace, starts the daemon, and prints a private local browser URL. Open that printed link once and the browser will create a local session, then redirect to a clean localhost URL so normal refresh works. The UI opens the `000_Company_Memory` explorer, graph, reader, and basic Markdown editor while still keeping the graph/data endpoints scoped to that local daemon session.
+- `npm run mcp`
+  starts a lightweight stdio MCP server so Codex, Claude Desktop, or another MCP-compatible terminal/cloud client can call repo status, rebuild advice, rebuild-now, file listing, and retrieval-context tools against this local workspace. `retrieve_context` stays read-only unless the caller explicitly passes `refresh_if_stale: true`.
 - `npm run index`
   manually creates the SQLite database, creates the SQL tables if needed, and runs indexing/vectorization without starting chat
 - `npm run status`

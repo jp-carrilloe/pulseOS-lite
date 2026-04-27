@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,11 +20,13 @@ import {
   removeDaemonState,
   writeDaemonState,
 } from "./shared.js";
-import { KnowledgeBaseIndex, type KnowledgeGraphSnapshot } from "./retrieval.js";
+import { KnowledgeBaseIndex, type KnowledgeGraphSnapshot, type RebuildAdvisorStatus } from "./retrieval.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const COMPANY_MEMORY_ROOT = "000_Company_Memory";
 const FRONTEND_DIST = path.join(__dirname, "frontend", "dist");
+const GRAPH_SESSION_COOKIE = "pulseos_graph_session";
+const UI_API_VERSION = 1;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,6 +52,199 @@ interface FileTreeNode {
   path: string;
   type: "folder" | "document";
   children?: FileTreeNode[];
+}
+
+interface TerminalSessionSummary {
+  id: string;
+  cwd: string;
+  shell: string;
+  startedAt: string;
+  status: "running" | "exited";
+  exitCode: number | null;
+  exitSignal: string | null;
+}
+
+type TerminalEvent =
+  | { type: "started"; session: TerminalSessionSummary; message: string }
+  | { type: "output"; stream: "stdout" | "stderr"; chunk: string }
+  | { type: "exit"; code: number | null; signal: string | null }
+  | { type: "error"; message: string };
+
+interface TerminalSession {
+  summary: TerminalSessionSummary;
+  process: ChildProcessWithoutNullStreams;
+  history: TerminalEvent[];
+  listeners: Set<(event: TerminalEvent) => void>;
+}
+
+class TerminalSessionManager {
+  private sessions = new Map<string, TerminalSession>();
+
+  createSession(): TerminalSessionSummary {
+    const shell = process.env.SHELL?.trim() || "/bin/zsh";
+    const child = spawn(shell, [], {
+      cwd: REPO_ROOT,
+      env: {
+        ...process.env,
+        TERM: "dumb",
+        PWD: REPO_ROOT,
+      },
+      stdio: "pipe",
+    });
+
+    const summary: TerminalSessionSummary = {
+      id: randomUUID(),
+      cwd: REPO_ROOT,
+      shell,
+      startedAt: new Date().toISOString(),
+      status: "running",
+      exitCode: null,
+      exitSignal: null,
+    };
+
+    const session: TerminalSession = {
+      summary,
+      process: child,
+      history: [],
+      listeners: new Set(),
+    };
+    this.sessions.set(summary.id, session);
+
+    this.publish(session, {
+      type: "started",
+      session: { ...summary },
+      message: `PulseOS local repo shell started in ${REPO_ROOT}. Run commands like ls, rg, git, npm, or codex if it is installed on this machine.`,
+    });
+
+    child.stdout.on("data", (chunk: Buffer | string) => {
+      this.publish(session, { type: "output", stream: "stdout", chunk: String(chunk) });
+    });
+    child.stderr.on("data", (chunk: Buffer | string) => {
+      this.publish(session, { type: "output", stream: "stderr", chunk: String(chunk) });
+    });
+    child.on("error", (error) => {
+      this.publish(session, { type: "error", message: error.message || "The local shell failed to start." });
+    });
+    child.on("exit", (code, signal) => {
+      session.summary.status = "exited";
+      session.summary.exitCode = code;
+      session.summary.exitSignal = signal;
+      this.publish(session, { type: "exit", code, signal });
+    });
+
+    return { ...summary };
+  }
+
+  getSession(id: string): TerminalSession | null {
+    return this.sessions.get(id) ?? null;
+  }
+
+  writeInput(id: string, text: string): void {
+    const session = this.sessions.get(id);
+    if (!session) throw new Error("That terminal session does not exist anymore. Start a new shell and try again.");
+    if (session.summary.status !== "running") {
+      throw new Error("That terminal session has already exited. Start a new shell to continue.");
+    }
+    session.process.stdin.write(text);
+  }
+
+  closeSession(id: string): void {
+    const session = this.sessions.get(id);
+    if (!session) return;
+    if (session.summary.status === "running") {
+      session.process.kill("SIGTERM");
+    }
+    session.listeners.clear();
+    this.sessions.delete(id);
+  }
+
+  closeAll(): void {
+    for (const id of Array.from(this.sessions.keys())) {
+      this.closeSession(id);
+    }
+  }
+
+  createStreamResponse(id: string, signal?: AbortSignal): Response {
+    const session = this.sessions.get(id);
+    if (!session) {
+      return createSingleTerminalEventResponse(
+        {
+          type: "error",
+          message: "That terminal session could not be found. Start a new shell from the terminal panel and try again.",
+        },
+        200,
+      );
+    }
+
+    const stream = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        const encoder = new TextEncoder();
+        const send = (event: TerminalEvent) => {
+          controller.enqueue(encoder.encode(encodeSseEvent(event)));
+        };
+
+        for (const event of session.history) send(event);
+        const listener = (event: TerminalEvent) => send(event);
+        session.listeners.add(listener);
+
+        const cleanup = () => {
+          session.listeners.delete(listener);
+          try {
+            controller.close();
+          } catch {
+            // already closed
+          }
+        };
+
+        signal?.addEventListener("abort", cleanup, { once: true });
+      },
+      cancel: () => {
+        // listener cleanup is handled via abort
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+      },
+    });
+  }
+
+  private publish(session: TerminalSession, event: TerminalEvent) {
+    session.history.push(event);
+    if (session.history.length > 400) {
+      session.history.splice(0, session.history.length - 400);
+    }
+    for (const listener of session.listeners) {
+      listener(event);
+    }
+  }
+}
+
+function jsonErrorResponse(status: number, code: string, message: string): Response {
+  return Response.json({ error: { code, message } }, { status });
+}
+
+function encodeSseEvent(event: TerminalEvent): string {
+  const payload = JSON.stringify(event);
+  return payload
+    .split("\n")
+    .map((line) => `data: ${line}`)
+    .join("\n")
+    .concat("\n\n");
+}
+
+function createSingleTerminalEventResponse(event: TerminalEvent, status = 200): Response {
+  return new Response(encodeSseEvent(event), {
+    status,
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+    },
+  });
 }
 
 // ── AI Providers ─────────────────────────────────────────────────────────────
@@ -134,6 +330,7 @@ export function createDaemonApp(options: {
   state: DaemonState;
   token: string;
   kbIndex: KnowledgeBaseIndex;
+  terminalManager: TerminalSessionManager;
   getReadyState: () => ReadyState;
   awaitReady: () => Promise<void>;
   sessions: Map<string, Session>;
@@ -141,7 +338,7 @@ export function createDaemonApp(options: {
   onShutdown: () => void;
 }) {
   const app = new Hono();
-  const { state, token, sessions, resetIdleTimer, onShutdown, kbIndex, getReadyState, awaitReady } = options;
+  const { state, token, sessions, resetIdleTimer, onShutdown, kbIndex, terminalManager, getReadyState, awaitReady } = options;
 
   const auth = async (ctx: Context, next: Next) => {
     const header = ctx.req.header("authorization");
@@ -170,11 +367,21 @@ export function createDaemonApp(options: {
   app.use("/shutdown", auth);
 
   app.get("/graph", (ctx) => {
+    const bootstrapSession = bootstrapGraphSession(ctx, token, "/graph");
+    if (bootstrapSession) return bootstrapSession;
+    if (!hasGraphSessionAccess(ctx, token)) {
+      return ctx.html(renderGraphUnauthorizedPage(), 401);
+    }
     resetIdleTimer();
     return serveGraphIndex(ctx);
   });
 
   app.get("/ui", (ctx) => {
+    const bootstrapSession = bootstrapGraphSession(ctx, token, "/ui");
+    if (bootstrapSession) return bootstrapSession;
+    if (!hasGraphSessionAccess(ctx, token)) {
+      return ctx.html(renderGraphUnauthorizedPage(), 401);
+    }
     resetIdleTimer();
     return serveGraphIndex(ctx);
   });
@@ -185,6 +392,17 @@ export function createDaemonApp(options: {
   });
 
   app.get("/api/graph-data", async (ctx) => {
+    if (!hasGraphSessionAccess(ctx, token)) {
+      return ctx.json(
+        {
+          error: {
+            code: "unauthorized",
+            message: "This graph request is no longer attached to the current local UI session. Run `npm run graph` again and open the printed link once to restore access.",
+          },
+        },
+        401,
+      );
+    }
     resetIdleTimer();
     if (kbIndex.getDocumentCount() === 0) {
       await awaitReady();
@@ -192,12 +410,85 @@ export function createDaemonApp(options: {
     return ctx.json({ data: scopeGraphToCompanyMemory(await kbIndex.buildGraphSnapshot()) });
   });
 
+  app.get("/api/ui-capabilities", (ctx) => {
+    if (!hasGraphSessionAccess(ctx, token)) {
+      return ctx.json(
+        {
+          error: {
+            code: "unauthorized",
+            message: "Open the current `npm run graph` link once to restore the local UI session.",
+          },
+        },
+        401,
+      );
+    }
+    resetIdleTimer();
+    return ctx.json({
+      data: {
+        daemonVersion: state.version,
+        uiApiVersion: UI_API_VERSION,
+        buildId: `${state.version}:${state.startedAt}`,
+        features: {
+          terminalPanel: true,
+          rebuildAdvisor: true,
+          documentContext: true,
+          graphSessionCookie: true,
+        },
+      },
+    });
+  });
+
+  app.get("/api/rebuild-advisor", async (ctx) => {
+    if (!hasGraphSessionAccess(ctx, token)) {
+      return ctx.json(
+        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        401,
+      );
+    }
+    resetIdleTimer();
+    return ctx.json({ data: await kbIndex.inspectRebuildStatus() });
+  });
+
+  app.post("/api/rebuild", async (ctx) => {
+    if (!hasGraphSessionAccess(ctx, token)) {
+      return ctx.json(
+        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        401,
+      );
+    }
+    resetIdleTimer();
+    const result = await kbIndex.sync();
+    const advisor = await kbIndex.inspectRebuildStatus();
+    return ctx.json({
+      data: {
+        files: result.fileCount,
+        charCount: result.charCount,
+        indexedAt: result.indexedAt,
+        embeddingModel: result.embeddingModel,
+        embeddingMode: result.embeddingMode,
+        advisor,
+      },
+    });
+  });
+
   app.get("/api/files/tree", async (ctx) => {
+    if (!hasGraphSessionAccess(ctx, token)) {
+      return ctx.json(
+        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        401,
+      );
+    }
     resetIdleTimer();
     return ctx.json({ data: await buildCompanyMemoryTree(REPO_ROOT) });
   });
 
   app.get("/api/files/read", async (ctx) => {
+    if (!hasGraphSessionAccess(ctx, token)) {
+      return ctx.json(
+        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        401,
+      );
+    }
     const requestedPath = ctx.req.query("path") ?? "";
     try {
       const resolved = resolveCompanyMemoryMarkdownPath(requestedPath);
@@ -218,6 +509,12 @@ export function createDaemonApp(options: {
   });
 
   app.post("/api/files/write", async (ctx) => {
+    if (!hasGraphSessionAccess(ctx, token)) {
+      return ctx.json(
+        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        401,
+      );
+    }
     const body = (await ctx.req.json()) as { path?: string; content?: unknown };
     try {
       const resolved = resolveCompanyMemoryMarkdownPath(String(body.path ?? ""));
@@ -241,7 +538,85 @@ export function createDaemonApp(options: {
     }
   });
 
+  app.post("/api/terminal/session", (ctx) => {
+    if (!hasGraphSessionAccess(ctx, token)) {
+      return ctx.json(
+        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        401,
+      );
+    }
+    resetIdleTimer();
+    return ctx.json({ data: terminalManager.createSession() });
+  });
+
+  app.get("/api/terminal/stream", (ctx) => {
+    if (!hasGraphSessionAccess(ctx, token)) {
+      return createSingleTerminalEventResponse(
+        {
+          type: "error",
+          message: "Open the current `npm run graph` link once to restore the local UI session.",
+        },
+        200,
+      );
+    }
+    resetIdleTimer();
+    const id = ctx.req.query("id") ?? "";
+    return terminalManager.createStreamResponse(id, ctx.req.raw.signal);
+  });
+
+  app.post("/api/terminal/input", async (ctx) => {
+    if (!hasGraphSessionAccess(ctx, token)) {
+      return ctx.json(
+        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        401,
+      );
+    }
+    const body = (await ctx.req.json()) as { id?: string; text?: unknown };
+    try {
+      if (typeof body.text !== "string" || !body.text.length) {
+        throw new Error("The terminal did not receive any command text to send.");
+      }
+      terminalManager.writeInput(String(body.id ?? ""), body.text);
+      resetIdleTimer();
+      return ctx.json({ data: { ok: true } });
+    } catch (err) {
+      return ctx.json(
+        {
+          error: {
+            code: "terminal_input_failed",
+            message: err instanceof Error ? err.message : "Could not send input to the local shell.",
+          },
+        },
+        400,
+      );
+    }
+  });
+
+  app.post("/api/terminal/close", async (ctx) => {
+    if (!hasGraphSessionAccess(ctx, token)) {
+      return ctx.json(
+        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        401,
+      );
+    }
+    const body = (await ctx.req.json()) as { id?: string };
+    terminalManager.closeSession(String(body.id ?? ""));
+    resetIdleTimer();
+    return ctx.json({ data: { closed: true } });
+  });
+
   app.get("/graph-data", async (ctx) => {
+    if (!hasGraphSessionAccess(ctx, token)) {
+      return ctx.json(
+        {
+          error: {
+            code: "unauthorized",
+            message: "This graph request is no longer attached to the current local UI session. Run `npm run graph` again and open the printed link once to restore access.",
+          },
+        },
+        401,
+      );
+    }
     resetIdleTimer();
     if (kbIndex.getDocumentCount() === 0) {
       await awaitReady();
@@ -286,6 +661,7 @@ export function createDaemonApp(options: {
         sessions,
         buildPromptContext: (message) => kbIndex.buildPromptContext(message),
         reloadRepo: () => kbIndex.sync(),
+        rebuildAdvisor: () => kbIndex.inspectRebuildStatus(),
         repoFiles: () => kbIndex.listFiles(),
         repoStatus: () => kbIndex.getStatus(),
       });
@@ -322,6 +698,7 @@ async function handleCommand(
     sessions: Map<string, Session>;
     buildPromptContext: (message: string) => Promise<string>;
     reloadRepo: () => Promise<{ fileCount: number; charCount: number; indexedAt: string; embeddingModel: string; embeddingMode: string }>;
+    rebuildAdvisor: () => Promise<RebuildAdvisorStatus>;
     repoFiles: () => string[];
     repoStatus: () => { root: string; indexedDocuments: number; indexedCharCount: number };
   },
@@ -403,6 +780,11 @@ async function handleCommand(
       };
     }
 
+    case "rebuild_advisor": {
+      await ctx.awaitReady();
+      return ctx.rebuildAdvisor();
+    }
+
     case "list_files": {
       await ctx.awaitReady();
       return ctx.repoFiles();
@@ -411,6 +793,68 @@ async function handleCommand(
     default:
       throw new Error(`The daemon does not recognize the command "${name}".`);
   }
+}
+
+function renderGraphUnauthorizedPage(): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PulseOS Lite Graph</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f5efe2; color: #211b14; font: 16px/1.5 Georgia, "Times New Roman", serif; }
+    main { max-width: 640px; padding: 32px; background: #fffaf0; border: 1px solid #d8c7aa; box-shadow: 0 22px 60px rgba(66, 47, 21, 0.12); }
+    code { background: #efe3cb; padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Graph link expired or incomplete</h1>
+    <p>Run <code>npm run graph</code> from <code>cli/</code> and open the local URL it prints once. The first launch uses a short-lived local token to create a browser session, then the UI redirects to a clean localhost URL so normal refresh works.</p>
+  </main>
+</body>
+</html>`;
+}
+
+function hasGraphSessionAccess(ctx: Context, token: string): boolean {
+  const queryToken = ctx.req.query("token");
+  if (queryToken === token) return true;
+  return getCookieValue(ctx, GRAPH_SESSION_COOKIE) === token;
+}
+
+function bootstrapGraphSession(ctx: Context, token: string, destinationPath: string): Response | null {
+  const queryToken = ctx.req.query("token");
+  if (queryToken !== token) return null;
+  ctx.header("Set-Cookie", serializeGraphSessionCookie(token));
+  return ctx.redirect(destinationPath, 302);
+}
+
+function getCookieValue(ctx: Context, cookieName: string): string | null {
+  const cookieHeader = ctx.req.header("cookie");
+  if (!cookieHeader) return null;
+
+  for (const part of cookieHeader.split(";")) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const separatorIndex = trimmed.indexOf("=");
+    if (separatorIndex === -1) continue;
+    const name = trimmed.slice(0, separatorIndex).trim();
+    if (name !== cookieName) continue;
+    return decodeURIComponent(trimmed.slice(separatorIndex + 1));
+  }
+
+  return null;
+}
+
+function serializeGraphSessionCookie(token: string): string {
+  return [
+    `${GRAPH_SESSION_COOKIE}=${encodeURIComponent(token)}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Strict",
+    "Max-Age=43200",
+  ].join("; ");
 }
 
 async function serveGraphIndex(ctx: Context) {
@@ -1967,8 +2411,9 @@ export async function startDaemonServer(env: NodeJS.ProcessEnv = process.env): P
     dbPath: getCliDbPath(env),
     env,
   });
+  const terminalManager = new TerminalSessionManager();
 
-  const port = await getAvailablePort();
+  const port = await getAvailablePort(env);
   const token = randomUUID();
   const version = getDaemonVersion();
   const state: DaemonState = {
@@ -1998,6 +2443,7 @@ export async function startDaemonServer(env: NodeJS.ProcessEnv = process.env): P
     shuttingDown = true;
     if (idleTimer) clearTimeout(idleTimer);
     if (server) await new Promise<void>((resolve) => server?.close(() => resolve()));
+    terminalManager.closeAll();
     kbIndex.close();
     await removeDaemonState(env);
     process.exit(0);
@@ -2007,6 +2453,7 @@ export async function startDaemonServer(env: NodeJS.ProcessEnv = process.env): P
     state,
     token,
     kbIndex,
+    terminalManager,
     getReadyState: () => ({ ...readyState }),
     awaitReady: async () => {
       await indexingPromise;
@@ -2025,6 +2472,7 @@ export async function startDaemonServer(env: NodeJS.ProcessEnv = process.env): P
   process.on("SIGTERM", () => void shutdown());
 
   await writeDaemonState(state, env);
+  await kbIndex.inspectRebuildStatus({ persistLog: true });
   indexingPromise = Promise.resolve();
   readyState.ready = true;
   readyState.error = null;

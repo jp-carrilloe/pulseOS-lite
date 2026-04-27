@@ -286,7 +286,7 @@ The graph UI has two focused modes:
 - **Company Ontology** shows the `000_Company_Memory` folder hierarchy only
 - **Document Relationships** shows indexed Markdown documents and direct Markdown references only
 
-The graph URL is now a plain localhost page. If the daemon is running, you can open or refresh the same `/graph` URL directly without any token or first-open handshake.
+The printed graph URL uses a temporary token only for the first open. That first launch creates a local browser session and then redirects you to a clean localhost URL, so normal refresh works without keeping the token in the address bar. This still helps keep the local graph data endpoint from being casually read by unrelated local processes, browser tabs, extensions, or webpages while the daemon is running.
 
 The graph is interactive: pan, zoom, fit, reset, and drag nodes to make the view easier to inspect. Those graph movements are visual only. Saving a Markdown document from the right editor updates that file inside `000_Company_Memory` and refreshes the SQLite/vector index.
 

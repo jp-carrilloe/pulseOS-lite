@@ -1,147 +1,40 @@
-import { useEffect, useMemo, useState } from "react";
+import { Component, type ErrorInfo, type MouseEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { GraphCanvas } from "./components/graph/GraphCanvas";
+import { TerminalPanel } from "./components/terminal/TerminalPanel";
 import { LiteBadge, LiteButton, LiteCard, LiteCardBody, LiteCardHeader, LiteEmptyState, LiteSectionHeader } from "./components/ui";
 import { api } from "./lib/api";
 import { getGraphEntityColor } from "./lib/graph-colors";
-import type { ApiKnowledgeGraphSnapshot, DocumentReadResponse, FileTreeNode, GraphEdge, GraphNode, GraphSnapshot } from "./types/graph";
+import { buildEmptyGraphSnapshot, toGraphSnapshot, type ViewMode } from "./lib/graph-snapshot";
+import type { ApiKnowledgeGraphSnapshot, DocumentReadResponse, FileTreeNode, GraphNode, RebuildAdvisorStatus, UiCapabilities } from "./types/graph";
 
-type ViewMode = "ontology" | "documents";
+const REQUIRED_UI_API_VERSION = 1;
 
-function getFolderChildren(source: ApiKnowledgeGraphSnapshot, folderId: string, childType: "folder" | "document") {
-  const nodesById = new Map(source.nodes.map((node) => [node.id, node]));
-  return source.edges
-    .filter((edge) => edge.type === "CONTAINS" && edge.source === folderId)
-    .map((edge) => nodesById.get(edge.target))
-    .filter((node): node is NonNullable<typeof node> => Boolean(node) && node.type === childType);
-}
+class GraphErrorBoundary extends Component<
+  { children: ReactNode },
+  { errorMessage: string | null }
+> {
+  state = { errorMessage: null };
 
-function getParentFoldersForDocument(source: ApiKnowledgeGraphSnapshot, documentId: string) {
-  const nodesById = new Map(source.nodes.map((node) => [node.id, node]));
-  return source.edges
-    .filter((edge) => edge.type === "CONTAINS" && edge.target === documentId)
-    .map((edge) => nodesById.get(edge.source))
-    .filter((node): node is NonNullable<typeof node> => Boolean(node) && node.type === "folder");
-}
-
-function toGraphSnapshot(source: ApiKnowledgeGraphSnapshot | null, mode: ViewMode, focusedNodeId?: string | null): GraphSnapshot {
-  if (!source) {
-    return {
-      nodes: [],
-      edges: [],
-      groups: { anchors: [], documents: [], entities: [], edges: [], taxonomyDomains: [] },
-      meta: { asOf: new Date().toISOString(), filtered: false, readLayer: "canonical" },
-    };
+  static getDerivedStateFromError(error: Error) {
+    return { errorMessage: error.message || "Unknown graph render error." };
   }
 
-  const nodesById = new Map(source.nodes.map((node) => [node.id, node]));
-  let includedNodeIds: Set<string>;
-  let includedEdgeIds: Set<string>;
+  componentDidCatch(error: Error, _info: ErrorInfo) {
+    console.error("Graph canvas crashed", error);
+  }
 
-  if (mode === "documents") {
-    includedNodeIds = new Set(source.nodes.filter((node) => node.type === "document").map((node) => node.id));
-    includedEdgeIds = new Set(source.edges.filter((edge) => {
-      if (!includedNodeIds.has(edge.source) || !includedNodeIds.has(edge.target)) return false;
-      return edge.type === "REFERENCES";
-    }).map((edge) => edge.id));
-  } else {
-    includedNodeIds = new Set(source.nodes.filter((node) => node.type === "folder").map((node) => node.id));
-    includedEdgeIds = new Set(
-      source.edges
-        .filter((edge) => {
-          if (edge.type !== "CONTAINS") return false;
-          return nodesById.get(edge.source)?.type === "folder" && nodesById.get(edge.target)?.type === "folder";
-        })
-        .map((edge) => edge.id),
-    );
-
-    const includeDocument = (documentId: string) => {
-      const documentNode = nodesById.get(documentId);
-      if (documentNode?.type !== "document") return;
-      includedNodeIds.add(documentId);
-      source.edges
-        .filter((edge) => edge.type === "CONTAINS" && edge.target === documentId && nodesById.get(edge.source)?.type === "folder")
-        .forEach((edge) => {
-          includedNodeIds.add(edge.source);
-          includedEdgeIds.add(edge.id);
-        });
-    };
-
-    const includeReferenceNeighborhood = (documentIds: Iterable<string>) => {
-      const seedIds = new Set(documentIds);
-      source.edges
-        .filter((edge) => edge.type === "REFERENCES" && (seedIds.has(edge.source) || seedIds.has(edge.target)))
-        .forEach((edge) => {
-          includeDocument(edge.source);
-          includeDocument(edge.target);
-          includedEdgeIds.add(edge.id);
-        });
-    };
-
-    const focusedNode = focusedNodeId ? nodesById.get(focusedNodeId) : null;
-    if (focusedNode?.type === "folder") {
-      const localDocuments = getFolderChildren(source, focusedNode.id, "document");
-      localDocuments.forEach((documentNode) => includeDocument(documentNode.id));
-      includeReferenceNeighborhood(localDocuments.map((documentNode) => documentNode.id));
-    } else if (focusedNode?.type === "document") {
-      includeDocument(focusedNode.id);
-      const parentFolders = getParentFoldersForDocument(source, focusedNode.id);
-      parentFolders
-        .flatMap((folderNode) => getFolderChildren(source, folderNode.id, "document"))
-        .forEach((documentNode) => includeDocument(documentNode.id));
-      includeReferenceNeighborhood([focusedNode.id]);
+  render() {
+    if (this.state.errorMessage) {
+      return (
+        <LiteEmptyState
+          title="Graph render failed"
+          detail={`The graph canvas crashed while rendering: ${this.state.errorMessage}. Refresh the page or run npm run graph again.`}
+        />
+      );
     }
 
-    includedEdges = source.edges.filter((edge) => includedEdgeIds.has(edge.id));
+    return this.props.children;
   }
-
-  const nodes: GraphNode[] = source.nodes
-    .filter((node) => includedNodeIds.has(node.id))
-    .map((node) => ({
-      id: node.id,
-      label: node.label,
-      type: node.type,
-      nodeClass: node.type === "document" ? "document" : "entity",
-      confidence: 1,
-      evidenceCount: node.documentCount ?? 1,
-      graphLayer: "canonical",
-      readLayer: "canonical",
-      properties: {
-        path: node.path,
-        parentId: node.parentId,
-        ontologyDomain: node.ontologyDomain,
-        status: node.status,
-        ownerAgent: node.ownerAgent,
-        summary: node.summary,
-        documentCount: node.documentCount,
-      },
-    }));
-
-  const edges: GraphEdge[] = source.edges
-    .filter((edge) => includedEdgeIds.has(edge.id))
-    .map((edge) => ({
-      id: edge.id,
-      source: edge.source,
-      target: edge.target,
-      type: edge.type,
-      edgeClass: edge.type === "REFERENCES" ? "document_reference" : "entity",
-      confidence: 1,
-      graphLayer: "canonical",
-      readLayer: "canonical",
-      properties: { label: edge.label },
-    }));
-
-  return {
-    nodes,
-    edges,
-    groups: {
-      anchors: nodes.filter((node) => node.type === "folder"),
-      documents: nodes.filter((node) => node.type === "document"),
-      entities: nodes.filter((node) => node.type === "folder"),
-      edges,
-      taxonomyDomains: [],
-    },
-    meta: { asOf: source.generatedAt, filtered: true, readLayer: "canonical" },
-  };
 }
 
 function findTreeNode(root: FileTreeNode | null, documentPath: string): FileTreeNode | null {
@@ -160,6 +53,36 @@ function collectFolderPaths(node: FileTreeNode | null): string[] {
   return node.type === "folder" ? [node.path, ...childFolderPaths] : childFolderPaths;
 }
 
+function formatTimestamp(value: string | null): string {
+  if (!value) return "Not yet";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString();
+}
+
+function parseFrontmatterTags(content: string): string[] {
+  const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!frontmatterMatch) return [];
+  const frontmatter = frontmatterMatch[1];
+
+  const bracketTags = frontmatter.match(/(?:^|\n)tags:\s*\[([^\]]*)\]/i);
+  if (bracketTags) {
+    return bracketTags[1]
+      .split(",")
+      .map((tag) => tag.trim().replace(/^["']|["']$/g, ""))
+      .filter(Boolean);
+  }
+
+  const blockTags = frontmatter.match(/(?:^|\n)tags:\s*\n((?:\s*-\s*.+\n?)*)/i);
+  if (!blockTags) return [];
+  return blockTags[1]
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("- "))
+    .map((line) => line.slice(2).trim().replace(/^["']|["']$/g, ""))
+    .filter(Boolean);
+}
+
 export function App() {
   const SIDEBAR_MIN_WIDTH = 280;
   const SIDEBAR_MAX_WIDTH = 540;
@@ -167,6 +90,7 @@ export function App() {
   const [tree, setTree] = useState<FileTreeNode | null>(null);
   const [mode, setMode] = useState<ViewMode>("ontology");
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  const [expandedOntologyNodeIds, setExpandedOntologyNodeIds] = useState<Set<string>>(new Set());
   const [selectedDocumentPath, setSelectedDocumentPath] = useState<string | null>(null);
   const [document, setDocument] = useState<DocumentReadResponse | null>(null);
   const [draft, setDraft] = useState("");
@@ -174,16 +98,59 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [rebuilding, setRebuilding] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [rebuildAdvisor, setRebuildAdvisor] = useState<RebuildAdvisorStatus | null>(null);
+  const [uiCapabilities, setUiCapabilities] = useState<UiCapabilities | null>(null);
+  const [compatibilityError, setCompatibilityError] = useState<string | null>(null);
   const [openFolderPaths, setOpenFolderPaths] = useState<Set<string>>(new Set(["000_Company_Memory"]));
   const [documentPanelOpen, setDocumentPanelOpen] = useState(false);
+  const [documentPanelExpanded, setDocumentPanelExpanded] = useState(false);
+  const [documentMetaOpen, setDocumentMetaOpen] = useState(false);
+  const [terminalPanelOpen, setTerminalPanelOpen] = useState(false);
+  const [terminalPanelExpanded, setTerminalPanelExpanded] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(320);
   const [sidebarResizing, setSidebarResizing] = useState(false);
+  const [folderContextMenu, setFolderContextMenu] = useState<{
+    x: number;
+    y: number;
+    folder: FileTreeNode;
+  } | null>(null);
 
   async function loadWorkspace() {
     setLoading(true);
     setError(null);
+    setCompatibilityError(null);
     try {
+      let capabilities: UiCapabilities;
+      try {
+        capabilities = await api.getUiCapabilities();
+      } catch (nextError) {
+        setCompatibilityError(
+          nextError instanceof Error
+            ? nextError.message
+            : "The local graph daemon could not confirm UI compatibility. Restart `npm run graph` and open the new link.",
+        );
+        setGraphData(null);
+        setTree(null);
+        setRebuildAdvisor(null);
+        setUiCapabilities(null);
+        return;
+      }
+
+      if (capabilities.uiApiVersion !== REQUIRED_UI_API_VERSION) {
+        setCompatibilityError(
+          `This graph page expects UI API v${REQUIRED_UI_API_VERSION}, but the running daemon reports v${capabilities.uiApiVersion}. Restart \`npm run graph\` and open the newly printed link.`,
+        );
+        setGraphData(null);
+        setTree(null);
+        setRebuildAdvisor(null);
+        setUiCapabilities(capabilities);
+        return;
+      }
+
+      setUiCapabilities(capabilities);
+
       const treePromise = api
         .getFileTree()
         .then((nextTree) => {
@@ -207,7 +174,20 @@ export function App() {
           );
         });
 
-      await Promise.allSettled([treePromise, graphPromise]);
+      const advisorPromise = capabilities.features.rebuildAdvisor
+        ? api
+            .getRebuildAdvisor()
+            .then((nextAdvisor) => {
+              setRebuildAdvisor(nextAdvisor);
+            })
+            .catch((nextError) => {
+              setError((current) =>
+                current ?? (nextError instanceof Error ? nextError.message : "Could not load the rebuild advisor."),
+              );
+            })
+        : Promise.resolve(setRebuildAdvisor(null));
+
+      await Promise.allSettled([treePromise, graphPromise, advisorPromise]);
     } finally {
       setLoading(false);
     }
@@ -244,6 +224,12 @@ export function App() {
   }, [selectedDocumentPath]);
 
   useEffect(() => {
+    if (uiCapabilities?.features.terminalPanel) return;
+    setTerminalPanelOpen(false);
+    setTerminalPanelExpanded(false);
+  }, [uiCapabilities?.features.terminalPanel]);
+
+  useEffect(() => {
     if (!sidebarResizing) return;
 
     function handlePointerMove(event: PointerEvent) {
@@ -266,16 +252,73 @@ export function App() {
     };
   }, [sidebarResizing]);
 
-  const graphSnapshot = useMemo(() => toGraphSnapshot(graphData, mode, selectedNode?.id), [graphData, mode, selectedNode?.id]);
+  useEffect(() => {
+    if (!folderContextMenu) return;
+
+    function handleClose() {
+      setFolderContextMenu(null);
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setFolderContextMenu(null);
+      }
+    }
+
+    window.addEventListener("pointerdown", handleClose);
+    window.addEventListener("contextmenu", handleClose);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("pointerdown", handleClose);
+      window.removeEventListener("contextmenu", handleClose);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [folderContextMenu]);
+
+  const { graphSnapshot, graphSnapshotError } = useMemo(() => {
+    try {
+      return {
+        graphSnapshot: toGraphSnapshot(graphData, mode, mode === "ontology" ? expandedOntologyNodeIds : []),
+        graphSnapshotError: null as string | null,
+      };
+    } catch (nextError) {
+      return {
+        graphSnapshot: buildEmptyGraphSnapshot(),
+        graphSnapshotError:
+          nextError instanceof Error
+            ? `The graph workspace hit a rendering error: ${nextError.message}`
+            : "The graph workspace hit a rendering error.",
+      };
+    }
+  }, [graphData, mode, expandedOntologyNodeIds]);
   const selectedTreeNode = useMemo(
     () => (selectedDocumentPath ? findTreeNode(tree, selectedDocumentPath) : null),
     [selectedDocumentPath, tree],
   );
+  const selectedApiNode = useMemo(
+    () => graphData?.nodes.find((node) => node.path === selectedDocumentPath) ?? null,
+    [graphData, selectedDocumentPath],
+  );
+  const documentTags = useMemo(() => (document ? parseFrontmatterTags(document.content) : []), [document]);
+  const relatedDocuments = useMemo(() => {
+    if (!graphData || !selectedApiNode) return [];
+    const relatedIds = new Set<string>();
+    for (const edge of graphData.edges) {
+      if (edge.type !== "REFERENCES") continue;
+      if (edge.source === selectedApiNode.id) relatedIds.add(edge.target);
+      if (edge.target === selectedApiNode.id) relatedIds.add(edge.source);
+    }
+    return graphData.nodes
+      .filter((node) => node.type === "document" && relatedIds.has(node.id))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [graphData, selectedApiNode]);
   const dirty = Boolean(document && draft !== document.content);
 
   function selectDocument(documentPath: string) {
     setSelectedDocumentPath(documentPath);
     setDocumentPanelOpen(true);
+    setDocumentPanelExpanded(true);
+    setDocumentMetaOpen(false);
     setNotice(null);
   }
 
@@ -314,16 +357,32 @@ export function App() {
     });
   }
 
+  function openFolderMenu(event: MouseEvent, folder: FileTreeNode) {
+    event.preventDefault();
+    event.stopPropagation();
+    setFolderContextMenu({ x: event.clientX, y: event.clientY, folder });
+  }
+
   function handleNodeSelect(node: GraphNode | null) {
     setSelectedNode(node);
+    if (mode === "ontology" && node) {
+      setExpandedOntologyNodeIds((current) => {
+        if (current.has(node.id)) return current;
+        return new Set([...current, node.id]);
+      });
+    }
+  }
+
+  function handleNodeOpen(node: GraphNode) {
+    setSelectedNode(node);
     const path = node?.properties?.path;
-    if (node?.type === "document" && typeof path === "string") {
+    if (node.type === "document" && typeof path === "string") {
       selectDocument(path);
     }
   }
 
-  async function saveDocument() {
-    if (!selectedDocumentPath || !document || !dirty) return;
+  async function saveDocument(): Promise<boolean> {
+    if (!selectedDocumentPath || !document || !dirty) return true;
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -332,10 +391,48 @@ export function App() {
       setDocument({ ...document, content: draft, updatedAt: result.indexedAt });
       setNotice("Saved. The SQLite index and graph were refreshed.");
       await loadWorkspace();
+      return true;
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Could not save this document.");
+      return false;
     } finally {
       setSaving(false);
+    }
+  }
+
+  function closeDocumentPanel() {
+    setDocumentPanelOpen(false);
+    setDocumentPanelExpanded(false);
+  }
+
+  function attemptCloseDocumentPanel() {
+    if (dirty) {
+      setNotice("Unsaved changes are still open. Use Save + close to keep them, or Revert before closing the reader.");
+      return;
+    }
+    closeDocumentPanel();
+  }
+
+  async function saveAndCloseDocument() {
+    const ok = await saveDocument();
+    if (ok) closeDocumentPanel();
+  }
+
+  async function rebuildGraphNow() {
+    if (!uiCapabilities?.features.rebuildAdvisor) return;
+    setRebuilding(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await api.rebuildGraph();
+      setRebuildAdvisor(result.advisor);
+      setNotice(`Rebuild finished. ${result.files} docs reindexed with ${result.embeddingModel} [${result.embeddingMode}].`);
+      await loadWorkspace();
+      setReloadKey((value) => value + 1);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Could not rebuild the graph and retrieval index.");
+    } finally {
+      setRebuilding(false);
     }
   }
 
@@ -357,16 +454,6 @@ export function App() {
               eyebrow="Explorer"
               title="000_Company_Memory"
               description="Only this folder is editable in the UI."
-              actions={
-                <div className="explorer-actions">
-                  <LiteButton variant="ghost" onClick={expandAllFolders}>
-                    Expand all
-                  </LiteButton>
-                  <LiteButton variant="ghost" onClick={collapseAllFolders}>
-                    Collapse all
-                  </LiteButton>
-                </div>
-              }
             />
           </LiteCardHeader>
           <LiteCardBody>
@@ -379,6 +466,8 @@ export function App() {
                 onToggleFolder={toggleFolder}
                 onExpandBranch={expandFolderBranch}
                 onCollapseBranch={collapseFolderBranch}
+                onContextMenu={openFolderMenu}
+                contextMenuFolderPath={folderContextMenu?.folder.path ?? null}
               />
             ) : (
               <p className="muted-copy">Loading folders...</p>
@@ -395,6 +484,24 @@ export function App() {
       />
 
       <section className="workspace-main">
+        {compatibilityError ? (
+          <LiteCard className="compatibility-card">
+            <LiteCardHeader>
+              <LiteSectionHeader
+                eyebrow="Compatibility"
+                title="Graph UI and daemon are out of sync"
+                description={compatibilityError}
+              />
+            </LiteCardHeader>
+            <LiteCardBody>
+              <p className="muted-copy">
+                This browser tab is talking to a daemon that does not match the current UI bundle. Restart <code>npm run graph</code>, then open the
+                newly printed tokenized localhost link once so the session is refreshed.
+              </p>
+            </LiteCardBody>
+          </LiteCard>
+        ) : null}
+
         <div className="workspace-toolbar">
           <div>
             <p className="eyebrow">SQLite graph</p>
@@ -413,42 +520,118 @@ export function App() {
             <LiteButton variant="secondary" onClick={() => setDocumentPanelOpen((value) => !value)}>
               {documentPanelOpen ? "Hide reader" : "Show reader"}
             </LiteButton>
+            {uiCapabilities?.features.terminalPanel ? (
+              <LiteButton variant="secondary" onClick={() => setTerminalPanelOpen((value) => !value)}>
+                {terminalPanelOpen ? "Hide terminal" : "Show terminal"}
+              </LiteButton>
+            ) : null}
           </div>
         </div>
 
         {error ? <div className="notice notice-error">{error}</div> : null}
+        {graphSnapshotError ? (
+          <div className="notice notice-error">
+            {graphSnapshotError} Refresh the graph, or run <code>npm run graph</code> again if the session is stale.
+          </div>
+        ) : null}
         {notice ? <div className="notice notice-success">{notice}</div> : null}
-
         <div className="graph-shell">
-          {loading ? (
+          {compatibilityError ? (
+            <LiteEmptyState
+              title="Graph workspace paused"
+              detail="Restart `npm run graph`, open the new local link once, and then refresh this page so the UI and daemon are on the same version."
+            />
+          ) : loading ? (
             <LiteEmptyState title="Loading graph" detail="The daemon is reading the SQLite index and Company Memory tree." />
           ) : (
-            <GraphCanvas
-              key={`${mode}:${reloadKey}`}
-              snapshot={graphSnapshot}
-              colorForType={getGraphEntityColor}
-              onNodeSelect={handleNodeSelect}
-              onNodeOpen={handleNodeSelect}
-              relayoutTrigger={reloadKey}
-              headerBadges={
-                <>
-                  <LiteBadge tone="neutral">{graphSnapshot.nodes.length} nodes</LiteBadge>
-                  <LiteBadge tone="neutral">{graphSnapshot.edges.length} edges</LiteBadge>
-                </>
-              }
-              toolbarControls={
-                <LiteButton variant="ghost" onClick={() => setReloadKey((value) => value + 1)}>
-                  Re-layout
-                </LiteButton>
-              }
-            />
+            <GraphErrorBoundary>
+              <GraphCanvas
+                key={`${mode}:${reloadKey}`}
+                snapshot={graphSnapshot}
+                colorForType={getGraphEntityColor}
+                onNodeSelect={handleNodeSelect}
+                onNodeOpen={handleNodeOpen}
+                relayoutTrigger={reloadKey}
+                headerBadges={
+                  <>
+                    <LiteBadge tone="neutral">{graphSnapshot.nodes.length} nodes</LiteBadge>
+                    <LiteBadge tone="neutral">{graphSnapshot.edges.length} edges</LiteBadge>
+                  </>
+                }
+                toolbarControls={
+                  <LiteButton variant="ghost" onClick={() => setReloadKey((value) => value + 1)}>
+                    Re-layout
+                  </LiteButton>
+                }
+              />
+            </GraphErrorBoundary>
           )}
         </div>
       </section>
 
-      {documentPanelOpen ? <button type="button" className="document-panel-backdrop" aria-label="Close document panel" onClick={() => setDocumentPanelOpen(false)} /> : null}
+      {folderContextMenu ? (
+        <div
+          className="tree-context-menu"
+          style={{ left: folderContextMenu.x, top: folderContextMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          {folderContextMenu.folder.path === "000_Company_Memory" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  expandAllFolders();
+                  setFolderContextMenu(null);
+                }}
+              >
+                Expand all folders
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  collapseAllFolders();
+                  setFolderContextMenu(null);
+                }}
+              >
+                Collapse all folders
+              </button>
+            </>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              expandFolderBranch(folderContextMenu.folder);
+              setFolderContextMenu(null);
+            }}
+          >
+            Expand this branch
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              collapseFolderBranch(folderContextMenu.folder);
+              setFolderContextMenu(null);
+            }}
+          >
+            Collapse this branch
+          </button>
+        </div>
+      ) : null}
 
-      <aside className={documentPanelOpen ? "document-panel open" : "document-panel"} aria-hidden={!documentPanelOpen}>
+      {documentPanelOpen ? (
+        <button
+          type="button"
+          className="document-panel-backdrop"
+          aria-label="Close document panel"
+          onClick={attemptCloseDocumentPanel}
+        />
+      ) : null}
+
+      <aside
+        className={documentPanelOpen ? `document-panel open${documentPanelExpanded ? " expanded" : ""}` : "document-panel"}
+        aria-hidden={!documentPanelOpen}
+      >
         <LiteCard className="document-card">
           <LiteCardHeader>
             <LiteSectionHeader
@@ -458,7 +641,18 @@ export function App() {
               actions={
                 <div className="document-panel-actions">
                   {dirty ? <LiteBadge tone="warning">Unsaved</LiteBadge> : null}
-                  <LiteButton variant="ghost" onClick={() => setDocumentPanelOpen(false)}>
+                  {dirty ? (
+                    <LiteButton onClick={() => void saveAndCloseDocument()} disabled={saving}>
+                      {saving ? "Saving..." : "Save + close"}
+                    </LiteButton>
+                  ) : null}
+                  <LiteButton variant="secondary" onClick={() => setDocumentPanelExpanded((current) => !current)}>
+                    {documentPanelExpanded ? "Windowed" : "Expand"}
+                  </LiteButton>
+                  <LiteButton
+                    variant="ghost"
+                    onClick={attemptCloseDocumentPanel}
+                  >
                     Close
                   </LiteButton>
                 </div>
@@ -468,6 +662,87 @@ export function App() {
           <LiteCardBody>
             {document ? (
               <div className="editor-stack">
+                <section className="document-meta-panel">
+                  <div className="document-meta-header">
+                    <div>
+                      <p className="lite-graph-legend-label">Document context</p>
+                      <p className="muted-copy">Tags, relationships, and indexed metadata for this file.</p>
+                    </div>
+                    <LiteButton variant="secondary" onClick={() => setDocumentMetaOpen((current) => !current)}>
+                      {documentMetaOpen ? "Hide details" : "Show details"}
+                    </LiteButton>
+                  </div>
+
+                  {documentMetaOpen ? (
+                    <div className="document-meta-grid">
+                      <section className="document-meta-section">
+                        <p className="lite-graph-legend-label">Tags</p>
+                        <div className="document-meta-chips">
+                          {documentTags.length ? (
+                            documentTags.map((tag) => (
+                              <span key={tag} className="document-meta-chip">
+                                {tag}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="muted-copy">No frontmatter tags found.</span>
+                          )}
+                        </div>
+                      </section>
+
+                      <section className="document-meta-section">
+                        <p className="lite-graph-legend-label">Relationships</p>
+                        <div className="document-meta-list">
+                          {relatedDocuments.length ? (
+                            relatedDocuments.map((node) => (
+                              <button
+                                key={node.id}
+                                type="button"
+                                className="document-meta-link"
+                                onClick={() => selectDocument(node.path)}
+                              >
+                                {node.label}
+                              </button>
+                            ))
+                          ) : (
+                            <span className="muted-copy">No direct document references were found in the graph.</span>
+                          )}
+                        </div>
+                      </section>
+
+                      <section className="document-meta-section">
+                        <p className="lite-graph-legend-label">Metadata</p>
+                        <dl className="document-meta-table">
+                          <div>
+                            <dt>Path</dt>
+                            <dd>{document.path}</dd>
+                          </div>
+                          <div>
+                            <dt>Updated</dt>
+                            <dd>{new Date(document.updatedAt).toLocaleString()}</dd>
+                          </div>
+                          <div>
+                            <dt>Ontology</dt>
+                            <dd>{selectedApiNode?.ontologyDomain ?? "Not set"}</dd>
+                          </div>
+                          <div>
+                            <dt>Status</dt>
+                            <dd>{selectedApiNode?.status ?? "Not set"}</dd>
+                          </div>
+                          <div>
+                            <dt>Owner</dt>
+                            <dd>{selectedApiNode?.ownerAgent ?? "Not set"}</dd>
+                          </div>
+                          <div>
+                            <dt>Summary</dt>
+                            <dd>{selectedApiNode?.summary ?? "No summary indexed yet."}</dd>
+                          </div>
+                        </dl>
+                      </section>
+                    </div>
+                  ) : null}
+                </section>
+
                 <div className="editor-actions">
                   <LiteButton onClick={() => void saveDocument()} disabled={!dirty || saving}>
                     {saving ? "Saving..." : "Save"}
@@ -487,6 +762,18 @@ export function App() {
           </LiteCardBody>
         </LiteCard>
       </aside>
+
+      {uiCapabilities?.features.terminalPanel ? (
+        <TerminalPanel
+          open={terminalPanelOpen}
+          expanded={terminalPanelExpanded}
+          onClose={() => {
+            setTerminalPanelOpen(false);
+            setTerminalPanelExpanded(false);
+          }}
+          onToggleExpanded={() => setTerminalPanelExpanded((current) => !current)}
+        />
+      ) : null}
     </main>
   );
 }
@@ -499,6 +786,8 @@ function TreeView({
   onToggleFolder,
   onExpandBranch,
   onCollapseBranch,
+  onContextMenu,
+  contextMenuFolderPath,
 }: {
   node: FileTreeNode;
   selectedPath: string | null;
@@ -507,6 +796,8 @@ function TreeView({
   onToggleFolder: (path: string) => void;
   onExpandBranch: (node: FileTreeNode) => void;
   onCollapseBranch: (node: FileTreeNode) => void;
+  onContextMenu: (event: MouseEvent, node: FileTreeNode) => void;
+  contextMenuFolderPath: string | null;
 }) {
   const isDocument = node.type === "document";
 
@@ -527,21 +818,16 @@ function TreeView({
 
   return (
     <div className="tree-folder">
-      <div className="tree-row tree-row-folder">
+      <div
+        className={contextMenuFolderPath === node.path ? "tree-row tree-row-folder context-open" : "tree-row tree-row-folder"}
+        onContextMenu={(event) => onContextMenu(event, node)}
+      >
         <button type="button" className="tree-toggle" onClick={() => onToggleFolder(node.path)} aria-label={`${open ? "Collapse" : "Expand"} ${node.name}`}>
           {open ? "v" : ">"}
         </button>
         <button type="button" className="tree-label" onClick={() => onToggleFolder(node.path)}>
           <strong>{node.name}</strong>
         </button>
-        <div className="tree-branch-actions">
-          <button type="button" onClick={() => onExpandBranch(node)} aria-label={`Expand all folders inside ${node.name}`}>
-            All
-          </button>
-          <button type="button" onClick={() => onCollapseBranch(node)} aria-label={`Collapse all folders inside ${node.name}`}>
-            None
-          </button>
-        </div>
       </div>
       {open ? (
         <div className="tree-children">
@@ -555,6 +841,8 @@ function TreeView({
               onToggleFolder={onToggleFolder}
               onExpandBranch={onExpandBranch}
               onCollapseBranch={onCollapseBranch}
+              onContextMenu={onContextMenu}
+              contextMenuFolderPath={contextMenuFolderPath}
             />
           ))}
         </div>

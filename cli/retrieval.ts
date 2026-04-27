@@ -23,6 +23,7 @@ export interface IndexedDocumentRecord {
   status: string | null;
   ownerAgent: string | null;
   contentHash: string;
+  contentLength: number;
   updatedAt: string;
   indexedAt: string;
 }
@@ -49,6 +50,63 @@ export interface IndexStatusSummary {
   embeddingModel: string | null;
   embeddingMode: "provider" | "heuristic";
   indexedCharCount: number;
+}
+
+export type RebuildChangeType = "added" | "updated" | "deleted";
+export type RebuildCostLevel = "none" | "low" | "medium" | "high";
+export type RebuildWorkScope = "none" | "small" | "medium" | "large";
+
+export interface RebuildTrackedChange {
+  path: string;
+  changeType: RebuildChangeType;
+  previousHash: string | null;
+  nextHash: string | null;
+  previousUpdatedAt: string | null;
+  nextUpdatedAt: string | null;
+  charDelta: number;
+}
+
+export interface RebuildChangeLogEntry extends RebuildTrackedChange {
+  id: string;
+  firstDetectedAt: string;
+  lastDetectedAt: string;
+  resolvedAt: string | null;
+}
+
+export interface RebuildAdvisorStatus {
+  checkedAt: string;
+  indexedDocuments: number;
+  indexedCharCount: number;
+  lastIndexedAt: string | null;
+  embeddingModel: string | null;
+  embeddingMode: "provider" | "heuristic";
+  needsRebuild: boolean;
+  reasons: string[];
+  suggestion: string;
+  suggestedAction: "none" | "review" | "rebuild";
+  weeklySchedule: {
+    intervalDays: number;
+    nextRecommendedAt: string | null;
+    overdue: boolean;
+    overdueDays: number;
+  };
+  pending: {
+    totalChanges: number;
+    added: number;
+    updated: number;
+    deleted: number;
+    changedCharacters: number;
+    changes: RebuildTrackedChange[];
+  };
+  cost: {
+    level: RebuildCostLevel;
+    likelyUsesProviderEmbeddings: boolean;
+    requiresFullReindex: boolean;
+    estimatedEmbeddingCalls: number;
+    summary: string;
+    warning: string | null;
+  };
+  recentLog: RebuildChangeLogEntry[];
 }
 
 export type KnowledgeGraphNodeType = "folder" | "document";
@@ -101,6 +159,10 @@ interface ScannedMarkdownFile {
   updatedAt: string;
 }
 
+interface RebuildInspectionOptions {
+  persistLog?: boolean;
+}
+
 interface EmbeddingProvider {
   mode: "provider" | "heuristic";
   model: string;
@@ -133,6 +195,7 @@ export class KnowledgeBaseIndex {
         status TEXT,
         owner_agent TEXT,
         content_hash TEXT NOT NULL,
+        content_length INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT NOT NULL,
         indexed_at TEXT NOT NULL
       );
@@ -190,6 +253,21 @@ export class KnowledgeBaseIndex {
         error TEXT
       );
 
+      CREATE TABLE IF NOT EXISTS rebuild_change_log (
+        id TEXT PRIMARY KEY,
+        relative_path TEXT NOT NULL,
+        change_type TEXT NOT NULL,
+        previous_hash TEXT,
+        next_hash TEXT,
+        previous_updated_at TEXT,
+        next_updated_at TEXT,
+        char_delta INTEGER NOT NULL DEFAULT 0,
+        first_detected_at TEXT NOT NULL,
+        last_detected_at TEXT NOT NULL,
+        resolved_at TEXT,
+        UNIQUE(relative_path, change_type, previous_hash, next_hash)
+      );
+
       CREATE INDEX IF NOT EXISTS idx_documents_relative_path ON documents(relative_path);
       CREATE INDEX IF NOT EXISTS idx_vectors_owner ON knowledge_vectors(owner_type, owner_id);
       CREATE INDEX IF NOT EXISTS idx_index_runs_started_at ON index_runs(started_at);
@@ -198,8 +276,11 @@ export class KnowledgeBaseIndex {
       CREATE INDEX IF NOT EXISTS idx_crm_objects_company_name ON crm_objects(company_name);
       CREATE INDEX IF NOT EXISTS idx_crm_objects_pipeline_stage ON crm_objects(pipeline_stage);
       CREATE INDEX IF NOT EXISTS idx_crm_sync_runs_started_at ON crm_sync_runs(started_at);
+      CREATE INDEX IF NOT EXISTS idx_rebuild_change_log_path ON rebuild_change_log(relative_path, resolved_at);
+      CREATE INDEX IF NOT EXISTS idx_rebuild_change_log_last_detected ON rebuild_change_log(last_detected_at DESC);
     `);
     this.migrateDocumentsOntologyColumn();
+    this.migrateDocumentsContentLengthColumn();
   }
 
   close() {
@@ -233,8 +314,8 @@ export class KnowledgeBaseIndex {
           this.db
             .prepare(
               `INSERT INTO documents (
-                 id, relative_path, title, summary, ontology_domain, status, owner_agent, content_hash, updated_at, indexed_at
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 id, relative_path, title, summary, ontology_domain, status, owner_agent, content_hash, content_length, updated_at, indexed_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(relative_path) DO UPDATE SET
                  id = excluded.id,
                  title = excluded.title,
@@ -243,6 +324,7 @@ export class KnowledgeBaseIndex {
                  status = excluded.status,
                  owner_agent = excluded.owner_agent,
                  content_hash = excluded.content_hash,
+                 content_length = excluded.content_length,
                  updated_at = excluded.updated_at,
                  indexed_at = excluded.indexed_at`,
             )
@@ -255,6 +337,7 @@ export class KnowledgeBaseIndex {
               parsed.status,
               parsed.ownerAgent,
               parsed.contentHash,
+              parsed.contentLength,
               parsed.updatedAt,
               parsed.indexedAt,
             );
@@ -303,6 +386,7 @@ export class KnowledgeBaseIndex {
         .run(indexedAt, files.length, files.length, runId);
 
       this.graphSnapshotCache = null;
+      this.recordRebuildChanges([], indexedAt);
 
       return {
         fileCount: files.length,
@@ -385,6 +469,83 @@ export class KnowledgeBaseIndex {
     };
   }
 
+  async inspectRebuildStatus(options: RebuildInspectionOptions = {}): Promise<RebuildAdvisorStatus> {
+    const checkedAt = new Date().toISOString();
+    const status = this.getStatus();
+    const { changes, scanned } = await this.collectRebuildChanges();
+
+    if (options.persistLog) {
+      this.recordRebuildChanges(changes, checkedAt);
+    }
+
+    const pending = {
+      totalChanges: changes.length,
+      added: changes.filter((change) => change.changeType === "added").length,
+      updated: changes.filter((change) => change.changeType === "updated").length,
+      deleted: changes.filter((change) => change.changeType === "deleted").length,
+      changedCharacters: changes.reduce((sum, change) => sum + Math.max(change.charDelta, 0), 0),
+      changes: changes.slice(0, 25),
+    };
+
+    const weeklySchedule = buildWeeklySchedule(status.lastIndexedAt, checkedAt);
+    const reasons: string[] = [];
+    if (status.indexedDocuments === 0) reasons.push("No graph/index has been built yet for the current knowledge base.");
+    if (pending.totalChanges > 0) {
+      reasons.push(
+        `${pending.totalChanges} documentation change${pending.totalChanges === 1 ? "" : "s"} ${pending.totalChanges === 1 ? "is" : "are"} waiting to be reflected in the graph and retrieval index.`,
+      );
+    }
+    if (weeklySchedule.overdue) {
+      reasons.push(
+        `The default weekly refresh window has passed${weeklySchedule.overdueDays > 0 ? ` by ${weeklySchedule.overdueDays} day${weeklySchedule.overdueDays === 1 ? "" : "s"}` : ""}.`,
+      );
+    }
+
+    const likelyUsesProviderEmbeddings = status.embeddingMode === "provider";
+    const estimatedEmbeddingCalls =
+      status.indexedDocuments === 0 || pending.totalChanges > 0 || weeklySchedule.overdue
+        ? Math.max(scanned.length, pending.totalChanges)
+        : 0;
+    const costLevel = classifyRebuildCost({
+      likelyUsesProviderEmbeddings,
+      indexedDocuments: status.indexedDocuments,
+      changedDocuments: pending.totalChanges,
+      changedCharacters: pending.changedCharacters,
+      overdue: weeklySchedule.overdue,
+    });
+
+    const needsRebuild = reasons.length > 0;
+    const suggestion = buildRebuildSuggestion({
+      indexedDocuments: status.indexedDocuments,
+      pendingChanges: pending.totalChanges,
+      overdue: weeklySchedule.overdue,
+    });
+
+    return {
+      checkedAt,
+      indexedDocuments: status.indexedDocuments,
+      indexedCharCount: status.indexedCharCount,
+      lastIndexedAt: status.lastIndexedAt,
+      embeddingModel: status.embeddingModel,
+      embeddingMode: status.embeddingMode,
+      needsRebuild,
+      reasons,
+      suggestion,
+      suggestedAction: needsRebuild ? (pending.totalChanges > 0 || status.indexedDocuments === 0 ? "rebuild" : "review") : "none",
+      weeklySchedule,
+      pending,
+      cost: {
+        level: costLevel,
+        likelyUsesProviderEmbeddings,
+        requiresFullReindex: needsRebuild,
+        estimatedEmbeddingCalls,
+        summary: buildCostSummary(costLevel, likelyUsesProviderEmbeddings, estimatedEmbeddingCalls, pending.totalChanges, scanned.length),
+        warning: buildCostWarning(costLevel, likelyUsesProviderEmbeddings, pending.totalChanges, scanned.length),
+      },
+      recentLog: this.listRecentRebuildChanges(),
+    };
+  }
+
   async retrieve(query: string, topK = MAX_RETRIEVAL_RESULTS): Promise<RetrievalResult[]> {
     const trimmed = query.trim();
     if (!trimmed) return [];
@@ -402,6 +563,7 @@ export class KnowledgeBaseIndex {
          d.status,
          d.owner_agent,
          d.content_hash,
+         d.content_length,
          d.updated_at,
          d.indexed_at,
          kv.vector_json
@@ -419,6 +581,7 @@ export class KnowledgeBaseIndex {
       status: string | null;
       owner_agent: string | null;
       content_hash: string;
+      content_length: number;
       updated_at: string;
       indexed_at: string;
       vector_json: string;
@@ -435,6 +598,7 @@ export class KnowledgeBaseIndex {
           status: row.status,
           ownerAgent: row.owner_agent,
           contentHash: row.content_hash,
+          contentLength: row.content_length,
           updatedAt: row.updated_at,
           indexedAt: row.indexed_at,
         },
@@ -664,12 +828,212 @@ export class KnowledgeBaseIndex {
     return row?.model ?? null;
   }
 
+  private async collectRebuildChanges(): Promise<{
+    scanned: ScannedMarkdownFile[];
+    changes: RebuildTrackedChange[];
+  }> {
+    const scanned = await scanKnowledgeBaseMarkdown(this.options.repoRoot);
+    const currentRows = this.db.prepare(
+      `SELECT relative_path, content_hash, content_length, updated_at FROM documents ORDER BY relative_path`,
+    ).all() as Array<{
+      relative_path: string;
+      content_hash: string;
+      content_length: number;
+      updated_at: string;
+    }>;
+
+    const currentMap = new Map(currentRows.map((row) => [row.relative_path, row]));
+    const scannedMap = new Map(
+      scanned.map((file) => [
+        file.relativePath,
+        { hash: hashText(file.content), updatedAt: file.updatedAt, contentLength: file.content.length },
+      ]),
+    );
+
+    const changes: RebuildTrackedChange[] = [];
+
+    for (const file of scanned) {
+      const current = currentMap.get(file.relativePath);
+      const nextHash = hashText(file.content);
+      const nextLength = file.content.length;
+      if (!current) {
+        changes.push({
+          path: file.relativePath,
+          changeType: "added",
+          previousHash: null,
+          nextHash,
+          previousUpdatedAt: null,
+          nextUpdatedAt: file.updatedAt,
+          charDelta: nextLength,
+        });
+        continue;
+      }
+      if (current.content_hash !== nextHash) {
+        changes.push({
+          path: file.relativePath,
+          changeType: "updated",
+          previousHash: current.content_hash,
+          nextHash,
+          previousUpdatedAt: current.updated_at,
+          nextUpdatedAt: file.updatedAt,
+          charDelta: Math.max(1, Math.abs(nextLength - current.content_length)),
+        });
+      }
+    }
+
+    for (const row of currentRows) {
+      if (scannedMap.has(row.relative_path)) continue;
+      changes.push({
+        path: row.relative_path,
+        changeType: "deleted",
+        previousHash: row.content_hash,
+        nextHash: null,
+        previousUpdatedAt: row.updated_at,
+        nextUpdatedAt: null,
+        charDelta: Math.max(row.content_length, 0),
+      });
+    }
+
+    return { scanned, changes };
+  }
+
+  private recordRebuildChanges(changes: RebuildTrackedChange[], detectedAt: string): void {
+    const activeKeys = new Set(changes.map((change) => buildRebuildChangeKey(change)));
+    const unresolved = this.db.prepare(
+      `SELECT id, relative_path, change_type, previous_hash, next_hash
+       FROM rebuild_change_log
+       WHERE resolved_at IS NULL`,
+    ).all() as Array<{
+      id: string;
+      relative_path: string;
+      change_type: string;
+      previous_hash: string | null;
+      next_hash: string | null;
+    }>;
+
+    this.db.exec("BEGIN");
+    try {
+      for (const change of changes) {
+        this.db.prepare(
+          `INSERT INTO rebuild_change_log (
+             id, relative_path, change_type, previous_hash, next_hash, previous_updated_at, next_updated_at,
+             char_delta, first_detected_at, last_detected_at, resolved_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+           ON CONFLICT(relative_path, change_type, previous_hash, next_hash) DO UPDATE SET
+             previous_updated_at = excluded.previous_updated_at,
+             next_updated_at = excluded.next_updated_at,
+             char_delta = excluded.char_delta,
+             last_detected_at = excluded.last_detected_at,
+             resolved_at = NULL`,
+        ).run(
+          buildRebuildChangeId(change),
+          change.path,
+          change.changeType,
+          change.previousHash ?? "",
+          change.nextHash ?? "",
+          change.previousUpdatedAt ?? "",
+          change.nextUpdatedAt ?? "",
+          change.charDelta,
+          detectedAt,
+          detectedAt,
+        );
+      }
+
+      for (const row of unresolved) {
+        const rowKey = buildRebuildChangeKey({
+          path: row.relative_path,
+          changeType: row.change_type as RebuildChangeType,
+          previousHash: row.previous_hash,
+          nextHash: row.next_hash,
+          previousUpdatedAt: null,
+          nextUpdatedAt: null,
+          charDelta: 0,
+        });
+        if (activeKeys.has(rowKey)) continue;
+        this.db.prepare(`UPDATE rebuild_change_log SET resolved_at = ? WHERE id = ?`).run(detectedAt, row.id);
+      }
+
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  private listRecentRebuildChanges(limit = 12): RebuildChangeLogEntry[] {
+    const rows = this.db.prepare(
+      `SELECT
+         id,
+         relative_path,
+         change_type,
+         previous_hash,
+         next_hash,
+         previous_updated_at,
+         next_updated_at,
+         char_delta,
+         first_detected_at,
+         last_detected_at,
+         resolved_at
+       FROM rebuild_change_log
+       ORDER BY resolved_at IS NULL DESC, last_detected_at DESC
+       LIMIT ?`,
+    ).all(limit) as Array<{
+      id: string;
+      relative_path: string;
+      change_type: RebuildChangeType;
+      previous_hash: string | null;
+      next_hash: string | null;
+      previous_updated_at: string | null;
+      next_updated_at: string | null;
+      char_delta: number;
+      first_detected_at: string;
+      last_detected_at: string;
+      resolved_at: string | null;
+    }>;
+
+    return rows.map((row) => ({
+      id: row.id,
+      path: row.relative_path,
+      changeType: row.change_type,
+      previousHash: row.previous_hash || null,
+      nextHash: row.next_hash || null,
+      previousUpdatedAt: row.previous_updated_at || null,
+      nextUpdatedAt: row.next_updated_at || null,
+      charDelta: row.char_delta,
+      firstDetectedAt: row.first_detected_at,
+      lastDetectedAt: row.last_detected_at,
+      resolvedAt: row.resolved_at,
+    }));
+  }
+
   private migrateDocumentsOntologyColumn(): void {
     const legacyDomainColumn = "tax" + "onomy_domain";
     const columns = this.db.prepare(`PRAGMA table_info(documents)`).all() as Array<{ name: string }>;
     const columnNames = new Set(columns.map((column) => column.name));
     if (columnNames.has(legacyDomainColumn) && !columnNames.has("ontology_domain")) {
       this.db.exec(`ALTER TABLE documents RENAME COLUMN ${legacyDomainColumn} TO ontology_domain;`);
+    }
+  }
+
+  private migrateDocumentsContentLengthColumn(): void {
+    const columns = this.db.prepare(`PRAGMA table_info(documents)`).all() as Array<{ name: string }>;
+    const columnNames = new Set(columns.map((column) => column.name));
+    if (!columnNames.has("content_length")) {
+      this.db.exec(`ALTER TABLE documents ADD COLUMN content_length INTEGER NOT NULL DEFAULT 0;`);
+    }
+
+    const rowsNeedingBackfill = this.db.prepare(
+      `SELECT relative_path FROM documents WHERE content_length IS NULL OR content_length = 0`,
+    ).all() as Array<{ relative_path: string }>;
+
+    for (const row of rowsNeedingBackfill) {
+      const fullPath = path.join(this.options.repoRoot, row.relative_path);
+      try {
+        const size = fs.readFileSync(fullPath, "utf8").length;
+        this.db.prepare(`UPDATE documents SET content_length = ? WHERE relative_path = ?`).run(size, row.relative_path);
+      } catch {
+        // Leave zero for deleted or inaccessible files until the next sync.
+      }
     }
   }
 }
@@ -744,6 +1108,7 @@ function summarizeMarkdown(relativePath: string, content: string, updatedAt: str
     status,
     ownerAgent,
     contentHash: hashText(content),
+    contentLength: content.length,
     updatedAt,
     indexedAt,
   };
@@ -942,6 +1307,113 @@ function buildDocumentId(relativePath: string): string {
 
 function buildVectorId(documentId: string): string {
   return `vec_${createHash("sha1").update(documentId).digest("hex")}`;
+}
+
+function buildRebuildChangeId(change: RebuildTrackedChange): string {
+  return `chg_${createHash("sha1").update(buildRebuildChangeKey(change)).digest("hex")}`;
+}
+
+function buildRebuildChangeKey(change: RebuildTrackedChange): string {
+  return [
+    change.path,
+    change.changeType,
+    change.previousHash ?? "",
+    change.nextHash ?? "",
+  ].join("::");
+}
+
+function buildWeeklySchedule(lastIndexedAt: string | null, checkedAt: string): RebuildAdvisorStatus["weeklySchedule"] {
+  const intervalDays = 7;
+  if (!lastIndexedAt) {
+    return {
+      intervalDays,
+      nextRecommendedAt: null,
+      overdue: true,
+      overdueDays: 0,
+    };
+  }
+
+  const base = new Date(lastIndexedAt).getTime();
+  const nextRecommendedAt = new Date(base + intervalDays * 24 * 60 * 60 * 1000).toISOString();
+  const overdueMs = new Date(checkedAt).getTime() - new Date(nextRecommendedAt).getTime();
+  const overdueDays = overdueMs > 0 ? Math.floor(overdueMs / (24 * 60 * 60 * 1000)) : 0;
+  return {
+    intervalDays,
+    nextRecommendedAt,
+    overdue: overdueMs > 0,
+    overdueDays,
+  };
+}
+
+function classifyRebuildCost(options: {
+  likelyUsesProviderEmbeddings: boolean;
+  indexedDocuments: number;
+  changedDocuments: number;
+  changedCharacters: number;
+  overdue: boolean;
+}): RebuildCostLevel {
+  if (!options.likelyUsesProviderEmbeddings) {
+    return options.changedDocuments === 0 && !options.overdue ? "none" : "low";
+  }
+  if (options.indexedDocuments === 0) return "medium";
+  if (options.changedDocuments >= 25 || options.changedCharacters >= 120_000) return "high";
+  if (options.changedDocuments >= 8 || options.overdue) return "medium";
+  if (options.changedDocuments > 0) return "low";
+  return "none";
+}
+
+function buildCostSummary(
+  level: RebuildCostLevel,
+  likelyUsesProviderEmbeddings: boolean,
+  estimatedEmbeddingCalls: number,
+  changedDocuments: number,
+  scannedDocuments: number,
+): string {
+  if (level === "none") {
+    return "No rebuild cost is recommended right now.";
+  }
+
+  const providerText = likelyUsesProviderEmbeddings ? "provider embeddings may be called" : "heuristic embeddings avoid direct API cost";
+  return `A rebuild currently reindexes the full knowledge base (${scannedDocuments} docs). ${changedDocuments} changed doc${changedDocuments === 1 ? "" : "s"} detected; ${providerText}; estimated embedding work: ${estimatedEmbeddingCalls} document summary call${estimatedEmbeddingCalls === 1 ? "" : "s"}.`;
+}
+
+function buildCostWarning(
+  level: RebuildCostLevel,
+  likelyUsesProviderEmbeddings: boolean,
+  changedDocuments: number,
+  scannedDocuments: number,
+): string | null {
+  if (level === "none") return null;
+  if (!likelyUsesProviderEmbeddings) {
+    return "This rebuild is mostly local compute. It may still take time because the CLI rescans the full knowledge base.";
+  }
+  if (level === "high") {
+    return `This rebuild will rescan all ${scannedDocuments} indexed documents and may incur noticeable embedding cost. Consider waiting unless the ${changedDocuments} pending changes are important for current retrieval answers.`;
+  }
+  if (level === "medium") {
+    return "This rebuild should be deliberate: the current implementation rescans the full knowledge base and may use paid embeddings.";
+  }
+  return "This rebuild is probably inexpensive, but it can still trigger provider embedding calls.";
+}
+
+function buildRebuildSuggestion(options: {
+  indexedDocuments: number;
+  pendingChanges: number;
+  overdue: boolean;
+}): string {
+  if (options.indexedDocuments === 0) {
+    return "Run the first rebuild to create the graph, document summaries, and retrieval vectors before relying on chat or graph answers.";
+  }
+  if (options.pendingChanges >= 8) {
+    return "Rebuild now. The graph and retrieval layer are materially behind the documentation changes.";
+  }
+  if (options.pendingChanges > 0) {
+    return "Rebuild when you need the latest docs reflected in chat, graph navigation, or retrieval. Small edits can wait if you are not using those files yet.";
+  }
+  if (options.overdue) {
+    return "No drift was detected, but a weekly refresh is due. Rebuild only if you want a fresh validation pass or have reason to distrust the current index.";
+  }
+  return "No rebuild is necessary right now. The graph and retrieval index look current.";
 }
 
 function stripMarkdown(value: string): string {

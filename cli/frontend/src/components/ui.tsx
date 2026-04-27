@@ -50,10 +50,11 @@ export function LiteSectionHeader({
 
 interface LiteButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "ghost";
+  size?: "sm" | "md";
 }
 
-export function LiteButton({ variant = "primary", className, ...props }: LiteButtonProps) {
-  return <button className={cx("lite-button", `lite-button-${variant}`, className)} {...props} />;
+export function LiteButton({ variant = "primary", size = "sm", className, ...props }: LiteButtonProps) {
+  return <button className={cx("lite-button", `lite-button-${variant}`, `lite-button-${size}`, className)} {...props} />;
 }
 
 interface LiteBadgeProps extends HTMLAttributes<HTMLSpanElement> {
