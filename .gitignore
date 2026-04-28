@@ -25,8 +25,7 @@ yarn-error.log*
 # Coding Agent State
 .claude/
 .gstack/
-.codex/
-claude.json
-.vscode/cline_mcp_settings.json
+.codex/*
+!.codex/company-ops-mcp-launch.sh
 cli/.pulseos-cli-state/
 cli/.pulseos-lite-open-source-cli-state/
