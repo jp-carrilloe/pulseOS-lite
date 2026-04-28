@@ -165,6 +165,15 @@ async function stopDaemon(env: NodeJS.ProcessEnv): Promise<void> {
   process.stdout.write("The daemon did not stop in time. You may need to stop the process manually and then retry.\n");
 }
 
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function printDaemonStatus(env: NodeJS.ProcessEnv): Promise<void> {
   const state = await readDaemonState(env);
   if (!state) {
@@ -175,8 +184,11 @@ async function printDaemonStatus(env: NodeJS.ProcessEnv): Promise<void> {
   }
   const alive = await probeDaemonHealth(state.port, state.token);
   if (!alive) {
+    const pidAlive = isProcessAlive(state.pid);
     process.stdout.write(
-      `Status: stale\nThe recorded daemon process (pid ${state.pid}) is not responding.\nYou can usually recover by running \`npm run daemon:stop\` and then starting chat again.\n`,
+      pidAlive
+        ? `Status: unverified\nThe recorded daemon process (pid ${state.pid}) still exists, but this CLI could not confirm localhost health from the current environment.\nIf the graph UI is already open and working, you can keep using it. Otherwise run \`npm run daemon:stop\` and then relaunch with \`npm run graph\` or \`npm run chat\`.\n`
+        : `Status: stale\nThe recorded daemon process (pid ${state.pid}) is not responding.\nYou can usually recover by running \`npm run daemon:stop\` and then starting chat again.\n`,
     );
     return;
   }
@@ -189,11 +201,13 @@ async function printWorkflowStatus(env: NodeJS.ProcessEnv): Promise<void> {
   const bootstrapState = await readBootstrapState(env);
   const daemonState = await readDaemonState(env);
   const daemonAlive = daemonState ? await probeDaemonHealth(daemonState.port, daemonState.token) : false;
+  const daemonPidAlive = daemonState ? isProcessAlive(daemonState.pid) : false;
   const dbPath = getCliDbPath(env);
   const dbExists = fs.existsSync(dbPath);
 
   let documentCount = 0;
   let vectorCount = 0;
+  let referenceCount = 0;
   let latestIndexRun:
     | { status: string; completed_at: string | null; files_indexed: number; error: string | null }
     | null = null;
@@ -211,6 +225,9 @@ async function printWorkflowStatus(env: NodeJS.ProcessEnv): Promise<void> {
       }
       if (tables.has("knowledge_vectors")) {
         vectorCount = (db.prepare(`SELECT COUNT(*) as count FROM knowledge_vectors`).get() as { count: number }).count;
+      }
+      if (tables.has("document_references")) {
+        referenceCount = (db.prepare(`SELECT COUNT(*) as count FROM document_references`).get() as { count: number }).count;
       }
       if (tables.has("index_runs")) {
         latestIndexRun =
@@ -265,9 +282,12 @@ async function printWorkflowStatus(env: NodeJS.ProcessEnv): Promise<void> {
   if (!daemonState) {
     lines.push(`- Status: not running`);
   } else {
-    lines.push(`- Status: ${daemonAlive ? "running" : "stale"}`);
+    lines.push(`- Status: ${daemonAlive ? "running" : daemonPidAlive ? "unverified" : "stale"}`);
     lines.push(`- PID: ${daemonState.pid}`);
     lines.push(`- Started at: ${daemonState.startedAt}`);
+    if (!daemonAlive && daemonPidAlive) {
+      lines.push(`- Note: The daemon process exists, but this CLI could not confirm localhost health from the current environment.`);
+    }
   }
 
   lines.push("", "SQL + vectorization:");
@@ -275,6 +295,7 @@ async function printWorkflowStatus(env: NodeJS.ProcessEnv): Promise<void> {
   lines.push(`- Database exists: ${dbExists ? "yes" : "no"}`);
   lines.push(`- Documents table rows: ${documentCount}`);
   lines.push(`- Vector rows: ${vectorCount}`);
+  lines.push(`- Document relationship rows: ${referenceCount}`);
   if (latestIndexRun) {
     lines.push(`- Latest index run status: ${latestIndexRun.status}`);
     lines.push(`- Latest files indexed: ${latestIndexRun.files_indexed}`);
@@ -289,6 +310,7 @@ async function printWorkflowStatus(env: NodeJS.ProcessEnv): Promise<void> {
   lines.push(`- Bootstrap completed successfully: ${bootstrapState?.status === "completed" ? "yes" : "no"}`);
   lines.push(`- SQL tables populated: ${documentCount > 0 ? "yes" : "no"}`);
   lines.push(`- Vectorization completed: ${vectorCount > 0 ? "yes" : "no"}`);
+  lines.push(`- Document relationships populated: ${referenceCount > 0 ? "yes" : "no"}`);
 
   process.stdout.write(lines.join("\n") + "\n");
 }

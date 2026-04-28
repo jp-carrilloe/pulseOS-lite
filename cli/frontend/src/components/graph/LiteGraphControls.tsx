@@ -6,23 +6,11 @@ interface LiteGraphControlsProps {
   subtitle: string;
   headerBadges?: ReactNode;
   toolbarControls?: ReactNode;
-  layoutName: string;
-  onLayoutChange: (name: string) => void;
-  onDefaultView: () => void;
-  onZoomIn: () => void;
-  onZoomOut: () => void;
-  onFit: () => void;
   entityTypes: string[];
   relationshipTypes: string[];
   readLayer: string;
   colorForType: (type: string) => string;
 }
-
-const LAYOUT_OPTIONS = [
-  { id: "fcose", label: "Force" },
-  { id: "breadthfirst", label: "Hierarchy" },
-  { id: "concentric", label: "Radial" },
-] as const;
 
 const READ_LAYER_LABELS: Record<string, string> = {
   canonical: "Verified",
@@ -35,12 +23,6 @@ export function LiteGraphControls({
   subtitle,
   headerBadges,
   toolbarControls,
-  layoutName,
-  onLayoutChange,
-  onDefaultView,
-  onZoomIn,
-  onZoomOut,
-  onFit,
   entityTypes,
   relationshipTypes,
   readLayer,
@@ -58,39 +40,7 @@ export function LiteGraphControls({
           <p className="lite-graph-controls-subtitle">{subtitle}</p>
           {headerBadges ? <div className="lite-graph-toolbar-badges">{headerBadges}</div> : null}
         </div>
-        <div className="lite-graph-controls-actions">
-          <LiteButton type="button" variant="secondary" onClick={onDefaultView}>
-            Default view
-          </LiteButton>
-          <LiteButton type="button" variant="ghost" onClick={onZoomIn}>
-            Zoom in
-          </LiteButton>
-          <LiteButton type="button" variant="ghost" onClick={onZoomOut}>
-            Zoom out
-          </LiteButton>
-          <LiteButton type="button" variant="secondary" onClick={onFit}>
-            Fit graph
-          </LiteButton>
-        </div>
-      </div>
-
-      <div className="lite-graph-controls-body">
-        <div className="lite-graph-toolbar-slot">{toolbarControls}</div>
-        <div className="lite-graph-layout-section" aria-label="Graph layout">
-          <span className="lite-graph-control-label">Layout</span>
-          <div className="lite-graph-layout-toolbar" role="group" aria-label="Graph layout">
-            {LAYOUT_OPTIONS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                className={layoutName === option.id ? "graph-segmented-option active" : "graph-segmented-option"}
-                onClick={() => onLayoutChange(option.id)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        {toolbarControls ? <div className="lite-graph-controls-actions">{toolbarControls}</div> : null}
       </div>
 
       <details className="lite-graph-legend-tray">

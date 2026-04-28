@@ -12,7 +12,17 @@ The goal of this repo is simple:
 
 ---
 
-## 0. The 2 Ways to Use This Repo
+## 0. The IDE-First Philosophy
+
+The absolute best way to run the CLI, the agents, and the company memory is normally inside your IDE, whatever that is—Cursor, VS Code, or Antigravity. 
+
+While the system provides a visually friendly UI (`npm run graph`), **most of the power is harnessed directly via the CLI**. 
+
+You can run Codex, Claude, or Gemini in your terminal or directly in the IDE and just tell them to call the CLI tools. This allows the models to handle document ingestion, semantic retrieval, and maintaining the graph. You can build your documents and agents inside the company memory graph and just use the UI as an additional visual guide. The real power is happening directly via the CLI, calling on the models to read, edit, update files and relationships, and update the knowledge graph.
+
+---
+
+## 1. The 2 Ways to Use This Repo
 
 There are **two different ways** to use this repo, and it is important not to confuse them.
 
@@ -129,6 +139,8 @@ So:
 Think of it as the temporary intake zone for raw company knowledge.
 
 You should place source material here before running bootstrap.
+
+This repo also includes [000_Acme_Sample_Company_Memory](./000_Acme_Sample_Company_Memory) as a public example/template. It is reference material only. Bootstrap does not delete it automatically when you seed a real company.
 
 Good examples of source material:
 - founder notes
@@ -489,6 +501,7 @@ npm run graph
 That builds the local React workspace, starts the same local daemon, and prints a private browser URL. The UI is scoped to `000_Company_Memory` and has three working areas:
 - **Left explorer:** a VS Code-style folder/document tree for `000_Company_Memory`
 - **Center graph:** an interactive graph backed by the SQLite index
+- **Right terminal sidebar:** a real local shell docked into the workspace
 - **Right reader/editor:** a basic Markdown reader and editor for selected documents
 
 The graph has two intentionally separate views so the company brain does not become visually overloaded:
@@ -499,7 +512,27 @@ The printed graph URL uses a temporary token only for the first open. That first
 
 The graph is interactive. You can drag nodes, pan the canvas, zoom in or out, fit the graph to the viewport, and reset to the generated default layout. Graph movements are visual only and do not persist layout changes. If you edit and save a Markdown document in the right panel, the daemon writes that file and refreshes the SQLite index/vector layer so chat and graph retrieval stay current.
 
+The graph workspace terminal is meant for local repo work without leaving the browser UI.
+
+What it supports:
+- a real local interactive shell
+- a `Run PulseOS` button that starts the shell if needed and sends `pulseos`
+- normal local CLI commands such as `git`, `npm`, `rg`, `claude`, and `gemini` when those tools are installed on the machine
+- side-by-side document editing and terminal work, because the terminal stays visible when the document panel is open
+
+The graph read path is now more SQL-native than before:
+- document metadata still comes from the `documents` table
+- document-to-document links are persisted during indexing into `document_references`
+- graph reads no longer need to reopen every Markdown file just to rebuild reference edges
+
+The retrieval prompt path is also more stable:
+- semantic ranking still uses summary vectors from `knowledge_vectors`
+- the full prompt context for top matches is assembled from persisted `document_chunks`
+- the daemon and MCP server no longer need to reread those top documents from disk on every query
+
 The graph UI also includes a rebuild advisor. It compares the current Markdown documents to the indexed SQLite state, warns when the weekly refresh window has passed, and estimates whether a rebuild is likely to be cheap or more deliberate. The advisor view itself is read-only. It does not rewrite the rebuild change log on every refresh. The audit log is updated by daemon startup, MCP startup, or explicit rebuild/scan flows so the history reflects real maintenance events instead of simple page loads.
+
+If document nodes appear in `Document Relationships` without edges, that usually means the SQL graph layer needs to be refreshed, not that the Markdown links disappeared from the source files. In that case, use the left sidebar `Settings` tab and run `Rebuild graph`, or run `cd cli && npm run index`.
 
 The editor is intentionally narrow. It only reads and saves Markdown inside `000_Company_Memory`; source intake, CLI files, repo configuration, generated assets, and hidden/system folders are not editable from the graph UI.
 
@@ -570,6 +603,8 @@ If you want to use this repo through MCP-style tooling, the practical pattern is
 2. either expose it as an accessible local workspace/filesystem context or start the local MCP server with `cd cli && npm run mcp`
 3. tell the model explicitly that this repo is the company brain
 4. reference the relevant folders or docs when you want grounded output
+
+The step-by-step MCP/client setup guide lives in [MCP_SETUP.md](./MCP_SETUP.md).
 
 The local MCP server exposes a small tool surface:
 - `repo_status`

@@ -5,10 +5,20 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { ACME_SAMPLE_MEMORY_DIR, cleanupAcmeSampleCompanyMemory } from "./bootstrap.js";
+import { ACME_SAMPLE_MEMORY_DIR, hasAcmeSampleCompanyMemory } from "./bootstrap.js";
 
-test("cleanupAcmeSampleCompanyMemory removes only the disposable Acme sample folder", async () => {
-  const repoRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "company-ops-bootstrap-cleanup-"));
+test("hasAcmeSampleCompanyMemory detects the public sample folder when present", async () => {
+  const repoRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "company-ops-bootstrap-sample-"));
+  const sampleDir = path.join(repoRoot, ACME_SAMPLE_MEMORY_DIR);
+
+  await fsp.mkdir(sampleDir, { recursive: true });
+  await fsp.writeFile(path.join(sampleDir, "sample.md"), "# Acme Sample\n");
+
+  assert.equal(hasAcmeSampleCompanyMemory(repoRoot), true);
+});
+
+test("sample company memory can remain in the repo without bootstrap deleting it", async () => {
+  const repoRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "company-ops-bootstrap-sample-"));
   const sampleDir = path.join(repoRoot, ACME_SAMPLE_MEMORY_DIR);
   const companyMemoryDir = path.join(repoRoot, "000_Company_Memory");
 
@@ -17,9 +27,7 @@ test("cleanupAcmeSampleCompanyMemory removes only the disposable Acme sample fol
   await fsp.writeFile(path.join(sampleDir, "sample.md"), "# Acme Sample\n");
   await fsp.writeFile(path.join(companyMemoryDir, "real.md"), "# Real Company Memory\n");
 
-  const removed = await cleanupAcmeSampleCompanyMemory(repoRoot);
-
-  assert.equal(removed, true);
-  assert.equal(fs.existsSync(sampleDir), false);
+  assert.equal(hasAcmeSampleCompanyMemory(repoRoot), true);
+  assert.equal(fs.existsSync(path.join(sampleDir, "sample.md")), true);
   assert.equal(fs.existsSync(path.join(companyMemoryDir, "real.md")), true);
 });

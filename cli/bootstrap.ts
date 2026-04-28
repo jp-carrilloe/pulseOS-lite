@@ -140,12 +140,8 @@ async function findTemplateFiles(dir: string, base: string, results: TemplateFil
   }
 }
 
-export async function cleanupAcmeSampleCompanyMemory(repoRoot: string = REPO_ROOT): Promise<boolean> {
-  const samplePath = path.join(repoRoot, ACME_SAMPLE_MEMORY_DIR);
-  if (!fs.existsSync(samplePath)) return false;
-
-  await fsp.rm(samplePath, { recursive: true, force: true });
-  return true;
+export function hasAcmeSampleCompanyMemory(repoRoot: string = REPO_ROOT): boolean {
+  return fs.existsSync(path.join(repoRoot, ACME_SAMPLE_MEMORY_DIR));
 }
 
 // ── Intake Questionnaire ──────────────────────────────────────────────────────
@@ -254,10 +250,6 @@ async function main() {
       "Bootstrap seeds documents in dependency order. It reads source material from 001_Data_Souces and keeps the originals in place.\n",
     );
 
-    if (await cleanupAcmeSampleCompanyMemory(REPO_ROOT)) {
-      process.stdout.write("Removed disposable Acme sample company memory before bootstrap.\n");
-    }
-
     // Discover and sort template files
     process.stdout.write("\nScanning for unfilled template files...\n");
     const raw: TemplateFile[] = [];
@@ -304,6 +296,19 @@ async function main() {
 
     const profile = await runIntake(rl);
     intakeReport.companyName = profile.name;
+
+    if (hasAcmeSampleCompanyMemory(REPO_ROOT)) {
+      process.stdout.write(
+        [
+          "",
+          `Sample company memory detected: ${ACME_SAMPLE_MEMORY_DIR}`,
+          "This sample folder is included intentionally as a public reference/template.",
+          "Bootstrap will not delete it automatically when you seed a real company.",
+          "If you do not want to keep it alongside your own company memory, archive or delete it manually after bootstrap.",
+          "",
+        ].join("\n"),
+      );
+    }
 
     process.stdout.write("\nValidating available model providers for bootstrap...\n");
     const provider = await createBootstrapProvider();

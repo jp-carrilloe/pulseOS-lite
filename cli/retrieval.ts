@@ -13,6 +13,8 @@ const MAX_SUMMARY_LENGTH = 320;
 const MAX_FULL_DOCUMENTS = 4;
 const MAX_RETRIEVAL_RESULTS = 8;
 const MAX_PROMPT_CHARS = 120_000;
+const MAX_CHUNK_CHARS = 1800;
+const MAX_RETRIEVAL_CANDIDATES = 64;
 
 export interface IndexedDocumentRecord {
   id: string;
@@ -50,6 +52,7 @@ export interface IndexStatusSummary {
   embeddingModel: string | null;
   embeddingMode: "provider" | "heuristic";
   indexedCharCount: number;
+  referenceCount: number;
 }
 
 export type RebuildChangeType = "added" | "updated" | "deleted";
@@ -150,6 +153,14 @@ export interface SyncIndexResult {
   indexedAt: string;
   embeddingModel: string;
   embeddingMode: "provider" | "heuristic";
+}
+
+interface IndexedDocumentChunk {
+  id: string;
+  documentId: string;
+  chunkIndex: number;
+  content: string;
+  contentLength: number;
 }
 
 interface ScannedMarkdownFile {
@@ -268,6 +279,28 @@ export class KnowledgeBaseIndex {
         UNIQUE(relative_path, change_type, previous_hash, next_hash)
       );
 
+      CREATE TABLE IF NOT EXISTS document_references (
+        id TEXT PRIMARY KEY,
+        source_document_id TEXT NOT NULL,
+        source_relative_path TEXT NOT NULL,
+        target_relative_path TEXT NOT NULL,
+        target_document_id TEXT,
+        link_text TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(source_document_id, target_relative_path)
+      );
+
+      CREATE TABLE IF NOT EXISTS document_chunks (
+        id TEXT PRIMARY KEY,
+        document_id TEXT NOT NULL,
+        relative_path TEXT NOT NULL,
+        chunk_index INTEGER NOT NULL,
+        content TEXT NOT NULL,
+        content_length INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(document_id, chunk_index)
+      );
+
       CREATE INDEX IF NOT EXISTS idx_documents_relative_path ON documents(relative_path);
       CREATE INDEX IF NOT EXISTS idx_vectors_owner ON knowledge_vectors(owner_type, owner_id);
       CREATE INDEX IF NOT EXISTS idx_index_runs_started_at ON index_runs(started_at);
@@ -278,6 +311,9 @@ export class KnowledgeBaseIndex {
       CREATE INDEX IF NOT EXISTS idx_crm_sync_runs_started_at ON crm_sync_runs(started_at);
       CREATE INDEX IF NOT EXISTS idx_rebuild_change_log_path ON rebuild_change_log(relative_path, resolved_at);
       CREATE INDEX IF NOT EXISTS idx_rebuild_change_log_last_detected ON rebuild_change_log(last_detected_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_document_references_source ON document_references(source_document_id);
+      CREATE INDEX IF NOT EXISTS idx_document_references_target ON document_references(target_relative_path);
+      CREATE INDEX IF NOT EXISTS idx_document_chunks_document ON document_chunks(document_id, chunk_index);
     `);
     this.migrateDocumentsOntologyColumn();
     this.migrateDocumentsContentLengthColumn();
@@ -302,13 +338,16 @@ export class KnowledgeBaseIndex {
       const provider = createEmbeddingProvider(this.options.env ?? process.env);
       const indexedAt = new Date().toISOString();
       let charCount = 0;
+      const parsedDocuments = files.map((file) => summarizeMarkdown(file.relativePath, file.content, file.updatedAt, indexedAt));
+      const documentIdByPath = new Map(parsedDocuments.map((parsed) => [parsed.relativePath, parsed.id]));
 
       const seenPaths = new Set(files.map((file) => file.relativePath));
       this.db.exec("BEGIN");
       try {
-        for (const file of files) {
+        for (let index = 0; index < files.length; index++) {
+          const file = files[index];
+          const parsed = parsedDocuments[index];
           charCount += file.content.length;
-          const parsed = summarizeMarkdown(file.relativePath, file.content, file.updatedAt, indexedAt);
           const vector = await provider.embed(parsed.summary);
 
           this.db
@@ -360,6 +399,40 @@ export class KnowledgeBaseIndex {
               JSON.stringify(vector),
               indexedAt,
             );
+
+          this.db.prepare(`DELETE FROM document_references WHERE source_document_id = ?`).run(parsed.id);
+          for (const reference of extractDocumentReferences(file.relativePath, file.content, documentIdByPath, indexedAt, parsed.id)) {
+            this.db.prepare(
+              `INSERT INTO document_references (
+                 id, source_document_id, source_relative_path, target_relative_path, target_document_id, link_text, created_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            ).run(
+              reference.id,
+              reference.sourceDocumentId,
+              reference.sourceRelativePath,
+              reference.targetRelativePath,
+              reference.targetDocumentId,
+              reference.linkText,
+              reference.createdAt,
+            );
+          }
+
+          this.db.prepare(`DELETE FROM document_chunks WHERE document_id = ?`).run(parsed.id);
+          for (const chunk of buildDocumentChunks(parsed.id, parsed.relativePath, file.content, indexedAt)) {
+            this.db.prepare(
+              `INSERT INTO document_chunks (
+                 id, document_id, relative_path, chunk_index, content, content_length, created_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            ).run(
+              chunk.id,
+              chunk.documentId,
+              parsed.relativePath,
+              chunk.chunkIndex,
+              chunk.content,
+              chunk.contentLength,
+              indexedAt,
+            );
+          }
         }
 
         const staleRows = this.db
@@ -368,6 +441,8 @@ export class KnowledgeBaseIndex {
         for (const row of staleRows) {
           if (seenPaths.has(row.relative_path)) continue;
           this.db.prepare(`DELETE FROM knowledge_vectors WHERE owner_type = ? AND owner_id = ?`).run(SUMMARY_VECTOR_OWNER_TYPE, row.id);
+          this.db.prepare(`DELETE FROM document_references WHERE source_document_id = ? OR target_document_id = ? OR source_relative_path = ? OR target_relative_path = ?`).run(row.id, row.id, row.relative_path, row.relative_path);
+          this.db.prepare(`DELETE FROM document_chunks WHERE document_id = ?`).run(row.id);
           this.db.prepare(`DELETE FROM documents WHERE id = ?`).run(row.id);
         }
 
@@ -457,6 +532,9 @@ export class KnowledgeBaseIndex {
     const vectorRow = this.db.prepare(
       `SELECT model FROM knowledge_vectors WHERE owner_type = ? ORDER BY created_at DESC LIMIT 1`,
     ).get(SUMMARY_VECTOR_OWNER_TYPE) as { model: string } | undefined;
+    const referenceRow = this.db.prepare(
+      `SELECT COUNT(*) as count FROM document_references`,
+    ).get() as { count: number };
 
     return {
       dbPath: this.options.dbPath,
@@ -466,6 +544,7 @@ export class KnowledgeBaseIndex {
       embeddingModel: vectorRow?.model ?? null,
       embeddingMode: vectorRow?.model && vectorRow.model !== HEURISTIC_MODEL ? "provider" : "heuristic",
       indexedCharCount: docRow.summaryChars ?? 0,
+      referenceCount: referenceRow.count ?? 0,
     };
   }
 
@@ -473,6 +552,21 @@ export class KnowledgeBaseIndex {
     const checkedAt = new Date().toISOString();
     const status = this.getStatus();
     const { changes, scanned } = await this.collectRebuildChanges();
+    const scannedDocumentIdByPath = new Map(
+      scanned.map((file) => [file.relativePath, buildDocumentId(file.relativePath)]),
+    );
+    const expectedReferenceCount = scanned.reduce(
+      (sum, file) =>
+        sum +
+        extractDocumentReferences(
+          file.relativePath,
+          file.content,
+          scannedDocumentIdByPath,
+          checkedAt,
+          buildDocumentId(file.relativePath),
+        ).length,
+      0,
+    );
 
     if (options.persistLog) {
       this.recordRebuildChanges(changes, checkedAt);
@@ -490,6 +584,11 @@ export class KnowledgeBaseIndex {
     const weeklySchedule = buildWeeklySchedule(status.lastIndexedAt, checkedAt);
     const reasons: string[] = [];
     if (status.indexedDocuments === 0) reasons.push("No graph/index has been built yet for the current knowledge base.");
+    if (status.indexedDocuments > 0 && expectedReferenceCount > 0 && status.referenceCount === 0) {
+      reasons.push(
+        "Documents are indexed, but no document relationships are stored in the SQL graph. Rebuild graph to restore Markdown reference edges.",
+      );
+    }
     if (pending.totalChanges > 0) {
       reasons.push(
         `${pending.totalChanges} documentation change${pending.totalChanges === 1 ? "" : "s"} ${pending.totalChanges === 1 ? "is" : "are"} waiting to be reflected in the graph and retrieval index.`,
@@ -553,7 +652,9 @@ export class KnowledgeBaseIndex {
     const storedModel = this.getStoredEmbeddingModel();
     const provider = createEmbeddingProvider(this.options.env ?? process.env, storedModel);
     const queryVector = await provider.embed(trimmed);
-    const rows = this.db.prepare(
+    const prefilteredRows = this.selectRetrievalCandidates(trimmed, MAX_RETRIEVAL_CANDIDATES);
+    const shouldUsePrefilter = prefilteredRows.length >= Math.min(Math.max(topK * 2, 4), MAX_RETRIEVAL_CANDIDATES);
+    const rows = (shouldUsePrefilter ? prefilteredRows : this.db.prepare(
       `SELECT
          d.id,
          d.relative_path,
@@ -572,7 +673,7 @@ export class KnowledgeBaseIndex {
          ON kv.owner_type = ?
         AND kv.owner_id = d.id
        ORDER BY d.relative_path`,
-    ).all(SUMMARY_VECTOR_OWNER_TYPE) as Array<{
+    ).all(SUMMARY_VECTOR_OWNER_TYPE)) as Array<{
       id: string;
       relative_path: string;
       title: string;
@@ -642,13 +743,8 @@ export class KnowledgeBaseIndex {
     ].join("\n");
 
     for (const match of matches.slice(0, MAX_FULL_DOCUMENTS)) {
-      const fullPath = path.join(this.options.repoRoot, match.document.relativePath);
-      let content = "";
-      try {
-        content = await fsp.readFile(fullPath, "utf8");
-      } catch {
-        continue;
-      }
+      const content = this.readIndexedDocumentBody(match.document.id);
+      if (!content) continue;
       const block = `\n### ${match.document.relativePath}\n\n${content}\n`;
       if (context.length + block.length > MAX_PROMPT_CHARS) break;
       context += block;
@@ -686,6 +782,7 @@ export class KnowledgeBaseIndex {
     const nodes = new Map<string, KnowledgeGraphNode>();
     const edges = new Map<string, KnowledgeGraphEdge>();
     const documentPathToNodeId = new Map<string, string>();
+    const documentDbIdToNodeId = new Map<string, string>();
     const folderDocumentCounts = new Map<string, number>();
 
     const addFolder = (folderPath: string): string => {
@@ -746,6 +843,7 @@ export class KnowledgeBaseIndex {
         summary: row.summary,
       });
       documentPathToNodeId.set(row.relative_path, documentId);
+      documentDbIdToNodeId.set(row.id, documentId);
 
       const edgeId = `contains:${parentId}->${documentId}`;
       edges.set(edgeId, {
@@ -762,31 +860,24 @@ export class KnowledgeBaseIndex {
       if (folder) folder.documentCount = count;
     }
 
-    for (const row of rows) {
-      const sourceId = documentPathToNodeId.get(row.relative_path);
-      if (!sourceId) continue;
+    const referenceRows = this.db.prepare(
+      `SELECT source_document_id, target_document_id
+       FROM document_references
+       WHERE target_document_id IS NOT NULL`,
+    ).all() as Array<{ source_document_id: string; target_document_id: string }>;
 
-      let content = "";
-      try {
-        content = await fsp.readFile(path.join(this.options.repoRoot, row.relative_path), "utf8");
-      } catch {
-        continue;
-      }
-
-      for (const link of extractMarkdownLinks(content)) {
-        const targetPath = resolveMarkdownLink(row.relative_path, link, documentPathToNodeId);
-        if (!targetPath || targetPath === row.relative_path) continue;
-        const targetId = documentPathToNodeId.get(targetPath);
-        if (!targetId) continue;
-        const edgeId = `references:${sourceId}->${targetId}`;
-        edges.set(edgeId, {
-          id: edgeId,
-          type: "REFERENCES",
-          source: sourceId,
-          target: targetId,
-          label: "references",
-        });
-      }
+    for (const row of referenceRows) {
+      const sourceNodeId = documentDbIdToNodeId.get(row.source_document_id);
+      const targetNodeId = documentDbIdToNodeId.get(row.target_document_id);
+      if (!sourceNodeId || !targetNodeId || sourceNodeId === targetNodeId) continue;
+      const edgeId = `references:${sourceNodeId}->${targetNodeId}`;
+      edges.set(edgeId, {
+        id: edgeId,
+        type: "REFERENCES",
+        source: sourceNodeId,
+        target: targetNodeId,
+        label: "references",
+      });
     }
 
     const graphNodes = Array.from(nodes.values()).sort((left, right) => {
@@ -826,6 +917,97 @@ export class KnowledgeBaseIndex {
       `SELECT model FROM knowledge_vectors WHERE owner_type = ? ORDER BY created_at DESC LIMIT 1`,
     ).get(SUMMARY_VECTOR_OWNER_TYPE) as { model: string } | undefined;
     return row?.model ?? null;
+  }
+
+  private readIndexedDocumentBody(documentId: string): string {
+    const rows = this.db.prepare(
+      `SELECT content
+       FROM document_chunks
+       WHERE document_id = ?
+       ORDER BY chunk_index`,
+    ).all(documentId) as Array<{ content: string }>;
+    return rows.map((row) => row.content).join("\n\n");
+  }
+
+  private selectRetrievalCandidates(query: string, limit: number): Array<{
+    id: string;
+    relative_path: string;
+    title: string;
+    summary: string;
+    ontology_domain: string;
+    status: string | null;
+    owner_agent: string | null;
+    content_hash: string;
+    content_length: number;
+    updated_at: string;
+    indexed_at: string;
+    vector_json: string;
+  }> {
+    const keywords = extractRetrievalKeywords(query).slice(0, 6);
+    if (keywords.length === 0) return [];
+
+    const clauses: string[] = [];
+    const params: Array<string | number> = [SUMMARY_VECTOR_OWNER_TYPE];
+    let scoreExpr = "0";
+
+    for (const keyword of keywords) {
+      const like = `%${keyword}%`;
+      clauses.push(
+        `(LOWER(d.title) LIKE ? OR LOWER(d.summary) LIKE ? OR LOWER(d.ontology_domain) LIKE ? OR LOWER(d.relative_path) LIKE ? OR LOWER(COALESCE(d.status, '')) LIKE ? OR LOWER(COALESCE(d.owner_agent, '')) LIKE ?)`,
+      );
+      for (let i = 0; i < 6; i++) params.push(like);
+
+      scoreExpr += ` + CASE WHEN LOWER(d.title) LIKE ? THEN 6 ELSE 0 END`;
+      params.push(like);
+      scoreExpr += ` + CASE WHEN LOWER(d.ontology_domain) LIKE ? THEN 4 ELSE 0 END`;
+      params.push(like);
+      scoreExpr += ` + CASE WHEN LOWER(COALESCE(d.status, '')) LIKE ? THEN 3 ELSE 0 END`;
+      params.push(like);
+      scoreExpr += ` + CASE WHEN LOWER(d.summary) LIKE ? THEN 2 ELSE 0 END`;
+      params.push(like);
+      scoreExpr += ` + CASE WHEN LOWER(d.relative_path) LIKE ? THEN 2 ELSE 0 END`;
+      params.push(like);
+      scoreExpr += ` + CASE WHEN LOWER(COALESCE(d.owner_agent, '')) LIKE ? THEN 1 ELSE 0 END`;
+      params.push(like);
+    }
+
+    params.push(limit);
+
+    return this.db.prepare(
+      `SELECT
+         d.id,
+         d.relative_path,
+         d.title,
+         d.summary,
+         d.ontology_domain,
+         d.status,
+         d.owner_agent,
+         d.content_hash,
+         d.content_length,
+         d.updated_at,
+         d.indexed_at,
+         kv.vector_json
+       FROM documents d
+       JOIN knowledge_vectors kv
+         ON kv.owner_type = ?
+        AND kv.owner_id = d.id
+       WHERE ${clauses.join(" OR ")}
+       ORDER BY (${scoreExpr}) DESC, d.relative_path
+       LIMIT ?`,
+    ).all(...params) as Array<{
+      id: string;
+      relative_path: string;
+      title: string;
+      summary: string;
+      ontology_domain: string;
+      status: string | null;
+      owner_agent: string | null;
+      content_hash: string;
+      content_length: number;
+      updated_at: string;
+      indexed_at: string;
+      vector_json: string;
+    }>;
   }
 
   private async collectRebuildChanges(): Promise<{
@@ -1158,15 +1340,138 @@ function getFolderAncestors(folderPath: string): string[] {
   return Array.from(ancestors);
 }
 
-function extractMarkdownLinks(content: string): string[] {
-  const links: string[] = [];
-  const pattern = /(?<!!)\[[^\]]+\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)/g;
+function extractMarkdownLinks(content: string): Array<{ text: string; target: string }> {
+  const links: Array<{ text: string; target: string }> = [];
+  const pattern = /(?<!!)\[([^\]]+)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)/g;
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(content))) {
-    const raw = match[1]?.trim();
-    if (raw) links.push(raw);
+    const text = match[1]?.trim();
+    const target = match[2]?.trim();
+    if (target) links.push({ text: text || target, target });
   }
   return links;
+}
+
+function extractDocumentReferences(
+  sourceRelativePath: string,
+  content: string,
+  documentIdByPath: Map<string, string>,
+  createdAt: string,
+  sourceDocumentId: string,
+): Array<{
+  id: string;
+  sourceDocumentId: string;
+  sourceRelativePath: string;
+  targetRelativePath: string;
+  targetDocumentId: string | null;
+  linkText: string;
+  createdAt: string;
+}> {
+  const references = new Map<string, {
+    id: string;
+    sourceDocumentId: string;
+    sourceRelativePath: string;
+    targetRelativePath: string;
+    targetDocumentId: string | null;
+    linkText: string;
+    createdAt: string;
+  }>();
+
+  for (const link of extractMarkdownLinks(content)) {
+    const targetPath = resolveMarkdownLink(sourceRelativePath, link.target, documentIdByPath);
+    if (!targetPath || targetPath === sourceRelativePath) continue;
+    references.set(targetPath, {
+      id: buildDocumentReferenceId(sourceDocumentId, targetPath),
+      sourceDocumentId,
+      sourceRelativePath,
+      targetRelativePath: targetPath,
+      targetDocumentId: documentIdByPath.get(targetPath) ?? null,
+      linkText: stripMarkdown(link.text),
+      createdAt,
+    });
+  }
+
+  return Array.from(references.values());
+}
+
+function buildDocumentChunks(
+  documentId: string,
+  relativePath: string,
+  content: string,
+  _createdAt: string,
+): IndexedDocumentChunk[] {
+  const sections = content
+    .split(/\n\s*\n/)
+    .map((section) => section.trim())
+    .filter(Boolean);
+
+  const chunks: IndexedDocumentChunk[] = [];
+  let current = "";
+  let chunkIndex = 0;
+
+  const flush = () => {
+    const trimmed = current.trim();
+    if (!trimmed) return;
+    chunks.push({
+      id: buildDocumentChunkId(documentId, chunkIndex),
+      documentId,
+      chunkIndex,
+      content: trimmed,
+      contentLength: trimmed.length,
+    });
+    chunkIndex += 1;
+    current = "";
+  };
+
+  for (const section of sections) {
+    if (!current) {
+      current = section;
+      continue;
+    }
+    if (current.length + 2 + section.length > MAX_CHUNK_CHARS) {
+      flush();
+      current = section;
+      continue;
+    }
+    current += `\n\n${section}`;
+  }
+  flush();
+
+  if (chunks.length === 0) {
+    const fallback = content.trim();
+    if (fallback) {
+      chunks.push({
+        id: buildDocumentChunkId(documentId, 0),
+        documentId,
+        chunkIndex: 0,
+        content: fallback.slice(0, MAX_CHUNK_CHARS),
+        contentLength: Math.min(fallback.length, MAX_CHUNK_CHARS),
+      });
+    }
+  }
+
+  return chunks;
+}
+
+function extractRetrievalKeywords(query: string): string[] {
+  const stopwords = new Set([
+    "the", "and", "for", "that", "with", "from", "this", "what", "when", "where", "which", "does", "about",
+    "into", "our", "your", "their", "have", "how", "are", "who", "why", "can", "use", "using",
+  ]);
+  const tokens = query
+    .toLowerCase()
+    .match(/[a-z0-9@._/-]+/g) ?? [];
+
+  const seen = new Set<string>();
+  const keywords: string[] = [];
+  for (const token of tokens) {
+    if (token.length < 3) continue;
+    if (stopwords.has(token)) continue;
+    if (seen.has(token)) continue;
+    seen.add(token);
+    keywords.push(token);
+  }
+  return keywords;
 }
 
 function resolveMarkdownLink(
@@ -1307,6 +1612,14 @@ function buildDocumentId(relativePath: string): string {
 
 function buildVectorId(documentId: string): string {
   return `vec_${createHash("sha1").update(documentId).digest("hex")}`;
+}
+
+function buildDocumentReferenceId(sourceDocumentId: string, targetRelativePath: string): string {
+  return `ref_${createHash("sha1").update(`${sourceDocumentId}::${targetRelativePath}`).digest("hex")}`;
+}
+
+function buildDocumentChunkId(documentId: string, chunkIndex: number): string {
+  return `chk_${createHash("sha1").update(`${documentId}::${chunkIndex}`).digest("hex")}`;
 }
 
 function buildRebuildChangeId(change: RebuildTrackedChange): string {

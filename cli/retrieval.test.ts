@@ -183,7 +183,7 @@ test("CRM schema initialization is idempotent", async () => {
   }
 });
 
-test("excludes disposable Acme sample memory from the curated index", async () => {
+test("excludes persistent Acme sample memory from the curated index", async () => {
   const repoRoot = await createTempRepo();
   const sampleRoot = path.join(repoRoot, "000_Acme_Sample_Company_Memory");
   await fsp.mkdir(path.join(sampleRoot, "101_Overview"), { recursive: true });
@@ -246,6 +246,9 @@ This document now focuses on enterprise packaging, retained value pricing, and a
   assert.equal(result.fileCount, 2);
   assert.equal(index.getDocumentCount(), 2);
 
+  await fsp.unlink(
+    path.join(repoRoot, "000_Company_Memory", "102_Corporate_Strategy_and_Foundation", "102.5_Pricing_Analysis.md"),
+  );
   const promptContext = await index.buildPromptContext("enterprise pricing and packaging");
   assert.match(promptContext, /enterprise packaging/i);
 
@@ -266,12 +269,26 @@ test("heuristic retrieval finds the most relevant KB document", async () => {
   index.close();
 });
 
+test("retrieval prefilter preserves ontology and title hint matches", async () => {
+  const repoRoot = await createTempRepo();
+  const dbPath = path.join(repoRoot, ".kb.sqlite");
+  const index = new KnowledgeBaseIndex({ repoRoot, dbPath, env: {} });
+
+  await index.ensureCurrent();
+  const matches = await index.retrieve("gtm strategy channels positioning");
+
+  assert.equal(matches[0]?.document.relativePath, "000_Company_Memory/202_Go-to-Market_Strategy/202.1_GTM_Strategy.md");
+
+  index.close();
+});
+
 test("buildGraphSnapshot returns folder, document, and markdown reference edges", async () => {
   const repoRoot = await createTempRepo();
   const dbPath = path.join(repoRoot, ".kb.sqlite");
   const index = new KnowledgeBaseIndex({ repoRoot, dbPath, env: {} });
 
   await index.sync();
+  await fsp.unlink(path.join(repoRoot, "000_Company_Memory", "202_Go-to-Market_Strategy", "202.1_GTM_Strategy.md"));
   const graph = await index.buildGraphSnapshot();
 
   assert.equal(graph.stats.documents, 2);
@@ -293,6 +310,30 @@ test("buildGraphSnapshot returns folder, document, and markdown reference edges"
   );
 
   index.close();
+});
+
+test("sync persists document references and body chunks in SQLite", async () => {
+  const repoRoot = await createTempRepo();
+  const dbPath = path.join(repoRoot, ".kb.sqlite");
+  const index = new KnowledgeBaseIndex({ repoRoot, dbPath, env: {} });
+
+  await index.sync();
+  index.close();
+
+  const db = new DatabaseSync(dbPath);
+  try {
+    const referenceCount = (
+      db.prepare(`SELECT COUNT(*) as count FROM document_references`).get() as { count: number }
+    ).count;
+    const chunkCount = (
+      db.prepare(`SELECT COUNT(*) as count FROM document_chunks`).get() as { count: number }
+    ).count;
+
+    assert.equal(referenceCount, 1);
+    assert.ok(chunkCount >= 2);
+  } finally {
+    db.close();
+  }
 });
 
 test("migrates existing legacy domain column to ontology_domain", async () => {

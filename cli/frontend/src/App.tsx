@@ -86,6 +86,8 @@ function parseFrontmatterTags(content: string): string[] {
 export function App() {
   const SIDEBAR_MIN_WIDTH = 280;
   const SIDEBAR_MAX_WIDTH = 540;
+  const TERMINAL_MIN_WIDTH = 460;
+  const TERMINAL_MAX_WIDTH = 920;
   const [graphData, setGraphData] = useState<ApiKnowledgeGraphSnapshot | null>(null);
   const [tree, setTree] = useState<FileTreeNode | null>(null);
   const [mode, setMode] = useState<ViewMode>("ontology");
@@ -103,19 +105,22 @@ export function App() {
   const [rebuildAdvisor, setRebuildAdvisor] = useState<RebuildAdvisorStatus | null>(null);
   const [uiCapabilities, setUiCapabilities] = useState<UiCapabilities | null>(null);
   const [compatibilityError, setCompatibilityError] = useState<string | null>(null);
+  const [sidebarTab, setSidebarTab] = useState<"explorer" | "settings">("explorer");
   const [openFolderPaths, setOpenFolderPaths] = useState<Set<string>>(new Set(["000_Company_Memory"]));
   const [documentPanelOpen, setDocumentPanelOpen] = useState(false);
   const [documentPanelExpanded, setDocumentPanelExpanded] = useState(false);
   const [documentMetaOpen, setDocumentMetaOpen] = useState(false);
   const [terminalPanelOpen, setTerminalPanelOpen] = useState(false);
-  const [terminalPanelExpanded, setTerminalPanelExpanded] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(320);
   const [sidebarResizing, setSidebarResizing] = useState(false);
+  const [terminalWidth, setTerminalWidth] = useState(560);
+  const [terminalResizing, setTerminalResizing] = useState(false);
   const [folderContextMenu, setFolderContextMenu] = useState<{
     x: number;
     y: number;
     folder: FileTreeNode;
   } | null>(null);
+  const terminalReservedWidth = terminalPanelOpen ? terminalWidth + 4 + 16 : 0;
 
   async function loadWorkspace() {
     setLoading(true);
@@ -226,7 +231,6 @@ export function App() {
   useEffect(() => {
     if (uiCapabilities?.features.terminalPanel) return;
     setTerminalPanelOpen(false);
-    setTerminalPanelExpanded(false);
   }, [uiCapabilities?.features.terminalPanel]);
 
   useEffect(() => {
@@ -251,6 +255,29 @@ export function App() {
       window.removeEventListener("pointercancel", handlePointerUp);
     };
   }, [sidebarResizing]);
+
+  useEffect(() => {
+    if (!terminalResizing) return;
+
+    function handlePointerMove(event: PointerEvent) {
+      const nextWidth = Math.min(Math.max(window.innerWidth - event.clientX - 16, TERMINAL_MIN_WIDTH), TERMINAL_MAX_WIDTH);
+      setTerminalWidth(nextWidth);
+    }
+
+    function handlePointerUp() {
+      setTerminalResizing(false);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    };
+  }, [terminalResizing]);
 
   useEffect(() => {
     if (!folderContextMenu) return;
@@ -438,8 +465,8 @@ export function App() {
 
   return (
     <main
-      className={sidebarResizing ? "company-memory-workspace sidebar-resizing" : "company-memory-workspace"}
-      style={{ gridTemplateColumns: `${sidebarWidth}px 10px minmax(0, 1fr)` }}
+      className={sidebarResizing || terminalResizing ? "company-memory-workspace sidebar-resizing" : "company-memory-workspace"}
+      style={{ gridTemplateColumns: `${sidebarWidth}px 4px minmax(0, 1fr)` }}
     >
       <aside className="workspace-sidebar" style={{ width: `${sidebarWidth}px` }}>
         <div className="brand-block">
@@ -451,26 +478,67 @@ export function App() {
         <LiteCard className="explorer-card">
           <LiteCardHeader>
             <LiteSectionHeader
-              eyebrow="Explorer"
-              title="000_Company_Memory"
-              description="Only this folder is editable in the UI."
+              eyebrow={sidebarTab === "explorer" ? "Explorer" : "Settings"}
+              title={sidebarTab === "explorer" ? "000_Company_Memory" : "Graph Maintenance"}
+              description={
+                sidebarTab === "explorer"
+                  ? "Only this folder is editable in the UI."
+                  : "Refresh the SQLite graph and retrieval layer from the local workspace."
+              }
             />
+            <div className="sidebar-tabbar" role="tablist" aria-label="Sidebar sections">
+              <button
+                type="button"
+                className={sidebarTab === "explorer" ? "sidebar-tab active" : "sidebar-tab"}
+                onClick={() => setSidebarTab("explorer")}
+                role="tab"
+                aria-selected={sidebarTab === "explorer"}
+              >
+                Explorer
+              </button>
+              <button
+                type="button"
+                className={sidebarTab === "settings" ? "sidebar-tab active" : "sidebar-tab"}
+                onClick={() => setSidebarTab("settings")}
+                role="tab"
+                aria-selected={sidebarTab === "settings"}
+              >
+                Settings
+              </button>
+            </div>
           </LiteCardHeader>
           <LiteCardBody>
-            {tree ? (
-              <TreeView
-                node={tree}
-                selectedPath={selectedDocumentPath}
-                openFolderPaths={openFolderPaths}
-                onSelect={selectDocument}
-                onToggleFolder={toggleFolder}
-                onExpandBranch={expandFolderBranch}
-                onCollapseBranch={collapseFolderBranch}
-                onContextMenu={openFolderMenu}
-                contextMenuFolderPath={folderContextMenu?.folder.path ?? null}
-              />
+            {sidebarTab === "explorer" ? (
+              tree ? (
+                <TreeView
+                  node={tree}
+                  selectedPath={selectedDocumentPath}
+                  openFolderPaths={openFolderPaths}
+                  onSelect={selectDocument}
+                  onToggleFolder={toggleFolder}
+                  onExpandBranch={expandFolderBranch}
+                  onCollapseBranch={collapseFolderBranch}
+                  onContextMenu={openFolderMenu}
+                  contextMenuFolderPath={folderContextMenu?.folder.path ?? null}
+                />
+              ) : (
+                <p className="muted-copy">Loading folders...</p>
+              )
             ) : (
-              <p className="muted-copy">Loading folders...</p>
+              <div className="sidebar-settings-stack">
+                <LiteButton onClick={() => void rebuildGraphNow()} disabled={rebuilding}>
+                  {rebuilding ? "Rebuilding..." : "Rebuild graph"}
+                </LiteButton>
+                <div className="sidebar-settings-meta">
+                  <span>
+                    Last indexed: {formatTimestamp(rebuildAdvisor?.lastIndexedAt ?? graphData?.generatedAt ?? null)}
+                  </span>
+                  <span>
+                    Status: {rebuildAdvisor?.needsRebuild ? "Refresh recommended" : "Up to date"}
+                  </span>
+                </div>
+                {rebuildAdvisor?.reasons?.[0] ? <p className="muted-copy sidebar-settings-note">{rebuildAdvisor.reasons[0]}</p> : null}
+              </div>
             )}
           </LiteCardBody>
         </LiteCard>
@@ -483,91 +551,146 @@ export function App() {
         onPointerDown={() => setSidebarResizing(true)}
       />
 
-      <section className="workspace-main">
-        {compatibilityError ? (
-          <LiteCard className="compatibility-card">
-            <LiteCardHeader>
-              <LiteSectionHeader
-                eyebrow="Compatibility"
-                title="Graph UI and daemon are out of sync"
-                description={compatibilityError}
-              />
-            </LiteCardHeader>
-            <LiteCardBody>
-              <p className="muted-copy">
-                This browser tab is talking to a daemon that does not match the current UI bundle. Restart <code>npm run graph</code>, then open the
-                newly printed tokenized localhost link once so the session is refreshed.
-              </p>
-            </LiteCardBody>
-          </LiteCard>
-        ) : null}
-
-        <div className="workspace-toolbar">
-          <div>
-            <p className="eyebrow">SQLite graph</p>
-            <h2>PulseOS Lite graph workspace</h2>
-          </div>
-          <div className="toolbar-actions">
-            <LiteButton variant={mode === "ontology" ? "primary" : "secondary"} onClick={() => setMode("ontology")}>
-              Company Ontology
-            </LiteButton>
-            <LiteButton variant={mode === "documents" ? "primary" : "secondary"} onClick={() => setMode("documents")}>
-              Document Relationships
-            </LiteButton>
-            <LiteButton variant="ghost" onClick={() => void loadWorkspace()}>
-              Refresh
-            </LiteButton>
-            <LiteButton variant="secondary" onClick={() => setDocumentPanelOpen((value) => !value)}>
-              {documentPanelOpen ? "Hide reader" : "Show reader"}
-            </LiteButton>
-            {uiCapabilities?.features.terminalPanel ? (
-              <LiteButton variant="secondary" onClick={() => setTerminalPanelOpen((value) => !value)}>
-                {terminalPanelOpen ? "Hide terminal" : "Show terminal"}
-              </LiteButton>
-            ) : null}
-          </div>
-        </div>
-
-        {error ? <div className="notice notice-error">{error}</div> : null}
-        {graphSnapshotError ? (
-          <div className="notice notice-error">
-            {graphSnapshotError} Refresh the graph, or run <code>npm run graph</code> again if the session is stale.
-          </div>
-        ) : null}
-        {notice ? <div className="notice notice-success">{notice}</div> : null}
-        <div className="graph-shell">
+      <div
+        className={terminalPanelOpen ? "workspace-main-area terminal-open" : "workspace-main-area"}
+        style={terminalPanelOpen ? { gridTemplateColumns: `minmax(0, 1fr) 4px ${terminalWidth}px` } : undefined}
+      >
+        <section className="workspace-main">
           {compatibilityError ? (
-            <LiteEmptyState
-              title="Graph workspace paused"
-              detail="Restart `npm run graph`, open the new local link once, and then refresh this page so the UI and daemon are on the same version."
-            />
-          ) : loading ? (
-            <LiteEmptyState title="Loading graph" detail="The daemon is reading the SQLite index and Company Memory tree." />
-          ) : (
-            <GraphErrorBoundary>
-              <GraphCanvas
-                key={`${mode}:${reloadKey}`}
-                snapshot={graphSnapshot}
-                colorForType={getGraphEntityColor}
-                onNodeSelect={handleNodeSelect}
-                onNodeOpen={handleNodeOpen}
-                relayoutTrigger={reloadKey}
-                headerBadges={
-                  <>
-                    <LiteBadge tone="neutral">{graphSnapshot.nodes.length} nodes</LiteBadge>
-                    <LiteBadge tone="neutral">{graphSnapshot.edges.length} edges</LiteBadge>
-                  </>
-                }
-                toolbarControls={
-                  <LiteButton variant="ghost" onClick={() => setReloadKey((value) => value + 1)}>
-                    Re-layout
-                  </LiteButton>
-                }
+            <LiteCard className="compatibility-card">
+              <LiteCardHeader>
+                <LiteSectionHeader
+                  eyebrow="Compatibility"
+                  title="Graph UI and daemon are out of sync"
+                  description={compatibilityError}
+                />
+              </LiteCardHeader>
+              <LiteCardBody>
+                <p className="muted-copy">
+                  This browser tab is talking to a daemon that does not match the current UI bundle. Restart <code>npm run graph</code>, then open the
+                  newly printed tokenized localhost link once so the session is refreshed.
+                </p>
+              </LiteCardBody>
+            </LiteCard>
+          ) : null}
+
+          <div className="workspace-toolbar">
+            <div className="workspace-toolbar-copy">
+              <p className="eyebrow">SQLite graph</p>
+              <h2>PulseOS graph workspace</h2>
+            </div>
+            <div className="toolbar-actions">
+              <LiteButton variant="secondary" onClick={() => setDocumentPanelOpen((value) => !value)}>
+                {documentPanelOpen ? "Hide reader" : "View document"}
+              </LiteButton>
+              {uiCapabilities?.features.terminalPanel ? (
+                <LiteButton variant="secondary" onClick={() => setTerminalPanelOpen((value) => !value)}>
+                  {terminalPanelOpen ? "Hide terminal" : "View terminal"}
+                </LiteButton>
+              ) : null}
+            </div>
+          </div>
+
+          {error ? <div className="notice notice-error">{error}</div> : null}
+          {graphSnapshotError ? (
+            <div className="notice notice-error">
+              {graphSnapshotError} Refresh the graph, or run <code>npm run graph</code> again if the session is stale.
+            </div>
+          ) : null}
+          {notice ? <div className="notice notice-success">{notice}</div> : null}
+          <div className="graph-shell">
+            {compatibilityError ? (
+              <LiteEmptyState
+                title="Graph workspace paused"
+                detail="Restart `npm run graph`, open the new local link once, and then refresh this page so the UI and daemon are on the same version."
               />
-            </GraphErrorBoundary>
-          )}
-        </div>
-      </section>
+            ) : loading ? (
+              <LiteEmptyState title="Loading graph" detail="The daemon is reading the SQLite index and Company Memory tree." />
+            ) : (
+              <GraphErrorBoundary>
+                <GraphCanvas
+                  key={`${mode}:${reloadKey}`}
+                  snapshot={graphSnapshot}
+                  colorForType={getGraphEntityColor}
+                  selectedNodeId={selectedNode?.id ?? null}
+                  onNodeSelect={handleNodeSelect}
+                  onNodeOpen={handleNodeOpen}
+                  relayoutTrigger={reloadKey}
+                  headerBadges={
+                    <>
+                      <LiteBadge tone="neutral">{graphSnapshot.nodes.length} nodes</LiteBadge>
+                      <LiteBadge tone="neutral">{graphSnapshot.edges.length} edges</LiteBadge>
+                    </>
+                  }
+                  toolbarControls={
+                    <>
+                      <div className="graph-inline-mode-switch" role="group" aria-label="Graph mode">
+                        <LiteButton
+                          className="graph-tooltip-target"
+                          data-tooltip="Show the folder hierarchy view"
+                          variant={mode === "ontology" ? "primary" : "secondary"}
+                          onClick={() => setMode("ontology")}
+                          title="Company Ontology"
+                        >
+                          Ontology
+                        </LiteButton>
+                        <LiteButton
+                          className="graph-tooltip-target"
+                          data-tooltip="Show document-to-document references"
+                          variant={mode === "documents" ? "primary" : "secondary"}
+                          onClick={() => setMode("documents")}
+                          title="Document Relationships"
+                        >
+                          Documents
+                        </LiteButton>
+                      </div>
+                      <LiteButton
+                        className="graph-tooltip-target"
+                        data-tooltip="Refresh graph data from the local daemon"
+                        variant="ghost"
+                        onClick={() => void loadWorkspace()}
+                        title="Refresh graph data"
+                        aria-label="Refresh graph data"
+                      >
+                        ↻
+                      </LiteButton>
+                      <LiteButton
+                        className="graph-tooltip-target"
+                        data-tooltip="Run the layout again"
+                        variant="ghost"
+                        onClick={() => setReloadKey((value) => value + 1)}
+                        title="Re-layout graph"
+                        aria-label="Re-layout graph"
+                      >
+                        ⟳
+                      </LiteButton>
+                    </>
+                  }
+                />
+              </GraphErrorBoundary>
+            )}
+          </div>
+        </section>
+
+        {uiCapabilities?.features.terminalPanel ? (
+          <>
+            {terminalPanelOpen ? (
+              <button
+                type="button"
+                className={terminalResizing ? "terminal-resize-handle active" : "terminal-resize-handle"}
+                aria-label="Resize terminal sidebar"
+                onPointerDown={() => setTerminalResizing(true)}
+              />
+            ) : null}
+            <TerminalPanel
+              open={terminalPanelOpen}
+              onClose={() => {
+                setTerminalPanelOpen(false);
+              }}
+            />
+          </>
+        ) : null}
+      </div>
 
       {folderContextMenu ? (
         <div
@@ -625,12 +748,14 @@ export function App() {
           className="document-panel-backdrop"
           aria-label="Close document panel"
           onClick={attemptCloseDocumentPanel}
+          style={terminalReservedWidth > 0 ? { right: `${terminalReservedWidth}px` } : undefined}
         />
       ) : null}
 
       <aside
         className={documentPanelOpen ? `document-panel open${documentPanelExpanded ? " expanded" : ""}` : "document-panel"}
         aria-hidden={!documentPanelOpen}
+        style={terminalReservedWidth > 0 ? { right: `${terminalReservedWidth}px` } : undefined}
       >
         <LiteCard className="document-card">
           <LiteCardHeader>
@@ -763,17 +888,6 @@ export function App() {
         </LiteCard>
       </aside>
 
-      {uiCapabilities?.features.terminalPanel ? (
-        <TerminalPanel
-          open={terminalPanelOpen}
-          expanded={terminalPanelExpanded}
-          onClose={() => {
-            setTerminalPanelOpen(false);
-            setTerminalPanelExpanded(false);
-          }}
-          onToggleExpanded={() => setTerminalPanelExpanded((current) => !current)}
-        />
-      ) : null}
     </main>
   );
 }

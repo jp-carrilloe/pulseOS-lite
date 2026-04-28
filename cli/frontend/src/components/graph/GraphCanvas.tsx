@@ -35,6 +35,7 @@ interface GraphCanvasProps {
   onNodeSelect?: (node: GraphNode | null) => void;
   onEdgeSelect?: (edge: GraphEdge | null) => void;
   onNodeOpen?: (node: GraphNode) => void;
+  selectedNodeId?: string | null;
   headerBadges?: ReactNode;
   toolbarControls?: ReactNode;
   fitTrigger?: number;
@@ -189,6 +190,12 @@ function applyElementUpdates(cy: cytoscape.Core, nextElements: GraphElementDefin
   });
 }
 
+const LAYOUT_OPTIONS = [
+  { id: "fcose", label: "Force", icon: "∿" },
+  { id: "breadthfirst", label: "Hierarchy", icon: "⇣" },
+  { id: "concentric", label: "Radial", icon: "◎" },
+] as const;
+
 export function GraphCanvas({
   snapshot,
   colorForType,
@@ -200,6 +207,7 @@ export function GraphCanvas({
   onNodeSelect,
   onEdgeSelect,
   onNodeOpen,
+  selectedNodeId,
   headerBadges,
   toolbarControls,
   fitTrigger,
@@ -309,6 +317,28 @@ export function GraphCanvas({
       cy.off("dbltap", "node", handleNodeDoubleTap);
     };
   }, [nodesById, edgesById, onNodeOpen, onNodeSelect, onEdgeSelect]);
+
+  useEffect(() => {
+    const cyRefValue = cyRef.current;
+    if (!cyReady || !cyRefValue || cyRefValue.destroyed()) {
+      return;
+    }
+
+    const cy = cyRefValue;
+    cy.batch(() => {
+      cy.nodes().unselect();
+      cy.edges().unselect();
+
+      if (!selectedNodeId) {
+        return;
+      }
+
+      const selectedNodeElement = cy.$id(selectedNodeId);
+      if (selectedNodeElement.length > 0) {
+        selectedNodeElement.select();
+      }
+    });
+  }, [cyReady, selectedNodeId]);
 
   useEffect(() => {
     const cyRefValue = cyRef.current;
@@ -638,15 +668,9 @@ export function GraphCanvas({
       {mode === "full" ? (
         <LiteGraphControls
           title="Graph Explorer"
-          subtitle="Use the control bar for graph scope and the sidebar for filtering. The canvas stays clear for inspection."
+          subtitle="Use the explorer and graph tools to inspect the company memory."
           headerBadges={headerBadges}
           toolbarControls={toolbarControls}
-          layoutName={layoutName}
-          onLayoutChange={applyLayout}
-          onDefaultView={resetDefaultView}
-          onZoomIn={zoomIn}
-          onZoomOut={zoomOut}
-          onFit={fitGraph}
           entityTypes={legendEntityTypes}
           relationshipTypes={legendRelationshipTypes}
           readLayer={snapshot.meta.readLayer}
@@ -655,15 +679,85 @@ export function GraphCanvas({
       ) : null}
 
       <div className="lite-graph-surface">
-        <CytoscapeComponent
-          elements={[]}
-          stylesheet={cognitiveStylesheet}
-          cy={handleCyReady}
-          className="lite-graph-cytoscape"
-          style={{ width: "100%", height: "100%" }}
-          minZoom={0.05}
-          maxZoom={3}
-        />
+        <div className="lite-graph-surface-tools">
+          <div className="lite-graph-dock-group">
+            <span className="graph-dock-label">View</span>
+            <div className="lite-graph-mini-dock" role="group" aria-label="Graph view controls">
+              <button
+                type="button"
+                className="graph-icon-button graph-tooltip-target"
+                data-tooltip="Reset to the default graph view"
+                onClick={resetDefaultView}
+                title="Default view"
+                aria-label="Default view"
+              >
+                ↺
+              </button>
+              <button
+                type="button"
+                className="graph-icon-button graph-tooltip-target"
+                data-tooltip="Zoom in"
+                onClick={zoomIn}
+                title="Zoom in"
+                aria-label="Zoom in"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                className="graph-icon-button graph-tooltip-target"
+                data-tooltip="Zoom out"
+                onClick={zoomOut}
+                title="Zoom out"
+                aria-label="Zoom out"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                className="graph-icon-button graph-tooltip-target"
+                data-tooltip="Fit the graph to the viewport"
+                onClick={fitGraph}
+                title="Fit graph"
+                aria-label="Fit graph"
+              >
+                ⤢
+              </button>
+              {toolbarControls ? <div className="lite-graph-mini-divider" aria-hidden="true" /> : null}
+              {toolbarControls ? <div className="lite-graph-mini-extra">{toolbarControls}</div> : null}
+            </div>
+          </div>
+
+          <div className="lite-graph-dock-group">
+            <span className="graph-dock-label">Layout</span>
+            <div className="lite-graph-mini-dock lite-graph-layout-dock" role="group" aria-label="Graph layout">
+              {LAYOUT_OPTIONS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={layoutName === option.id ? "graph-icon-button graph-tooltip-target active" : "graph-icon-button graph-tooltip-target"}
+                  data-tooltip={option.label}
+                  onClick={() => applyLayout(option.id)}
+                  title={option.label}
+                  aria-label={option.label}
+                >
+                  {option.icon}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="lite-graph-surface-canvas">
+          <CytoscapeComponent
+            elements={[]}
+            stylesheet={cognitiveStylesheet}
+            cy={handleCyReady}
+            className="lite-graph-cytoscape"
+            style={{ width: "100%", height: "100%" }}
+            minZoom={0.05}
+            maxZoom={3}
+          />
+        </div>
       </div>
     </div>
   );
