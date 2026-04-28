@@ -82,12 +82,16 @@ class TerminalSessionManager {
 
   createSession(): TerminalSessionSummary {
     const shell = process.env.SHELL?.trim() || "/bin/zsh";
-    const child = spawn(shell, [], {
+    const child = spawn("python3", [path.join(__dirname, "terminal_bridge.py")], {
       cwd: REPO_ROOT,
       env: {
         ...process.env,
-        TERM: "dumb",
+        TERM: "xterm-256color",
+        COLORTERM: "truecolor",
         PWD: REPO_ROOT,
+        PULSEOS_SHELL: shell,
+        PULSEOS_TERM_COLS: "100",
+        PULSEOS_TERM_ROWS: "32",
       },
       stdio: "pipe",
     });
@@ -113,7 +117,7 @@ class TerminalSessionManager {
     this.publish(session, {
       type: "started",
       session: { ...summary },
-      message: `PulseOS local repo shell started in ${REPO_ROOT}. Run commands like ls, rg, git, npm, or codex if it is installed on this machine.`,
+      message: `PulseOS local repo shell started in ${REPO_ROOT}. Run cd cli && npm run chat for the PulseOS CLI, cd cli && npm run graph for the graph UI, or use commands like rg, git, npm, claude, and gemini if they are installed on this machine.`,
     });
 
     child.stdout.on("data", (chunk: Buffer | string) => {
@@ -146,6 +150,13 @@ class TerminalSessionManager {
       throw new Error("That terminal session has already exited. Start a new shell to continue.");
     }
     session.process.stdin.write(text);
+  }
+
+  resizeSession(id: string, cols: number, rows: number): void {
+    void id;
+    void cols;
+    void rows;
+    // The Python PTY bridge uses a fixed default terminal size in v1.
   }
 
   closeSession(id: string): void {
@@ -585,6 +596,36 @@ export function createDaemonApp(options: {
           error: {
             code: "terminal_input_failed",
             message: err instanceof Error ? err.message : "Could not send input to the local shell.",
+          },
+        },
+        400,
+      );
+    }
+  });
+
+  app.post("/api/terminal/resize", async (ctx) => {
+    if (!hasGraphSessionAccess(ctx, token)) {
+      return ctx.json(
+        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        401,
+      );
+    }
+    const body = (await ctx.req.json()) as { id?: string; cols?: unknown; rows?: unknown };
+    try {
+      const cols = Number(body.cols ?? 0);
+      const rows = Number(body.rows ?? 0);
+      if (!Number.isFinite(cols) || !Number.isFinite(rows)) {
+        throw new Error("The terminal resize request did not include valid dimensions.");
+      }
+      terminalManager.resizeSession(String(body.id ?? ""), Math.round(cols), Math.round(rows));
+      resetIdleTimer();
+      return ctx.json({ data: { ok: true } });
+    } catch (err) {
+      return ctx.json(
+        {
+          error: {
+            code: "terminal_resize_failed",
+            message: err instanceof Error ? err.message : "Could not resize the local shell.",
           },
         },
         400,

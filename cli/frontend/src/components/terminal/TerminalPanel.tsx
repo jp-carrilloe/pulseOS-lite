@@ -1,34 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { FitAddon } from "@xterm/addon-fit";
+import { Terminal } from "@xterm/xterm";
+import "@xterm/xterm/css/xterm.css";
 import { api } from "../../lib/api";
 import type { TerminalEvent, TerminalSessionSummary } from "../../types/terminal";
 import { LiteBadge, LiteButton, LiteEmptyState } from "../ui";
 
 interface TerminalPanelProps {
   open: boolean;
-  expanded: boolean;
   onClose: () => void;
-  onToggleExpanded: () => void;
 }
 
-interface TerminalLine {
-  id: string;
-  tone: "muted" | "stdout" | "stderr" | "warning";
-  text: string;
-}
-
-function splitChunkIntoLines(chunk: string): string[] {
-  const normalized = chunk.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  return normalized.split("\n");
-}
-
-export function TerminalPanel({ open, expanded, onClose, onToggleExpanded }: TerminalPanelProps) {
+export function TerminalPanel({ open, onClose }: TerminalPanelProps) {
   const [session, setSession] = useState<TerminalSessionSummary | null>(null);
-  const [command, setCommand] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lines, setLines] = useState<TerminalLine[]>([]);
-  const outputRef = useRef<HTMLDivElement | null>(null);
+  const terminalHostRef = useRef<HTMLDivElement | null>(null);
   const streamRef = useRef<EventSource | null>(null);
+  const terminalRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
+  const activeSessionIdRef = useRef<string | null>(null);
 
   const statusBadge = useMemo(() => {
     if (!session) return null;
@@ -36,43 +27,117 @@ export function TerminalPanel({ open, expanded, onClose, onToggleExpanded }: Ter
   }, [session]);
 
   useEffect(() => {
+    const host = terminalHostRef.current;
+    if (!host || terminalRef.current) return;
+
+    const terminal = new Terminal({
+      cursorBlink: true,
+      convertEol: true,
+      fontFamily: '"SF Mono", "Geist Mono", ui-monospace, monospace',
+      fontSize: 14,
+      lineHeight: 1.42,
+      theme: {
+        background: "#020812",
+        foreground: "#dbe7ff",
+        cursor: "#6ab2ff",
+        cursorAccent: "#020812",
+        selectionBackground: "rgba(106, 178, 255, 0.22)",
+        black: "#06101a",
+        red: "#ff8aa2",
+        green: "#63d59d",
+        yellow: "#f2c26a",
+        blue: "#6ab2ff",
+        magenta: "#c084fc",
+        cyan: "#69d2e7",
+        white: "#eef4ff",
+        brightBlack: "#7f8ba3",
+        brightRed: "#ffb2c1",
+        brightGreen: "#8cf0b9",
+        brightYellow: "#f8d992",
+        brightBlue: "#9bcfff",
+        brightMagenta: "#dbb0ff",
+        brightCyan: "#93e8f7",
+        brightWhite: "#ffffff",
+      },
+    });
+    const fitAddon = new FitAddon();
+    terminal.loadAddon(fitAddon);
+    terminal.open(host);
+    fitAddon.fit();
+    terminal.writeln("PulseOS local repo terminal");
+    terminal.writeln("Start shell to open a real interactive terminal in this workspace.");
+    terminal.writeln("");
+
+    const disposable = terminal.onData((data) => {
+      const sessionId = activeSessionIdRef.current;
+      if (!sessionId) return;
+      void api.sendTerminalInput(sessionId, data).catch((nextError) => {
+        setError(nextError instanceof Error ? nextError.message : "Could not send input to the local terminal.");
+      });
+    });
+
+    terminalRef.current = terminal;
+    fitAddonRef.current = fitAddon;
+
+    return () => {
+      disposable.dispose();
+      fitAddon.dispose();
+      terminal.dispose();
+      fitAddonRef.current = null;
+      terminalRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    const fitAddon = fitAddonRef.current;
+    if (!terminal || !fitAddon || !open) return;
+
+    const syncSize = () => {
+      fitAddon.fit();
+      const sessionId = activeSessionIdRef.current;
+      if (!sessionId) return;
+      void api.resizeTerminalSession(sessionId, terminal.cols, terminal.rows).catch(() => undefined);
+    };
+
+    const frame = requestAnimationFrame(syncSize);
+    const resizeObserver = new ResizeObserver(syncSize);
+    if (terminalHostRef.current) {
+      resizeObserver.observe(terminalHostRef.current);
+    }
+
+    return () => {
+      cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+    };
+  }, [open]);
+
+  useEffect(() => {
     if (!open || !session?.id) return;
 
+    const terminal = terminalRef.current;
     const stream = new EventSource(`/api/terminal/stream?id=${encodeURIComponent(session.id)}`, { withCredentials: true });
     streamRef.current = stream;
+
     stream.onmessage = (message) => {
       try {
         const event = JSON.parse(message.data) as TerminalEvent;
         if (event.type === "started") {
+          activeSessionIdRef.current = event.session.id;
           setSession(event.session);
-          setLines([
-            {
-              id: `${Date.now()}-started`,
-              tone: "muted",
-              text: event.message,
-            },
-          ]);
+          terminal?.reset();
+          terminal?.writeln(event.message);
           return;
         }
 
         if (event.type === "output") {
-          const nextLines = splitChunkIntoLines(event.chunk).filter((line, index, arr) => line.length > 0 || index < arr.length - 1);
-          if (!nextLines.length) return;
-          setLines((current) => [
-            ...current,
-            ...nextLines.map(
-              (line, index): TerminalLine => ({
-                id: `${Date.now()}-${current.length}-${index}`,
-                tone: event.stream === "stderr" ? "stderr" : "stdout",
-                text: line,
-              }),
-            ),
-          ]);
+          terminal?.write(event.chunk);
           return;
         }
 
         if (event.type === "error") {
-          setLines((current) => [...current, { id: `${Date.now()}-error`, tone: "warning", text: event.message }]);
+          terminal?.writeln(`\r\n[error] ${event.message}`);
+          setError(event.message);
           return;
         }
 
@@ -82,19 +147,13 @@ export function TerminalPanel({ open, expanded, onClose, onToggleExpanded }: Ter
               ? { ...current, status: "exited", exitCode: event.code, exitSignal: event.signal }
               : current,
           );
-          setLines((current) => [
-            ...current,
-            {
-              id: `${Date.now()}-exit`,
-              tone: "muted",
-              text: `Shell exited${event.code !== null ? ` with code ${event.code}` : ""}${event.signal ? ` (${event.signal})` : ""}.`,
-            },
-          ]);
+          terminal?.writeln(`\r\n[shell exited${event.code !== null ? ` code ${event.code}` : ""}${event.signal ? ` ${event.signal}` : ""}]`);
         }
       } catch {
         setError("The terminal stream returned a response the UI could not read.");
       }
     };
+
     stream.onerror = () => {
       stream.close();
       streamRef.current = null;
@@ -106,21 +165,24 @@ export function TerminalPanel({ open, expanded, onClose, onToggleExpanded }: Ter
     };
   }, [open, session?.id]);
 
-  useEffect(() => {
-    if (!open) return;
-    outputRef.current?.scrollTo({ top: outputRef.current.scrollHeight });
-  }, [lines, open]);
-
   async function startShell() {
     setBusy(true);
     setError(null);
-    setLines([]);
     try {
       if (session?.id) {
         await api.closeTerminalSession(session.id).catch(() => undefined);
       }
+      terminalRef.current?.reset();
       const nextSession = await api.createTerminalSession();
+      activeSessionIdRef.current = nextSession.id;
       setSession(nextSession);
+      requestAnimationFrame(() => {
+        const terminal = terminalRef.current;
+        const fitAddon = fitAddonRef.current;
+        if (!terminal || !fitAddon) return;
+        fitAddon.fit();
+        void api.resizeTerminalSession(nextSession.id, terminal.cols, terminal.rows).catch(() => undefined);
+      });
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Could not start the local repo shell.");
     } finally {
@@ -128,19 +190,44 @@ export function TerminalPanel({ open, expanded, onClose, onToggleExpanded }: Ter
     }
   }
 
-  async function sendCommand() {
-    const trimmed = command.trim();
-    if (!session?.id || !trimmed || busy) return;
+  async function ensureRunningSession(): Promise<string | null> {
+    if (session?.id && session.status === "running") {
+      return session.id;
+    }
+
     setBusy(true);
     setError(null);
-    setLines((current) => [...current, { id: `${Date.now()}-command`, tone: "muted", text: `$ ${trimmed}` }]);
     try {
-      await api.sendTerminalInput(session.id, `${trimmed}\n`);
-      setCommand("");
+      if (session?.id) {
+        await api.closeTerminalSession(session.id).catch(() => undefined);
+      }
+      terminalRef.current?.reset();
+      const nextSession = await api.createTerminalSession();
+      activeSessionIdRef.current = nextSession.id;
+      setSession(nextSession);
+      requestAnimationFrame(() => {
+        const terminal = terminalRef.current;
+        const fitAddon = fitAddonRef.current;
+        if (!terminal || !fitAddon) return;
+        fitAddon.fit();
+        void api.resizeTerminalSession(nextSession.id, terminal.cols, terminal.rows).catch(() => undefined);
+      });
+      return nextSession.id;
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Could not send that command to the shell.");
+      setError(nextError instanceof Error ? nextError.message : "Could not start the local repo shell.");
+      return null;
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function runPresetCommand(command: string) {
+    const sessionId = await ensureRunningSession();
+    if (!sessionId) return;
+    try {
+      await api.sendTerminalInput(sessionId, `${command}\n`);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : `Could not run \`${command}\` in the local terminal.`);
     }
   }
 
@@ -149,9 +236,13 @@ export function TerminalPanel({ open, expanded, onClose, onToggleExpanded }: Ter
     setBusy(true);
     try {
       await api.closeTerminalSession(session.id);
+      streamRef.current?.close();
+      streamRef.current = null;
+      activeSessionIdRef.current = null;
       setSession(null);
-      setLines([]);
-      setCommand("");
+      terminalRef.current?.reset();
+      terminalRef.current?.writeln("Shell closed.");
+      terminalRef.current?.writeln("Start shell to open a new interactive session.");
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Could not close that shell session.");
     } finally {
@@ -160,24 +251,25 @@ export function TerminalPanel({ open, expanded, onClose, onToggleExpanded }: Ter
   }
 
   return (
-    <aside
-      className={open ? `terminal-panel open${expanded ? " expanded" : ""}` : "terminal-panel"}
-      aria-hidden={!open}
-    >
+    <aside className={open ? "terminal-panel open" : "terminal-panel"} aria-hidden={!open}>
       <div className="terminal-panel-card">
         <div className="terminal-panel-head">
           <div className="terminal-panel-copy">
-            <p className="eyebrow">Local repo shell</p>
-            <h3>Terminal</h3>
-            <p className="section-description">
-              Run repo commands like <code>rg</code>, <code>git</code>, <code>npm</code>, or <code>codex</code> if it is installed locally.
-            </p>
+            <p className="eyebrow">Local repo terminal</p>
+            <div className="terminal-title-row">
+              <h3>Terminal</h3>
+              <button
+                type="button"
+                className="graph-icon-button graph-tooltip-target terminal-info-button"
+                data-tooltip="Run PulseOS for chat. Use git, npm, rg, claude, gemini, or cd cli && npm run graph directly."
+                aria-label="Terminal help"
+              >
+                i
+              </button>
+            </div>
           </div>
           <div className="terminal-panel-actions">
             {statusBadge}
-            <LiteButton variant="secondary" onClick={onToggleExpanded}>
-              {expanded ? "Windowed" : "Expand"}
-            </LiteButton>
             <LiteButton variant="ghost" onClick={onClose}>
               Close
             </LiteButton>
@@ -188,6 +280,14 @@ export function TerminalPanel({ open, expanded, onClose, onToggleExpanded }: Ter
           <LiteButton onClick={() => void startShell()} disabled={busy}>
             {session ? "Restart shell" : "Start shell"}
           </LiteButton>
+          <LiteButton
+            variant="secondary"
+            onClick={() => void runPresetCommand("cd cli && npm run chat")}
+            disabled={busy}
+            title="Run cd cli && npm run chat"
+          >
+            Run PulseOS
+          </LiteButton>
           <LiteButton variant="secondary" onClick={() => void closeShell()} disabled={!session || busy}>
             End shell
           </LiteButton>
@@ -196,45 +296,17 @@ export function TerminalPanel({ open, expanded, onClose, onToggleExpanded }: Ter
 
         {error ? <div className="notice notice-error">{error}</div> : null}
 
-        {session ? (
-          <>
-            <div className="terminal-output" ref={outputRef}>
-              {lines.length ? (
-                lines.map((line) => (
-                  <div key={line.id} className={`terminal-line terminal-line-${line.tone}`}>
-                    {line.text}
-                  </div>
-                ))
-              ) : (
-                <div className="terminal-line terminal-line-muted">Shell is ready. Type a command below and press Send.</div>
-              )}
-            </div>
-
-            <div className="terminal-input-row">
-              <input
-                className="lite-input terminal-input"
-                value={command}
-                onChange={(event) => setCommand(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    void sendCommand();
-                  }
-                }}
-                placeholder="Type a command and press Enter"
-                spellCheck={false}
-              />
-              <LiteButton onClick={() => void sendCommand()} disabled={!command.trim() || busy || session.status !== "running"}>
-                Send
-              </LiteButton>
-            </div>
-          </>
-        ) : (
-          <LiteEmptyState
-            title="Shell not started"
-            detail="Nothing runs automatically. Start the shell when you want a local terminal inside this workspace."
-          />
-        )}
+          <div className="terminal-output-shell">
+            <div className="terminal-output-host" ref={terminalHostRef} />
+            {!session ? (
+              <div className="terminal-empty-overlay">
+                <LiteEmptyState
+                  title="Shell not started"
+                  detail="Start the shell when you want a real terminal inside this workspace."
+                />
+              </div>
+            ) : null}
+          </div>
       </div>
     </aside>
   );

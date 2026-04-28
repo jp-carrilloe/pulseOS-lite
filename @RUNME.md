@@ -79,6 +79,8 @@ Important:
 Before bootstrapping, add company knowledge-base material to:
 - [001_Data_Souces](./001_Data_Souces)
 
+This repo also includes [000_Acme_Sample_Company_Memory](./000_Acme_Sample_Company_Memory) as a public example/template. Bootstrap does not delete it automatically, so the user should decide whether to keep it, archive it, or remove it manually.
+
 Do not skip this step.
 
 If Codex, Gemini, Claude, or another AI assistant is reading this file, it should pause here and tell the user to add source material first. It should not launch bootstrap automatically.
@@ -226,9 +228,13 @@ npm run chat
 
 What `npm run chat` does:
 - starts the local daemon
-- creates or refreshes the local SQL index
-- runs vectorization for the local retrieval layer
+- uses the existing local SQL index
 - lets you query the repo through the CLI
+
+Important:
+- the `Document Relationships` graph is SQL-backed through `document_references`
+- if you see document nodes without edges, open the left sidebar `Settings` tab and run `Rebuild graph`, or run `cd cli && npm run index`
+- indexing and vectorization are refreshed deliberately, not silently on every chat launch
 
 Useful commands inside chat:
 - `:model openai`
@@ -271,6 +277,8 @@ If you want to trigger that layer, run:
 - `npm run daemon:start`, or
 - `:reload` after chat has started
 
+If you want to connect the same company brain through MCP-compatible clients after setup, read [MCP_SETUP.md](./MCP_SETUP.md).
+
 To view the basic company-memory ontology visually, run:
 
 ```bash
@@ -280,6 +288,7 @@ npm run graph
 That builds the local React workspace and prints a private local browser URL. The UI is scoped to `000_Company_Memory` and includes:
 - a left folder/document explorer
 - a center interactive graph
+- a docked right terminal sidebar
 - a right Markdown reader/editor
 
 The graph UI has two focused modes:
@@ -289,6 +298,13 @@ The graph UI has two focused modes:
 The printed graph URL uses a temporary token only for the first open. That first launch creates a local browser session and then redirects you to a clean localhost URL, so normal refresh works without keeping the token in the address bar. This still helps keep the local graph data endpoint from being casually read by unrelated local processes, browser tabs, extensions, or webpages while the daemon is running.
 
 The graph is interactive: pan, zoom, fit, reset, and drag nodes to make the view easier to inspect. Those graph movements are visual only. Saving a Markdown document from the right editor updates that file inside `000_Company_Memory` and refreshes the SQLite/vector index.
+
+The graph workspace terminal is a real local shell sidebar.
+
+What it supports:
+- `Run PulseOS`, which starts the shell if needed and sends `pulseos`
+- normal local commands such as `git`, `npm`, `rg`, `claude`, and `gemini` when those CLIs are installed on your machine
+- side-by-side document editing and terminal work, because the terminal remains visible even when the document panel is open
 
 ---
 

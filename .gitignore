@@ -42,6 +42,9 @@ dist-ssr
 .claude/
 .codex/
 .gstack/
+.codex/
+claude.json
+.vscode/cline_mcp_settings.json
 cli/.pulseos-cli-state/
 cli/.pulseos-lite-cli-state/
 cli/.pulseos-lite-open-source-cli-state/

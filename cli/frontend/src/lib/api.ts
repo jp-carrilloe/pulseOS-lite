@@ -77,6 +77,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ id, text }),
     }),
+  resizeTerminalSession: (id: string, cols: number, rows: number) =>
+    request<{ ok: boolean }>("/api/terminal/resize", {
+      method: "POST",
+      body: JSON.stringify({ id, cols, rows }),
+    }),
   closeTerminalSession: (id: string) =>
     request<{ closed: boolean }>("/api/terminal/close", {
       method: "POST",

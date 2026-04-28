@@ -1,6 +1,6 @@
-# 🚢 PulseOS Lite Open Source — The Strategic Growth Engine
+# PulseOS Lite Open Source — The Strategic Growth Engine
 
-> "Complexity is the enemy of execution. Strategy is the art of saying no." — JP
+> "Complexity is the enemy of execution. Strategy is the art of focusing on the right things."
 
 This is the strategic hub for **PulseOS Lite Open Source**. It is not a folder of documents; it is an **AI-driven growth organism** designed to turn your preferred coding agent into a high-performance executive team.
 
@@ -8,7 +8,7 @@ This is the strategic hub for **PulseOS Lite Open Source**. It is not a folder o
 
 ---
 
-## ⚡ The JP Standard: High-Alpha Execution
+## The PulseOS Lite Open Source Standard: High-Alpha Execution
 
 We don't do "templates." we do **Alpha**. Every file in this repo is a living component of our growth engine, governed by three core laws:
 
@@ -34,6 +34,8 @@ We don't do "templates." we do **Alpha**. Every file in this repo is a living co
 
 2. **Add Source Material First:**
    Put company knowledge base material into [`001_Data_Souces`](./001_Data_Souces/).
+
+   This repo also includes [`000_Acme_Sample_Company_Memory`](./000_Acme_Sample_Company_Memory/) as a public sample/template. It is reference material only. Bootstrap will not delete it automatically when you seed a real company.
 
    Good inputs include:
    - strategy docs
@@ -71,7 +73,11 @@ Bootstrap now asks only for the company name, but only after it has confirmed th
 In simple terms:
 - `bootstrap` seeds the documents
 - `chat` or daemon startup uses the existing SQL index
-- `npm run index` or `:reload` manually refreshes indexing and vectorization
+- `npm run index` or the graph `Rebuild graph` action refreshes indexing and vectorization manually
+
+Important relationship note:
+- the `Document Relationships` graph is backed by the local SQL index, not by direct client-side Markdown parsing at render time
+- if document nodes appear without relationship edges, use the graph `Settings` tab and run `Rebuild graph`, or run `cd cli && npm run index`
 
 The bootstrap engine now auto-detects your available model provider and prefers `OPENAI_API_KEY` first, then Anthropic, then Gemini.
 
@@ -103,36 +109,38 @@ The `ontology_domain` is the document's structural placement in the company brai
 What uses this database today:
 - the local CLI chat flow (`npm run chat`) uses the SQLite database and stored vectors to retrieve relevant company-brain documents before answering
 - the local daemon uses the same database, so a different terminal can access the same indexed company brain as long as it runs from this repo's `cli/` folder
-- the local graph UI (`npm run graph`) opens the Company Memory workspace backed by the same SQLite index: a left explorer for `000_Company_Memory`, a central interactive graph, and a right reader/editor for Markdown documents
-- the graph UI now includes a rebuild advisor that tracks markdown drift, recommends a weekly refresh cadence, and warns when a manual rebuild is likely to trigger meaningful compute or embedding cost
-- the rebuild change log is updated by explicit scan/rebuild flows and daemon or MCP session startup, not by every status read, so the audit history reflects real maintenance events instead of page refreshes
-- the graph workspace has two focused views: Company Ontology for the `000_Company_Memory` folder hierarchy, and Document Relationships for direct Markdown reference links; the graph can be panned, zoomed, fitted, reset, and manually rearranged by dragging nodes
-- the browser editor can only read and save Markdown inside `000_Company_Memory`; source intake, CLI files, repo config, generated assets, and hidden/system folders are outside the editor scope
+- the local graph UI (`npm run graph`) uses the same SQLite index in two focused views: Company Ontology for the folder hierarchy, and Document Relationships for a gravity-style Markdown reference map with quiet connector lines and hover-only document labels; the graph can be panned, zoomed, fitted, reset, and manually rearranged by dragging nodes
 - `npm run index` can create or refresh the same database without opening chat
 - `npm run status` checks whether the database, tables, and latest indexing/vectorization run are healthy
 
-MCP support today:
-- this repo now ships a lightweight stdio MCP server from `cli/`
-- MCP-compatible assistants can call repo status, rebuild advice, rebuild-now, file listing, and retrieval-context tools against this local workspace
-- `retrieve_context` is read-only by default; if the index is stale, callers should inspect `rebuild_advisor` or call `rebuild_now` first, or opt into `refresh_if_stale: true`
+### 💻 IDE-First & Agent-First Architecture
+
+The UI provided by `npm run graph` is primarily a visually friendly interface. While it is useful as an additional visual guide to the company structure, **the true power of the company memory is harnessed directly via the CLI and your IDE**. 
+
+The best way to run the CLI, the agents, and the company memory is natively inside your preferred IDE (Cursor, VS Code, Antigravity, etc.). 
+
+You can run your agents (Codex, Claude, Gemini) in your terminal or directly in the IDE and simply tell them to call the CLI tools. This allows the models to autonomously:
+- Perform document ingestion and retrieval (`npm run chat` or `npm run index`)
+- Read, edit, and update markdown files and their relationships
+- Maintain and update the knowledge graph directly from the terminal
+
+Because the graph and company memory are backed by markdown files and a local SQLite CLI layer, the models have full autonomy to read and rewrite the strategy without needing a complex UI layer in between. Build your documents and agents inside the graph, and use the CLI to supercharge them.
 
 Commands:
 - `npm run bootstrap`
   seeds the markdown documents only
 - `npm run chat`
-  starts the daemon and uses the existing SQLite index immediately
+  starts the daemon, creates or refreshes the SQL index, and runs vectorization
 - `npm run graph`
-  builds the local React graph workspace, starts the daemon, and prints a private local browser URL. Open that printed link once and the browser will create a local session, then redirect to a clean localhost URL so normal refresh works. The UI opens the `000_Company_Memory` explorer, graph, reader, and basic Markdown editor while still keeping the graph/data endpoints scoped to that local daemon session.
-- `npm run mcp`
-  starts a lightweight stdio MCP server so Codex, Claude Desktop, or another MCP-compatible terminal/cloud client can call repo status, rebuild advice, rebuild-now, file listing, and retrieval-context tools against this local workspace. `retrieve_context` stays read-only unless the caller explicitly passes `refresh_if_stale: true`.
+  starts the daemon and prints a private local browser URL for the interactive two-mode ontology/document graph UI
 - `npm run index`
   manually creates the SQLite database, creates the SQL tables if needed, and runs indexing/vectorization without starting chat
 - `npm run status`
   checks bootstrap status, intake readiness, daemon state, SQL table creation, and the latest indexing/vectorization status
 - `npm run daemon:start`
-  starts the daemon directly and uses the existing SQLite index immediately
+  starts the daemon directly and also creates or refreshes the SQL index plus vectorization
 - `:reload`
-  manually re-indexes the repo and re-runs vectorization from inside chat
+  re-indexes the repo and re-runs vectorization from inside chat
 
 ### Manual Fallback for Terminal-Based LLMs
 
@@ -181,6 +189,7 @@ Important:
 > **🔒 Privacy & Security:** All information, API keys, and data inputs run entirely locally on your machine and are securely stored within your local environment.
 
 For the full setup flow, process explanation, and agent structure, read **[@RUNME.md](./@RUNME.md)** first and then **[HOW_IT_WORKS.md](./HOW_IT_WORKS.md)** for the deeper “How It Works” walkthrough.
+For MCP/client integration, also read **[MCP_SETUP.md](./MCP_SETUP.md)**.
 
 ---
 
