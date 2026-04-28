@@ -242,4 +242,4 @@ Part of this repository's architecture and 100x efficiency philosophy are inspir
 ## License
 MIT — Fork it, build it, ship it.
 
-*Powered by PulseOS Lite Open Source — Built by JP Carrillo for Strategic Clarity at Scale.*
+*Powered by PulseOS Lite Open Source — Built by JP Carrillo for Operational Clarity at Scale.*
