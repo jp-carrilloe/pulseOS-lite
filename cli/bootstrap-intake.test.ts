@@ -146,3 +146,57 @@ test("parseReferenceNote reads the documented markdown fields", () => {
   assert.equal(note.usageNotes, "Read everything");
   assert.equal(note.constraints, "Ignore secrets");
 });
+
+test("bootstrap intake includes curated Company Memory docs alongside raw data sources", async () => {
+  const repoRoot = await createTempRepo();
+  await fsp.mkdir(path.join(repoRoot, "000_Company_Memory", "102_Strategy"), { recursive: true });
+  await fsp.mkdir(path.join(repoRoot, "000_Company_Memory", "105_Tech"), { recursive: true });
+
+  await fsp.writeFile(
+    path.join(repoRoot, "001_Data_Souces", "Data_Souces_Folder", "raw-notes.md"),
+    `# Raw Notes
+
+ACME sells AI operations retainers to seed-stage founders.
+`,
+  );
+
+  await fsp.writeFile(
+    path.join(repoRoot, "000_Company_Memory", "102_Strategy", "102.1_Strategy.md"),
+    `# Strategy
+
+**Status:** Active
+- **Owner Agent:** @Strategy
+
+ACME's curated strategy focuses on workflow automation for founder-led sales teams.
+`,
+  );
+
+  await fsp.writeFile(
+    path.join(repoRoot, "000_Company_Memory", "105_Tech", "105.1_Template.md"),
+    `# Tech Template
+
+**Status:** Template
+
+[INSERT_TECH_STACK]
+`,
+  );
+
+  await fsp.writeFile(
+    path.join(repoRoot, "000_Company_Memory", "102_Strategy", "102_Strategy_Agent.md"),
+    `# Strategy Agent
+
+This canonical agent file should not be used as bootstrap company evidence.
+`,
+  );
+
+  const report = await collectBootstrapIntake(repoRoot, "ACME");
+  assert.equal(report.localSources.length, 1);
+  assert.equal(report.companyMemorySources.length, 1);
+  assert.equal(report.companyMemorySources[0]?.relativePath, "000_Company_Memory/102_Strategy/102.1_Strategy.md");
+
+  const evidence = buildBootstrapEvidenceBlock(report, "000_Company_Memory/102_Strategy/102.2_Service_Portfolio.md");
+  assert.match(evidence, /Curated Company Memory Files:\*\* 1/);
+  assert.match(evidence, /Source Type: company_memory/);
+  assert.doesNotMatch(evidence, /INSERT_TECH_STACK/);
+  assert.doesNotMatch(evidence, /Strategy Agent/);
+});

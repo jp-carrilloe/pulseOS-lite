@@ -9,6 +9,33 @@ export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url
 
 export type ModelName = "claude" | "openai" | "gemini";
 
+export const DEFAULT_CHAT_MODELS: Record<ModelName, string> = {
+  openai: "gpt-4o",
+  claude: "claude-opus-4-6",
+  gemini: "gemini-2.0-flash",
+};
+
+export const SUGGESTED_CHAT_MODELS: Record<ModelName, string[]> = {
+  openai: ["gpt-4o", "gpt-4o-mini"],
+  claude: ["claude-opus-4-6", "claude-sonnet-4-5"],
+  gemini: ["gemini-2.0-flash", "gemini-1.5-pro"],
+};
+
+export function getChatModelEnvVar(provider: ModelName): string {
+  switch (provider) {
+    case "openai":
+      return "PULSEOS_CHAT_OPENAI_MODEL";
+    case "claude":
+      return "PULSEOS_CHAT_ANTHROPIC_MODEL";
+    case "gemini":
+      return "PULSEOS_CHAT_GEMINI_MODEL";
+  }
+}
+
+export function getDefaultChatModel(provider: ModelName, env: NodeJS.ProcessEnv = process.env): string {
+  return env[getChatModelEnvVar(provider)]?.trim() || DEFAULT_CHAT_MODELS[provider];
+}
+
 export interface DaemonState {
   pid: number;
   port: number;
@@ -27,6 +54,9 @@ export interface BootstrapState {
   failed: number;
   localSourceCount: number;
   externalSourceCount: number;
+  companyMemorySourceCount?: number;
+  indexedDocumentCount?: number;
+  indexedAt?: string | null;
   warningsCount: number;
   error: string | null;
 }
@@ -199,7 +229,7 @@ export async function getAvailablePort(env: NodeJS.ProcessEnv = process.env): Pr
 }
 
 export function getDaemonVersion(): string {
-  return "1.8.1";
+  return "1.9.1";
 }
 
 export function delay(ms: number): Promise<void> {

@@ -492,6 +492,8 @@ Useful commands inside chat:
 
 Use `:reload` only when you manually add or edit repo files and want the CLI to refresh its indexed view and vectors.
 
+When you add or create new Markdown documents in `000_Company_Memory` outside the graph editor, rebuild the graph before relying on it. Use `/reload` in chat, the graph UI `Rebuild graph` button, or `cd cli && npm run index`; a normal browser refresh only reloads the current SQLite-backed graph snapshot.
+
 To inspect the company-memory structure visually, run:
 
 ```bash
@@ -511,6 +513,8 @@ The graph has two intentionally separate views so the company brain does not bec
 The printed graph URL uses a temporary token only for the first open. That first launch creates a local browser session and then redirects you to a clean localhost URL, so normal refresh works without keeping the token in the address bar. This is still a lightweight local access guard: the daemon is an HTTP server on `127.0.0.1`, so the one-time token plus local session help prevent unrelated local processes, browser tabs, extensions, or webpages from casually calling the graph data endpoint while the daemon is running.
 
 The graph is interactive. You can drag nodes, pan the canvas, zoom in or out, fit the graph to the viewport, and reset to the generated default layout. Graph movements are visual only and do not persist layout changes. If you edit and save a Markdown document in the right panel, the daemon writes that file and refreshes the SQLite index/vector layer so chat and graph retrieval stay current.
+
+If a new Markdown file is created by a user, agent, IDE, or external tool, run `Rebuild graph` in the UI or `cd cli && npm run index` from the terminal so the file is inserted into SQLite and can appear in the graph, summaries, and retrieval results.
 
 The graph workspace terminal is meant for local repo work without leaving the browser UI.
 
@@ -533,6 +537,8 @@ The retrieval prompt path is also more stable:
 The graph UI also includes a rebuild advisor. It compares the current Markdown documents to the indexed SQLite state, warns when the weekly refresh window has passed, and estimates whether a rebuild is likely to be cheap or more deliberate. The advisor view itself is read-only. It does not rewrite the rebuild change log on every refresh. The audit log is updated by daemon startup, MCP startup, or explicit rebuild/scan flows so the history reflects real maintenance events instead of simple page loads.
 
 If document nodes appear in `Document Relationships` without edges, that usually means the SQL graph layer needs to be refreshed, not that the Markdown links disappeared from the source files. In that case, use the left sidebar `Settings` tab and run `Rebuild graph`, or run `cd cli && npm run index`.
+
+The same rebuild step is required when newly created documents are missing from the graph. The UI reads the indexed SQL layer; it does not rescan the filesystem on every browser refresh.
 
 The editor is intentionally narrow. It only reads and saves Markdown inside `000_Company_Memory`; source intake, CLI files, repo configuration, generated assets, and hidden/system folders are not editable from the graph UI.
 

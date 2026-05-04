@@ -15,6 +15,14 @@ async function createTempRepo() {
   await fsp.mkdir(path.join(root, "001_Source_Intake", "Data_Souces_Folder"), { recursive: true });
 
   await fsp.writeFile(
+    path.join(root, "README.md"),
+    `# Repo README
+
+This repo-level onboarding document should not be included in the curated Company Memory graph.
+`,
+  );
+
+  await fsp.writeFile(
     path.join(root, "000_Company_Memory", "102_Corporate_Strategy_and_Foundation", "102.5_Pricing_Analysis.md"),
     `# Pricing Analysis
 

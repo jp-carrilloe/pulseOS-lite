@@ -13,9 +13,11 @@ import {
   type ModelName,
   delay,
   fetchDaemonJson,
+  getDefaultChatModel,
   getDaemonStateFilePath,
   getDaemonVersion,
   getModelCredentialStatus,
+  SUGGESTED_CHAT_MODELS,
   loadRepoEnv,
   probeGraphBootstrapUrl,
   probeUiCapabilities,
@@ -26,6 +28,12 @@ import {
 } from "./shared.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const MODEL_PROVIDERS: ModelName[] = ["openai", "claude", "gemini"];
+
+interface ChatModelSelection {
+  provider: ModelName;
+  modelId: string;
+}
 
 // ── CLI Entry ─────────────────────────────────────────────────────────────────
 
@@ -38,7 +46,7 @@ async function main(argv = process.argv.slice(2), env: NodeJS.ProcessEnv = proce
     switch (`${command ?? ""} ${subcommand ?? ""}`.trim()) {
       case "daemon start":
         await ensureRuntime(env);
-        process.stdout.write("Daemon started. It will use the existing SQLite index immediately. Run `npm run index` or `:reload` only when you want to refresh indexing/vectorization.\n");
+        process.stdout.write("Daemon started. It checks 000_Company_Memory against the SQLite graph/index on startup.\n");
         break;
       case "daemon stop":
         await stopDaemon(env);
@@ -75,30 +83,35 @@ pulseos-lite-open-source-cli — Chat with your PulseOS Lite Open Source repo us
 
 Workflow:
   npm run bootstrap          — seed the markdown documents
-  npm run chat               — start the daemon and use the existing SQLite index
+  npm run chat               — start the daemon and refresh the Company Memory index
   npm run graph              — build and open the PulseOS Company Memory UI
 
 Usage:
-  npm run chat [-- --model <openai|claude|gemini>]
+  npm run chat [-- --model <auto|openai|claude|gemini> --model-id <provider-model-id|auto>]
   npm run graph
   npm run status
   npm run daemon:start
   npm run daemon:stop
   npm run daemon:status
 
-Chat commands (type while in REPL):
-  :model openai|claude|gemini  — switch AI model
-  :reset                       — clear conversation history
-  :reload                      — manually re-index repo files and re-run vectorization
-  :files                       — list indexed files
-  :status                      — daemon status
-  :help                        — show this help
-  :exit                        — quit
+Chat commands (type while in REPL; "/" and ":" both work):
+  /model auto                  — auto-pick the first configured provider
+  /model openai gpt-4o         — switch provider and model id
+  /models                      — list configured provider examples
+  /reset                       — clear conversation history
+  /reload                      — manually re-index repo files/new docs and re-run vectorization
+  /files                       — list indexed files
+  /status                      — daemon status
+  /help                        — show this help
+  /exit                        — quit
 
 Environment variables (set in .env at repo root):
   ANTHROPIC_API_KEY
   OPENAI_API_KEY
   GEMINI_API_KEY
+  PULSEOS_CHAT_OPENAI_MODEL
+  PULSEOS_CHAT_ANTHROPIC_MODEL
+  PULSEOS_CHAT_GEMINI_MODEL
 `);
 }
 
@@ -268,6 +281,11 @@ async function printWorkflowStatus(env: NodeJS.ProcessEnv): Promise<void> {
     lines.push(`- Failed: ${bootstrapState.failed}`);
     lines.push(`- Local intake files used: ${bootstrapState.localSourceCount}`);
     lines.push(`- External reference files used: ${bootstrapState.externalSourceCount}`);
+    lines.push(`- Company Memory files checked: ${bootstrapState.companyMemorySourceCount ?? 0}`);
+    if (bootstrapState.indexedDocumentCount !== undefined) {
+      lines.push(`- Company Memory docs indexed after bootstrap: ${bootstrapState.indexedDocumentCount}`);
+    }
+    if (bootstrapState.indexedAt) lines.push(`- Latest bootstrap index refresh: ${bootstrapState.indexedAt}`);
     lines.push(`- Warnings: ${bootstrapState.warningsCount}`);
     if (bootstrapState.completedAt) lines.push(`- Completed at: ${bootstrapState.completedAt}`);
     if (bootstrapState.error) lines.push(`- Error: ${bootstrapState.error}`);
@@ -276,6 +294,7 @@ async function printWorkflowStatus(env: NodeJS.ProcessEnv): Promise<void> {
   lines.push("", "Current intake:");
   lines.push(`- Local source files available now: ${intake.localSources.length}`);
   lines.push(`- External source files available now: ${intake.externalSources.length}`);
+  lines.push(`- Curated Company Memory files available now: ${intake.companyMemorySources.length}`);
   lines.push(`- Intake warnings now: ${intake.warnings.length}`);
 
   lines.push("", "Daemon:");
@@ -307,6 +326,7 @@ async function printWorkflowStatus(env: NodeJS.ProcessEnv): Promise<void> {
 
   lines.push("", "Overall checks:");
   lines.push(`- Source intake ready: ${intake.localSources.length + intake.externalSources.length > 0 ? "yes" : "no"}`);
+  lines.push(`- Curated Company Memory ready: ${intake.companyMemorySources.length > 0 ? "yes" : "no"}`);
   lines.push(`- Bootstrap completed successfully: ${bootstrapState?.status === "completed" ? "yes" : "no"}`);
   lines.push(`- SQL tables populated: ${documentCount > 0 ? "yes" : "no"}`);
   lines.push(`- Vectorization completed: ${vectorCount > 0 ? "yes" : "no"}`);
@@ -340,6 +360,7 @@ async function printGraphUrl(env: NodeJS.ProcessEnv): Promise<void> {
       "- Interaction: pan, zoom, fit, reset, and drag graph nodes without changing layout data.",
       "",
       "Saving a document refreshes the SQLite documents table and summary vectors so chat and graph retrieval stay current.",
+      "After adding, creating, moving, renaming, or deleting Markdown files outside the graph editor, click Rebuild index/Rebuild graph/index in the UI or run `npm run index` so new files appear.",
       "Open the printed link once to create the local browser session. After that, the UI redirects to a clean localhost URL and normal refresh works.",
     ].join("\n") + "\n",
   );
@@ -358,12 +379,12 @@ async function runInteractiveChat(
   flags: Record<string, string | boolean>,
   env: NodeJS.ProcessEnv,
 ): Promise<void> {
-  let model: ModelName = (flags.model as ModelName | undefined) ?? "openai";
-  assertModelCredentials(model, env);
+  let selection = resolveChatModelSelection(flags.model, flags["model-id"] ?? flags.modelId ?? flags["chat-model"], env);
+  assertModelCredentials(selection.provider, env);
 
   process.stdout.write("Starting pulseos-lite-open-source-cli daemon...\n");
   const state = await ensureRuntime(env);
-  process.stdout.write("Connected. The daemon is using the existing SQLite index. Run :reload only when you want to refresh indexing/vectorization.\n\n");
+  process.stdout.write("Connected. The daemon checks 000_Company_Memory on startup and waits for any graph/index refresh before answering.\n\n");
 
   const sessionId = "main";
 
@@ -373,13 +394,13 @@ async function runInteractiveChat(
     terminal: process.stdin.isTTY ?? true,
   });
 
-  printWelcome(model);
+  printWelcome(selection);
 
   try {
     while (true) {
       let rawLine: string;
       try {
-        rawLine = await rl.question(`\n[${model}]> `);
+        rawLine = await rl.question(`\npulseOS-lite [${selection.provider}:${selection.modelId}] -> `);
       } catch {
         break; // readline closed (Ctrl+D)
       }
@@ -388,11 +409,11 @@ async function runInteractiveChat(
       if (!line) continue;
 
       // handle REPL commands
-      if (line.startsWith(":")) {
-        const handled = await handleReplCommand(line, state, model, sessionId, env);
+      if (line.startsWith(":") || line.startsWith("/")) {
+        const handled = await handleReplCommand(line, state, selection, sessionId, env);
         if (handled === "exit") break;
         if (handled !== null) {
-          model = handled as ModelName;
+          selection = handled;
         }
         continue;
       }
@@ -400,13 +421,13 @@ async function runInteractiveChat(
       // send to AI
       process.stdout.write("Thinking...\n");
       try {
-        const result = await daemonCommand<{ reply: string; model: ModelName; messageCount: number }>(
+        const result = await daemonCommand<{ reply: string; model: ModelName; modelId: string; messageCount: number }>(
           state,
           "chat",
-          { message: line, model, session_id: sessionId },
+          { message: line, model: selection.provider, model_id: selection.modelId, session_id: sessionId },
         );
         process.stdout.write(`\n${result.reply}\n`);
-        process.stdout.write(`\n— ${result.model} · ${result.messageCount / 2} exchanges\n`);
+        process.stdout.write(`\n— ${result.model}:${result.modelId} · ${result.messageCount / 2} exchanges\n`);
       } catch (err) {
         process.stderr.write(`\nThat request could not be completed.\n${err instanceof Error ? err.message : String(err)}\n`);
       }
@@ -420,11 +441,12 @@ async function runInteractiveChat(
 async function handleReplCommand(
   line: string,
   state: DaemonState,
-  currentModel: ModelName,
+  currentSelection: ChatModelSelection,
   sessionId: string,
   env: NodeJS.ProcessEnv,
-): Promise<ModelName | "exit" | null> {
-  const [cmd, arg] = line.slice(1).split(/\s+/);
+): Promise<ChatModelSelection | "exit" | null> {
+  const commandPrefix = line[0];
+  const [cmd, ...args] = line.slice(1).trim().split(/\s+/);
 
   switch (cmd) {
     case "exit":
@@ -436,14 +458,22 @@ async function handleReplCommand(
       return null;
 
     case "model": {
-      const next = arg as ModelName | undefined;
-      if (!next || !["claude", "openai", "gemini"].includes(next)) {
-        process.stdout.write("Please choose a valid model: `:model openai`, `:model claude`, or `:model gemini`.\n");
+      if (!args[0]) {
+        process.stdout.write(
+          `Current model: ${currentSelection.provider}:${currentSelection.modelId}\nUse \`/model auto\`, \`/model openai gpt-4o\`, \`/model claude auto\`, or \`/models\`.\n`,
+        );
         return null;
       }
-      assertModelCredentials(next, env);
-      process.stdout.write(`Switched to ${next}.\n`);
-      return next;
+
+      const nextSelection = resolveChatModelSelection(args[0], args[1] ?? "auto", env);
+      assertModelCredentials(nextSelection.provider, env);
+      process.stdout.write(`Switched to ${nextSelection.provider}:${nextSelection.modelId}.\n`);
+      return nextSelection;
+    }
+
+    case "models": {
+      printModelOptions(env);
+      return null;
     }
 
     case "reset": {
@@ -480,16 +510,121 @@ async function handleReplCommand(
     }
 
     default:
-      process.stdout.write(`I don't recognize \`:${cmd}\`.\nType \`:help\` to see the available chat commands.\n`);
+      process.stdout.write(`I don't recognize \`${commandPrefix}${cmd}\`.\nType \`/help\` to see the available chat commands.\n`);
       return null;
   }
 }
 
-function printWelcome(model: ModelName) {
-  process.stdout.write("🚢 PulseOS Lite Open Source — Strategic Growth Engine\n");
-  process.stdout.write(`Vibe: JP Standard | Model: ${model}\n`);
-  process.stdout.write("Workflow: bootstrap seeds documents; chat/daemon reads the existing SQL index; :reload or npm run index refresh indexing/vectorization manually.\n");
-  process.stdout.write("─".repeat(60) + "\n");
+function printWelcome(selection: ChatModelSelection) {
+  const directory = formatDisplayPath(REPO_ROOT);
+  const lines = [
+    "☕️ PulseOS Lite by tintto",
+    "Operating System for AI Native Teams",
+    "",
+    `model;     ${selection.provider}:${selection.modelId}   (/model to change)`,
+    `directory; ${directory}`,
+    "vibe;      caffeinated company memory",
+    "workflow;  chat refreshes 000_Company_Memory into the SQL graph/index",
+    "commands;  /help /model /models /files /status /reload /reset /exit",
+    "",
+    "☕ made with much coffee by jp-carrilloe",
+    "   https://github.com/jp-carrilloe",
+  ];
+  process.stdout.write(renderWelcomeBox(lines));
+}
+
+function resolveChatModelSelection(
+  providerInput: string | boolean | undefined,
+  modelIdInput: string | boolean | undefined,
+  env: NodeJS.ProcessEnv,
+): ChatModelSelection {
+  const providerValue = typeof providerInput === "string" ? providerInput.trim().toLowerCase() : "";
+  const provider = providerValue && providerValue !== "auto" ? parseModelProvider(providerValue) : selectAutoProvider(env);
+  const requestedModelId = typeof modelIdInput === "string" ? modelIdInput.trim() : "";
+  const modelId = requestedModelId && requestedModelId !== "auto" ? requestedModelId : getDefaultChatModel(provider, env);
+  return { provider, modelId };
+}
+
+function parseModelProvider(value: string): ModelName {
+  if (MODEL_PROVIDERS.includes(value as ModelName)) return value as ModelName;
+  throw new Error(`Unknown model provider "${value}". Use one of: auto, openai, claude, gemini.`);
+}
+
+function selectAutoProvider(env: NodeJS.ProcessEnv): ModelName {
+  for (const provider of MODEL_PROVIDERS) {
+    if (getModelCredentialStatus(provider, env).ok) return provider;
+  }
+  throw new Error(
+    "No configured chat provider was found for `auto`.\nAdd `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`/`GOOGLE_API_KEY` to `.env` or `.env.local`.",
+  );
+}
+
+function printModelOptions(env: NodeJS.ProcessEnv) {
+  process.stdout.write("Available chat model selectors:\n");
+  process.stdout.write("  /model auto                       auto-pick the first configured provider\n");
+  for (const provider of MODEL_PROVIDERS) {
+    const credential = getModelCredentialStatus(provider, env);
+    const defaultModel = getDefaultChatModel(provider, env);
+    const examples = SUGGESTED_CHAT_MODELS[provider].join(", ");
+    process.stdout.write(
+      `  /model ${provider} auto                 use ${provider}'s default (${defaultModel}) ${credential.ok ? "[key found]" : "[missing key]"}\n`,
+    );
+    process.stdout.write(`  /model ${provider} <model-id>           examples: ${examples}\n`);
+  }
+}
+
+function formatDisplayPath(value: string) {
+  const home = process.env.HOME;
+  if (home && value === home) return "~";
+  if (home && value.startsWith(`${home}${path.sep}`)) return `~${value.slice(home.length)}`;
+  return value;
+}
+
+function renderWelcomeBox(lines: string[]) {
+  const width = Math.max(...lines.map((line) => terminalDisplayWidth(line)), 58);
+  const top = `╭${"─".repeat(width + 2)}╮`;
+  const body = lines.map((line) => `│ ${padEndTerminal(line, width)} │`).join("\n");
+  const bottom = `╰${"─".repeat(width + 2)}╯`;
+  return `${top}\n${body}\n${bottom}\n`;
+}
+
+function padEndTerminal(value: string, width: number) {
+  return value + " ".repeat(Math.max(0, width - terminalDisplayWidth(value)));
+}
+
+function terminalDisplayWidth(value: string) {
+  let width = 0;
+  for (const char of Array.from(value)) {
+    const code = char.codePointAt(0) ?? 0;
+    if (code === 0) continue;
+    if (code < 32 || (code >= 0x7f && code < 0xa0)) continue;
+    if (isZeroWidthCodePoint(code)) continue;
+    width += isWideCodePoint(code) ? 2 : 1;
+  }
+  return width;
+}
+
+function isZeroWidthCodePoint(code: number) {
+  return (
+    (code >= 0x0300 && code <= 0x036f) ||
+    (code >= 0xfe00 && code <= 0xfe0f) ||
+    code === 0x200d
+  );
+}
+
+function isWideCodePoint(code: number) {
+  return (
+    (code >= 0x1100 && code <= 0x115f) ||
+    (code >= 0x2329 && code <= 0x232a) ||
+    (code >= 0x2e80 && code <= 0xa4cf) ||
+    (code >= 0xac00 && code <= 0xd7a3) ||
+    (code >= 0xf900 && code <= 0xfaff) ||
+    (code >= 0xfe10 && code <= 0xfe19) ||
+    (code >= 0xfe30 && code <= 0xfe6f) ||
+    (code >= 0xff00 && code <= 0xff60) ||
+    (code >= 0xffe0 && code <= 0xffe6) ||
+    (code >= 0x1f300 && code <= 0x1faff)
+  );
 }
 
 function assertModelCredentials(model: ModelName, env: NodeJS.ProcessEnv) {

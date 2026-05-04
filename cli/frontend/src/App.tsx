@@ -85,9 +85,24 @@ function parseFrontmatterTags(content: string): string[] {
 
 export function App() {
   const SIDEBAR_MIN_WIDTH = 280;
-  const SIDEBAR_MAX_WIDTH = 540;
-  const TERMINAL_MIN_WIDTH = 460;
-  const TERMINAL_MAX_WIDTH = 920;
+  const SIDEBAR_MAX_WIDTH = 300;
+  const TERMINAL_MIN_WIDTH = 360;
+  const TERMINAL_MAX_WIDTH = 420;
+  const MIN_MAIN_CONTENT_WIDTH = 640;
+  const SHELL_GUTTER = 12;
+  const WORKSPACE_PADDING = 12;
+  const LAYOUT_GAP = 12;
+  const RESIZE_HANDLE_WIDTH = 4;
+  const THREE_ZONE_MIN_WIDTH =
+    SHELL_GUTTER * 2 +
+    WORKSPACE_PADDING * 2 +
+    SIDEBAR_MIN_WIDTH +
+    RESIZE_HANDLE_WIDTH +
+    LAYOUT_GAP * 2 +
+    MIN_MAIN_CONTENT_WIDTH +
+    RESIZE_HANDLE_WIDTH +
+    LAYOUT_GAP * 2 +
+    TERMINAL_MIN_WIDTH;
   const [graphData, setGraphData] = useState<ApiKnowledgeGraphSnapshot | null>(null);
   const [tree, setTree] = useState<FileTreeNode | null>(null);
   const [mode, setMode] = useState<ViewMode>("ontology");
@@ -111,16 +126,46 @@ export function App() {
   const [documentPanelExpanded, setDocumentPanelExpanded] = useState(false);
   const [documentMetaOpen, setDocumentMetaOpen] = useState(false);
   const [terminalPanelOpen, setTerminalPanelOpen] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(320);
+  const [sidebarWidth, setSidebarWidth] = useState(280);
   const [sidebarResizing, setSidebarResizing] = useState(false);
-  const [terminalWidth, setTerminalWidth] = useState(560);
+  const [terminalWidth, setTerminalWidth] = useState(360);
   const [terminalResizing, setTerminalResizing] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [folderContextMenu, setFolderContextMenu] = useState<{
     x: number;
     y: number;
     folder: FileTreeNode;
   } | null>(null);
-  const terminalReservedWidth = terminalPanelOpen ? terminalWidth + 4 + 16 : 0;
+  const rightPanelOpen = documentPanelOpen || terminalPanelOpen;
+  const rightPanelDocked = rightPanelOpen && viewportWidth >= THREE_ZONE_MIN_WIDTH;
+  const maxSidebarWidthForViewport = Math.max(
+    SIDEBAR_MIN_WIDTH,
+    Math.min(
+      SIDEBAR_MAX_WIDTH,
+      viewportWidth -
+        SHELL_GUTTER * 2 -
+        WORKSPACE_PADDING * 2 -
+        RESIZE_HANDLE_WIDTH -
+        LAYOUT_GAP * 2 -
+        MIN_MAIN_CONTENT_WIDTH -
+        (rightPanelDocked ? terminalWidth + RESIZE_HANDLE_WIDTH + LAYOUT_GAP * 2 : 0),
+    ),
+  );
+  const maxTerminalWidthForViewport = Math.max(
+    TERMINAL_MIN_WIDTH,
+    Math.min(
+      TERMINAL_MAX_WIDTH,
+      viewportWidth -
+        SHELL_GUTTER * 2 -
+        WORKSPACE_PADDING * 2 -
+        sidebarWidth -
+        RESIZE_HANDLE_WIDTH -
+        LAYOUT_GAP * 2 -
+        MIN_MAIN_CONTENT_WIDTH -
+        RESIZE_HANDLE_WIDTH -
+        LAYOUT_GAP * 2,
+    ),
+  );
 
   async function loadWorkspace() {
     setLoading(true);
@@ -237,7 +282,7 @@ export function App() {
     if (!sidebarResizing) return;
 
     function handlePointerMove(event: PointerEvent) {
-      const nextWidth = Math.min(Math.max(event.clientX - 16, SIDEBAR_MIN_WIDTH), SIDEBAR_MAX_WIDTH);
+      const nextWidth = Math.min(Math.max(event.clientX - SHELL_GUTTER, SIDEBAR_MIN_WIDTH), maxSidebarWidthForViewport);
       setSidebarWidth(nextWidth);
     }
 
@@ -254,13 +299,13 @@ export function App() {
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
     };
-  }, [sidebarResizing]);
+  }, [maxSidebarWidthForViewport, sidebarResizing]);
 
   useEffect(() => {
     if (!terminalResizing) return;
 
     function handlePointerMove(event: PointerEvent) {
-      const nextWidth = Math.min(Math.max(window.innerWidth - event.clientX - 16, TERMINAL_MIN_WIDTH), TERMINAL_MAX_WIDTH);
+      const nextWidth = Math.min(Math.max(window.innerWidth - event.clientX - SHELL_GUTTER, TERMINAL_MIN_WIDTH), maxTerminalWidthForViewport);
       setTerminalWidth(nextWidth);
     }
 
@@ -277,7 +322,26 @@ export function App() {
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
     };
-  }, [terminalResizing]);
+  }, [maxTerminalWidthForViewport, terminalResizing]);
+
+  useEffect(() => {
+    function handleResize() {
+      setViewportWidth(window.innerWidth);
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    setSidebarWidth((current) => Math.min(current, maxSidebarWidthForViewport));
+  }, [maxSidebarWidthForViewport]);
+
+  useEffect(() => {
+    setTerminalWidth((current) => Math.min(current, maxTerminalWidthForViewport));
+  }, [maxTerminalWidthForViewport]);
 
   useEffect(() => {
     if (!folderContextMenu) return;
@@ -453,7 +517,9 @@ export function App() {
     try {
       const result = await api.rebuildGraph();
       setRebuildAdvisor(result.advisor);
-      setNotice(`Rebuild finished. ${result.files} docs reindexed with ${result.embeddingModel} [${result.embeddingMode}].`);
+      setNotice(
+        `Rebuild finished. ${result.files} docs reindexed with ${result.embeddingModel} [${result.embeddingMode}]. New and edited docs are now reflected in the graph.`,
+      );
       await loadWorkspace();
       setReloadKey((value) => value + 1);
     } catch (nextError) {
@@ -464,98 +530,151 @@ export function App() {
   }
 
   return (
-    <main
-      className={sidebarResizing || terminalResizing ? "company-memory-workspace sidebar-resizing" : "company-memory-workspace"}
-      style={{ gridTemplateColumns: `${sidebarWidth}px 4px minmax(0, 1fr)` }}
-    >
-      <aside className="workspace-sidebar" style={{ width: `${sidebarWidth}px` }}>
-        <div className="brand-block">
-          <p className="eyebrow">PulseOS</p>
-          <h1>Company Memory</h1>
-          <p>Browse, map, read, and safely edit Markdown inside 000_Company_Memory.</p>
+    <div className="company-memory-app-shell">
+      <header className="app-shell-header">
+        <div className="app-shell-header-copy">
+          <p className="eyebrow">Company Memory</p>
+          <h1>Graph workspace</h1>
+          <p>Navigate the ontology, open Markdown documents, and refresh the local index from one focused view.</p>
         </div>
-
-        <LiteCard className="explorer-card">
-          <LiteCardHeader>
-            <LiteSectionHeader
-              eyebrow={sidebarTab === "explorer" ? "Explorer" : "Settings"}
-              title={sidebarTab === "explorer" ? "000_Company_Memory" : "Graph Maintenance"}
-              description={
-                sidebarTab === "explorer"
-                  ? "Only this folder is editable in the UI."
-                  : "Refresh the SQLite graph and retrieval layer from the local workspace."
-              }
-            />
-            <div className="sidebar-tabbar" role="tablist" aria-label="Sidebar sections">
-              <button
-                type="button"
-                className={sidebarTab === "explorer" ? "sidebar-tab active" : "sidebar-tab"}
-                onClick={() => setSidebarTab("explorer")}
-                role="tab"
-                aria-selected={sidebarTab === "explorer"}
+        <div className="app-shell-header-actions">
+          <div className="toolbar-actions">
+            {uiCapabilities?.features.rebuildAdvisor ? (
+              <LiteButton
+                onClick={() => void rebuildGraphNow()}
+                disabled={rebuilding || Boolean(compatibilityError)}
+                title="Rebuild the SQLite graph and retrieval index. Same refresh path as `cd cli && npm run index`."
+                aria-label="Rebuild graph and retrieval index"
               >
-                Explorer
-              </button>
-              <button
-                type="button"
-                className={sidebarTab === "settings" ? "sidebar-tab active" : "sidebar-tab"}
-                onClick={() => setSidebarTab("settings")}
-                role="tab"
-                aria-selected={sidebarTab === "settings"}
-              >
-                Settings
-              </button>
-            </div>
-          </LiteCardHeader>
-          <LiteCardBody>
-            {sidebarTab === "explorer" ? (
-              tree ? (
-                <TreeView
-                  node={tree}
-                  selectedPath={selectedDocumentPath}
-                  openFolderPaths={openFolderPaths}
-                  onSelect={selectDocument}
-                  onToggleFolder={toggleFolder}
-                  onExpandBranch={expandFolderBranch}
-                  onCollapseBranch={collapseFolderBranch}
-                  onContextMenu={openFolderMenu}
-                  contextMenuFolderPath={folderContextMenu?.folder.path ?? null}
-                />
-              ) : (
-                <p className="muted-copy">Loading folders...</p>
-              )
-            ) : (
-              <div className="sidebar-settings-stack">
-                <LiteButton onClick={() => void rebuildGraphNow()} disabled={rebuilding}>
-                  {rebuilding ? "Rebuilding..." : "Rebuild graph"}
-                </LiteButton>
-                <div className="sidebar-settings-meta">
-                  <span>
-                    Last indexed: {formatTimestamp(rebuildAdvisor?.lastIndexedAt ?? graphData?.generatedAt ?? null)}
-                  </span>
-                  <span>
-                    Status: {rebuildAdvisor?.needsRebuild ? "Refresh recommended" : "Up to date"}
-                  </span>
-                </div>
-                {rebuildAdvisor?.reasons?.[0] ? <p className="muted-copy sidebar-settings-note">{rebuildAdvisor.reasons[0]}</p> : null}
-              </div>
-            )}
-          </LiteCardBody>
-        </LiteCard>
-      </aside>
+                {rebuilding ? "Rebuilding..." : "Rebuild graph"}
+              </LiteButton>
+            ) : null}
+            <LiteButton variant="secondary" onClick={() => setDocumentPanelOpen((value) => !value)}>
+              {documentPanelOpen ? "Hide reader" : "View document"}
+            </LiteButton>
+            {uiCapabilities?.features.terminalPanel ? (
+              <LiteButton variant="secondary" onClick={() => setTerminalPanelOpen((value) => !value)}>
+                {terminalPanelOpen ? "Hide terminal" : "View terminal"}
+              </LiteButton>
+            ) : null}
+          </div>
+          <div className="app-shell-header-meta">
+            <span>Local UI</span>
+            <span>SQLite-backed</span>
+          </div>
+        </div>
+      </header>
 
-      <button
-        type="button"
-        className={sidebarResizing ? "sidebar-resize-handle active" : "sidebar-resize-handle"}
-        aria-label="Resize explorer sidebar"
-        onPointerDown={() => setSidebarResizing(true)}
-      />
-
-      <div
-        className={terminalPanelOpen ? "workspace-main-area terminal-open" : "workspace-main-area"}
-        style={terminalPanelOpen ? { gridTemplateColumns: `minmax(0, 1fr) 4px ${terminalWidth}px` } : undefined}
+      <main
+        className={sidebarResizing || terminalResizing ? "company-memory-workspace sidebar-resizing" : "company-memory-workspace"}
+        style={
+          viewportWidth >= 1180
+            ? { gridTemplateColumns: `${sidebarWidth}px ${RESIZE_HANDLE_WIDTH}px minmax(0, 1fr)` }
+            : undefined
+        }
       >
-        <section className="workspace-main">
+        <aside className="workspace-sidebar" style={viewportWidth >= 1180 ? { width: `${sidebarWidth}px` } : undefined}>
+          <div className="brand-block">
+            <p className="eyebrow">Editable scope</p>
+            <h2>000_Company_Memory</h2>
+            <p>Only Markdown in this folder can be opened, edited, and reindexed from the workspace.</p>
+          </div>
+
+          <LiteCard className="explorer-card">
+            <LiteCardHeader>
+              <LiteSectionHeader
+                eyebrow={sidebarTab === "explorer" ? "Explorer" : "Settings"}
+                title={sidebarTab === "explorer" ? "Folder explorer" : "Graph maintenance"}
+                description={
+                  sidebarTab === "explorer"
+                    ? "Browse the editable Markdown tree."
+                    : "Refresh the SQLite graph and retrieval layer from the local workspace."
+                }
+              />
+              <div className="sidebar-tabbar" role="tablist" aria-label="Sidebar sections">
+                <button
+                  type="button"
+                  className={sidebarTab === "explorer" ? "sidebar-tab active" : "sidebar-tab"}
+                  onClick={() => setSidebarTab("explorer")}
+                  role="tab"
+                  aria-selected={sidebarTab === "explorer"}
+                >
+                  Explorer
+                </button>
+                <button
+                  type="button"
+                  className={sidebarTab === "settings" ? "sidebar-tab active" : "sidebar-tab"}
+                  onClick={() => setSidebarTab("settings")}
+                  role="tab"
+                  aria-selected={sidebarTab === "settings"}
+                >
+                  Settings
+                </button>
+              </div>
+            </LiteCardHeader>
+            <LiteCardBody>
+              {sidebarTab === "explorer" ? (
+                tree ? (
+                  <TreeView
+                    node={tree}
+                    selectedPath={selectedDocumentPath}
+                    openFolderPaths={openFolderPaths}
+                    onSelect={selectDocument}
+                    onToggleFolder={toggleFolder}
+                    onExpandBranch={expandFolderBranch}
+                    onCollapseBranch={collapseFolderBranch}
+                    onContextMenu={openFolderMenu}
+                    contextMenuFolderPath={folderContextMenu?.folder.path ?? null}
+                  />
+                ) : (
+                  <p className="muted-copy">Loading folders...</p>
+                )
+              ) : (
+                <div className="sidebar-settings-stack">
+                  <LiteButton onClick={() => void rebuildGraphNow()} disabled={rebuilding || Boolean(compatibilityError)}>
+                    {rebuilding ? "Rebuilding..." : "Rebuild graph/index"}
+                  </LiteButton>
+                  <p className="muted-copy sidebar-settings-note">
+                    Run this after adding, creating, moving, renaming, or deleting Markdown files in <code>000_Company_Memory</code>. It
+                    refreshes the same SQLite graph and retrieval index as <code>cd cli && npm run index</code>.
+                  </p>
+                  <div className="sidebar-settings-meta">
+                    <span>
+                      Last indexed: {formatTimestamp(rebuildAdvisor?.lastIndexedAt ?? graphData?.generatedAt ?? null)}
+                    </span>
+                    <span>
+                      Status: {rebuildAdvisor?.needsRebuild ? "Refresh recommended" : "Up to date"}
+                    </span>
+                  </div>
+                  {rebuildAdvisor?.reasons?.[0] ? <p className="muted-copy sidebar-settings-note">{rebuildAdvisor.reasons[0]}</p> : null}
+                </div>
+              )}
+            </LiteCardBody>
+          </LiteCard>
+        </aside>
+
+        <button
+          type="button"
+          className={sidebarResizing ? "sidebar-resize-handle active" : "sidebar-resize-handle"}
+          aria-label="Resize explorer sidebar"
+          onPointerDown={() => setSidebarResizing(true)}
+        />
+
+        <div
+          className={
+            rightPanelDocked
+              ? "workspace-main-area side-dock-open"
+              : rightPanelOpen
+                ? "workspace-main-area side-dock-stacked"
+                : "workspace-main-area"
+          }
+          style={
+            rightPanelDocked
+              ? { gridTemplateColumns: `minmax(${MIN_MAIN_CONTENT_WIDTH}px, 1fr) ${RESIZE_HANDLE_WIDTH}px ${terminalWidth}px` }
+              : undefined
+          }
+        >
+          <section className="workspace-main">
           {compatibilityError ? (
             <LiteCard className="compatibility-card">
               <LiteCardHeader>
@@ -573,23 +692,6 @@ export function App() {
               </LiteCardBody>
             </LiteCard>
           ) : null}
-
-          <div className="workspace-toolbar">
-            <div className="workspace-toolbar-copy">
-              <p className="eyebrow">SQLite graph</p>
-              <h2>PulseOS graph workspace</h2>
-            </div>
-            <div className="toolbar-actions">
-              <LiteButton variant="secondary" onClick={() => setDocumentPanelOpen((value) => !value)}>
-                {documentPanelOpen ? "Hide reader" : "View document"}
-              </LiteButton>
-              {uiCapabilities?.features.terminalPanel ? (
-                <LiteButton variant="secondary" onClick={() => setTerminalPanelOpen((value) => !value)}>
-                  {terminalPanelOpen ? "Hide terminal" : "View terminal"}
-                </LiteButton>
-              ) : null}
-            </div>
-          </div>
 
           {error ? <div className="notice notice-error">{error}</div> : null}
           {graphSnapshotError ? (
@@ -644,9 +746,22 @@ export function App() {
                           Documents
                         </LiteButton>
                       </div>
+                      {uiCapabilities?.features.rebuildAdvisor ? (
+                        <LiteButton
+                          className="graph-tooltip-target"
+                          data-tooltip="Rebuild SQLite graph/index so new Markdown files appear"
+                          variant={rebuildAdvisor?.needsRebuild ? "primary" : "secondary"}
+                          onClick={() => void rebuildGraphNow()}
+                          disabled={rebuilding}
+                          title="Rebuild graph/index"
+                          aria-label="Rebuild graph and retrieval index"
+                        >
+                          {rebuilding ? "Rebuilding..." : "Rebuild index"}
+                        </LiteButton>
+                      ) : null}
                       <LiteButton
                         className="graph-tooltip-target"
-                        data-tooltip="Refresh graph data from the local daemon"
+                        data-tooltip="Refresh graph data already stored in SQLite"
                         variant="ghost"
                         onClick={() => void loadWorkspace()}
                         title="Refresh graph data"
@@ -670,27 +785,171 @@ export function App() {
               </GraphErrorBoundary>
             )}
           </div>
-        </section>
+          </section>
 
-        {uiCapabilities?.features.terminalPanel ? (
-          <>
-            {terminalPanelOpen ? (
-              <button
-                type="button"
-                className={terminalResizing ? "terminal-resize-handle active" : "terminal-resize-handle"}
-                aria-label="Resize terminal sidebar"
-                onPointerDown={() => setTerminalResizing(true)}
-              />
-            ) : null}
-            <TerminalPanel
-              open={terminalPanelOpen}
-              onClose={() => {
-                setTerminalPanelOpen(false);
-              }}
-            />
-          </>
-        ) : null}
-      </div>
+          {rightPanelOpen ? (
+            <>
+              {rightPanelDocked ? (
+                <button
+                  type="button"
+                  className={terminalResizing ? "terminal-resize-handle active" : "terminal-resize-handle"}
+                  aria-label="Resize right sidebar"
+                  onPointerDown={() => setTerminalResizing(true)}
+                />
+              ) : null}
+              <aside
+                className={[
+                  "workspace-side-dock",
+                  documentPanelOpen ? "document-open" : "",
+                  terminalPanelOpen ? "terminal-open" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                <section
+                  className={documentPanelOpen ? `document-panel open${documentPanelExpanded ? " expanded" : ""}` : "document-panel"}
+                  aria-hidden={!documentPanelOpen}
+                >
+                  <LiteCard className="document-card">
+                    <LiteCardHeader>
+                      <LiteSectionHeader
+                        eyebrow="Reader + editor"
+                        title={selectedTreeNode?.name ?? selectedNode?.label ?? "Select a document"}
+                        description={selectedDocumentPath ?? "Click a Markdown file in the explorer or a document node in the graph."}
+                        actions={
+                          <div className="document-panel-actions">
+                            {dirty ? <LiteBadge tone="warning">Unsaved</LiteBadge> : null}
+                            {dirty ? (
+                              <LiteButton onClick={() => void saveAndCloseDocument()} disabled={saving}>
+                                {saving ? "Saving..." : "Save + close"}
+                              </LiteButton>
+                            ) : null}
+                            <LiteButton variant="secondary" onClick={() => setDocumentPanelExpanded((current) => !current)}>
+                              {documentPanelExpanded ? "Compact" : "Focus"}
+                            </LiteButton>
+                            <LiteButton variant="ghost" onClick={attemptCloseDocumentPanel}>
+                              Close
+                            </LiteButton>
+                          </div>
+                        }
+                      />
+                    </LiteCardHeader>
+                    <LiteCardBody>
+                      {document ? (
+                        <div className="editor-stack">
+                          <section className="document-meta-panel">
+                            <div className="document-meta-header">
+                              <div>
+                                <p className="lite-graph-legend-label">Document context</p>
+                                <p className="muted-copy">Tags, relationships, and indexed metadata for this file.</p>
+                              </div>
+                              <LiteButton variant="secondary" onClick={() => setDocumentMetaOpen((current) => !current)}>
+                                {documentMetaOpen ? "Hide details" : "Show details"}
+                              </LiteButton>
+                            </div>
+
+                            {documentMetaOpen ? (
+                              <div className="document-meta-grid">
+                                <section className="document-meta-section">
+                                  <p className="lite-graph-legend-label">Tags</p>
+                                  <div className="document-meta-chips">
+                                    {documentTags.length ? (
+                                      documentTags.map((tag) => (
+                                        <span key={tag} className="document-meta-chip">
+                                          {tag}
+                                        </span>
+                                      ))
+                                    ) : (
+                                      <span className="muted-copy">No frontmatter tags found.</span>
+                                    )}
+                                  </div>
+                                </section>
+
+                                <section className="document-meta-section">
+                                  <p className="lite-graph-legend-label">Relationships</p>
+                                  <div className="document-meta-list">
+                                    {relatedDocuments.length ? (
+                                      relatedDocuments.map((node) => (
+                                        <button
+                                          key={node.id}
+                                          type="button"
+                                          className="document-meta-link"
+                                          onClick={() => selectDocument(node.path)}
+                                        >
+                                          {node.label}
+                                        </button>
+                                      ))
+                                    ) : (
+                                      <span className="muted-copy">No direct document references were found in the graph.</span>
+                                    )}
+                                  </div>
+                                </section>
+
+                                <section className="document-meta-section">
+                                  <p className="lite-graph-legend-label">Metadata</p>
+                                  <dl className="document-meta-table">
+                                    <div>
+                                      <dt>Path</dt>
+                                      <dd>{document.path}</dd>
+                                    </div>
+                                    <div>
+                                      <dt>Updated</dt>
+                                      <dd>{new Date(document.updatedAt).toLocaleString()}</dd>
+                                    </div>
+                                    <div>
+                                      <dt>Ontology</dt>
+                                      <dd>{selectedApiNode?.ontologyDomain ?? "Not set"}</dd>
+                                    </div>
+                                    <div>
+                                      <dt>Status</dt>
+                                      <dd>{selectedApiNode?.status ?? "Not set"}</dd>
+                                    </div>
+                                    <div>
+                                      <dt>Owner</dt>
+                                      <dd>{selectedApiNode?.ownerAgent ?? "Not set"}</dd>
+                                    </div>
+                                    <div>
+                                      <dt>Summary</dt>
+                                      <dd>{selectedApiNode?.summary ?? "No summary indexed yet."}</dd>
+                                    </div>
+                                  </dl>
+                                </section>
+                              </div>
+                            ) : null}
+                          </section>
+
+                          <div className="editor-actions">
+                            <LiteButton onClick={() => void saveDocument()} disabled={!dirty || saving}>
+                              {saving ? "Saving..." : "Save"}
+                            </LiteButton>
+                            <LiteButton variant="secondary" onClick={() => setDraft(document.content)} disabled={!dirty || saving}>
+                              Revert
+                            </LiteButton>
+                          </div>
+                          <textarea value={draft} onChange={(event) => setDraft(event.target.value)} spellCheck={false} />
+                        </div>
+                      ) : (
+                        <LiteEmptyState
+                          title="No document selected"
+                          detail="The editor only reads and saves Markdown files inside 000_Company_Memory."
+                        />
+                      )}
+                    </LiteCardBody>
+                  </LiteCard>
+                </section>
+
+                {uiCapabilities?.features.terminalPanel ? (
+                  <TerminalPanel
+                    open={terminalPanelOpen}
+                    onClose={() => {
+                      setTerminalPanelOpen(false);
+                    }}
+                  />
+                ) : null}
+              </aside>
+            </>
+          ) : null}
+        </div>
 
       {folderContextMenu ? (
         <div
@@ -742,153 +1001,8 @@ export function App() {
         </div>
       ) : null}
 
-      {documentPanelOpen ? (
-        <button
-          type="button"
-          className="document-panel-backdrop"
-          aria-label="Close document panel"
-          onClick={attemptCloseDocumentPanel}
-          style={terminalReservedWidth > 0 ? { right: `${terminalReservedWidth}px` } : undefined}
-        />
-      ) : null}
-
-      <aside
-        className={documentPanelOpen ? `document-panel open${documentPanelExpanded ? " expanded" : ""}` : "document-panel"}
-        aria-hidden={!documentPanelOpen}
-        style={terminalReservedWidth > 0 ? { right: `${terminalReservedWidth}px` } : undefined}
-      >
-        <LiteCard className="document-card">
-          <LiteCardHeader>
-            <LiteSectionHeader
-              eyebrow="Reader + editor"
-              title={selectedTreeNode?.name ?? selectedNode?.label ?? "Select a document"}
-              description={selectedDocumentPath ?? "Click a Markdown file in the explorer or a document node in the graph."}
-              actions={
-                <div className="document-panel-actions">
-                  {dirty ? <LiteBadge tone="warning">Unsaved</LiteBadge> : null}
-                  {dirty ? (
-                    <LiteButton onClick={() => void saveAndCloseDocument()} disabled={saving}>
-                      {saving ? "Saving..." : "Save + close"}
-                    </LiteButton>
-                  ) : null}
-                  <LiteButton variant="secondary" onClick={() => setDocumentPanelExpanded((current) => !current)}>
-                    {documentPanelExpanded ? "Windowed" : "Expand"}
-                  </LiteButton>
-                  <LiteButton
-                    variant="ghost"
-                    onClick={attemptCloseDocumentPanel}
-                  >
-                    Close
-                  </LiteButton>
-                </div>
-              }
-            />
-          </LiteCardHeader>
-          <LiteCardBody>
-            {document ? (
-              <div className="editor-stack">
-                <section className="document-meta-panel">
-                  <div className="document-meta-header">
-                    <div>
-                      <p className="lite-graph-legend-label">Document context</p>
-                      <p className="muted-copy">Tags, relationships, and indexed metadata for this file.</p>
-                    </div>
-                    <LiteButton variant="secondary" onClick={() => setDocumentMetaOpen((current) => !current)}>
-                      {documentMetaOpen ? "Hide details" : "Show details"}
-                    </LiteButton>
-                  </div>
-
-                  {documentMetaOpen ? (
-                    <div className="document-meta-grid">
-                      <section className="document-meta-section">
-                        <p className="lite-graph-legend-label">Tags</p>
-                        <div className="document-meta-chips">
-                          {documentTags.length ? (
-                            documentTags.map((tag) => (
-                              <span key={tag} className="document-meta-chip">
-                                {tag}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="muted-copy">No frontmatter tags found.</span>
-                          )}
-                        </div>
-                      </section>
-
-                      <section className="document-meta-section">
-                        <p className="lite-graph-legend-label">Relationships</p>
-                        <div className="document-meta-list">
-                          {relatedDocuments.length ? (
-                            relatedDocuments.map((node) => (
-                              <button
-                                key={node.id}
-                                type="button"
-                                className="document-meta-link"
-                                onClick={() => selectDocument(node.path)}
-                              >
-                                {node.label}
-                              </button>
-                            ))
-                          ) : (
-                            <span className="muted-copy">No direct document references were found in the graph.</span>
-                          )}
-                        </div>
-                      </section>
-
-                      <section className="document-meta-section">
-                        <p className="lite-graph-legend-label">Metadata</p>
-                        <dl className="document-meta-table">
-                          <div>
-                            <dt>Path</dt>
-                            <dd>{document.path}</dd>
-                          </div>
-                          <div>
-                            <dt>Updated</dt>
-                            <dd>{new Date(document.updatedAt).toLocaleString()}</dd>
-                          </div>
-                          <div>
-                            <dt>Ontology</dt>
-                            <dd>{selectedApiNode?.ontologyDomain ?? "Not set"}</dd>
-                          </div>
-                          <div>
-                            <dt>Status</dt>
-                            <dd>{selectedApiNode?.status ?? "Not set"}</dd>
-                          </div>
-                          <div>
-                            <dt>Owner</dt>
-                            <dd>{selectedApiNode?.ownerAgent ?? "Not set"}</dd>
-                          </div>
-                          <div>
-                            <dt>Summary</dt>
-                            <dd>{selectedApiNode?.summary ?? "No summary indexed yet."}</dd>
-                          </div>
-                        </dl>
-                      </section>
-                    </div>
-                  ) : null}
-                </section>
-
-                <div className="editor-actions">
-                  <LiteButton onClick={() => void saveDocument()} disabled={!dirty || saving}>
-                    {saving ? "Saving..." : "Save"}
-                  </LiteButton>
-                  <LiteButton variant="secondary" onClick={() => setDraft(document.content)} disabled={!dirty || saving}>
-                    Revert
-                  </LiteButton>
-                </div>
-                <textarea value={draft} onChange={(event) => setDraft(event.target.value)} spellCheck={false} />
-              </div>
-            ) : (
-              <LiteEmptyState
-                title="No document selected"
-                detail="The editor only reads and saves Markdown files inside 000_Company_Memory."
-              />
-            )}
-          </LiteCardBody>
-        </LiteCard>
-      </aside>
-
-    </main>
+      </main>
+    </div>
   );
 }
 

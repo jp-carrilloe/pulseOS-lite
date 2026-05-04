@@ -1,10 +1,15 @@
-# PulseOS Lite Open Source — The Strategic Growth Engine
+# PulseOS Lite Open Source — The OS for 
 
 > "Complexity is the enemy of execution. Strategy is the art of focusing on the right things."
 
-This is the strategic hub for **PulseOS Lite Open Source**. It is not a folder of documents; it is an **AI-driven growth organism** designed to turn your preferred coding agent into a high-performance executive team.
+This is the strategic hub for **PulseOS Lite Open Source**. PulseOS Lite is a lightweight approach of PulseOS to provide a company memory and operational system for the agentic workflow, agentic workforce, and AI-native companies.
 
 **Built for builders who value strategic clarity and 100x execution velocity.**
+
+---
+
+## 🤝 Attribution
+Part of this repository's architecture and 100x efficiency philosophy are inspired by the [gstack](https://github.com/garrytan/gstack) methodology by Garry Tan. We acknowledge and appreciate the open-source concepts of "Boil the Lake" and the dual-layer agent framework which serve as the foundation of this engine's execution logic.
 
 ---
 
@@ -73,11 +78,26 @@ Bootstrap now asks only for the company name, but only after it has confirmed th
 In simple terms:
 - `bootstrap` seeds the documents
 - `chat` or daemon startup uses the existing SQL index
-- `npm run index` or the graph `Rebuild graph` action refreshes indexing and vectorization manually
+- `npm run index` or the graph `Rebuild graph/index` action refreshes indexing and vectorization manually
+- when you add, create, move, rename, or delete Markdown documents in `000_Company_Memory` outside the graph editor, rebuild before relying on the graph; a browser refresh only reloads the current SQL-backed snapshot
 
 Important relationship note:
 - the `Document Relationships` graph is backed by the local SQL index, not by direct client-side Markdown parsing at render time
-- if document nodes appear without relationship edges, use the graph `Settings` tab and run `Rebuild graph`, or run `cd cli && npm run index`
+- if document nodes appear without relationship edges, use the graph `Settings` tab and run `Rebuild graph/index`, or run `cd cli && npm run index`
+- if newly added documents do not appear yet, run the graph UI `Rebuild index` / `Rebuild graph/index` button, `cd cli && npm run index`, or `/reload` inside chat so the SQLite graph, document summaries, and retrieval vectors are current
+
+### Graph Rebuild Rule
+
+The graph UI is backed by the local SQLite index. It does not parse the Markdown tree directly each time the browser refreshes.
+
+Run a rebuild after any file-level Markdown change in `000_Company_Memory`: adding a new document, creating one through an agent, moving or renaming files, or deleting files. Use one of:
+
+```bash
+cd cli
+npm run index
+```
+
+or use `/reload` inside chat, or click `Rebuild index` / `Rebuild graph/index` in the graph UI. Until that rebuild runs, the graph may show the previous indexed snapshot.
 
 The bootstrap engine now auto-detects your available model provider and prefers `OPENAI_API_KEY` first, then Anthropic, then Gemini.
 
@@ -134,7 +154,7 @@ Commands:
 - `npm run graph`
   starts the daemon and prints a private local browser URL for the interactive two-mode ontology/document graph UI
 - `npm run index`
-  manually creates the SQLite database, creates the SQL tables if needed, and runs indexing/vectorization without starting chat
+  manually creates or refreshes the SQLite database, SQL tables, document relationships, summaries, and vectors; run this after new Markdown documents are added outside the graph editor
 - `npm run status`
   checks bootstrap status, intake readiness, daemon state, SQL table creation, and the latest indexing/vectorization status
 - `npm run daemon:start`
@@ -234,12 +254,37 @@ To prevent prompt-bloat, the system inherently supports separating actionable kn
 
 ---
 
-## 🤝 Attribution
-Part of this repository's architecture and 100x efficiency philosophy are inspired by the [gstack](https://github.com/garrytan/gstack) methodology by Garry Tan. We acknowledge and appreciate the open-source concepts of "Boil the Lake" and the dual-layer agent framework which serve as the foundation of this engine's execution logic.
+## Building Toward PulseOS
+
+**PulseOS Lite is the simplest version of the broader PulseOS platform we are building.**
+
+PulseOS is designed for enterprise-level agentic workflows: a memory and runtime layer where AI systems can reason over structured company context, execute safely, and improve across teams without becoming locked to one model provider.
+
+The long-term goal is to make PulseOS an open standard for agentic memory and the enterprise infrastructure around:
+- the intelligence graph
+- the company memory graph
+- the reality graph
+- managed safe runtime environments
+- sandboxed execution for agents and tools
+- model-agnostic inference optimization at scale
+
+We are a small team backed by investors and currently building the platform. The work sits at the intersection of agent infrastructure, knowledge graphs, secure runtimes, memory systems, and inference optimization.
 
 ---
 
 ## License
 MIT — Fork it, build it, ship it.
 
-*Powered by PulseOS Lite Open Source — Built by JP Carrillo for Operational Clarity at Scale.*
+*Powered by PulseOS Lite Open Source — Built by JP Carrillo for Strategic Clarity at Scale.*
+
+---
+
+## Join PulseOS
+
+We are looking for technical talent to help build the open standard for agentic memory and enterprise-grade AI infrastructure.
+
+If you are excited by company memory graphs, safe agent runtimes, model-agnostic systems, or inference optimization, we would love to hear from you.
+
+Website: [pulse.tintto.com](https://pulse.tintto.com)
+
+**contact@tintto.com**

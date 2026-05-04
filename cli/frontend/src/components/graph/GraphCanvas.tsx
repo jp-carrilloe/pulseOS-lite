@@ -667,8 +667,8 @@ export function GraphCanvas({
     <div className={mode === "compact" ? "lite-graph-canvas lite-graph-canvas-compact" : "lite-graph-canvas"} data-testid="graph-canvas-shell">
       {mode === "full" ? (
         <LiteGraphControls
-          title="Graph Explorer"
-          subtitle="Use the explorer and graph tools to inspect the company memory."
+          title="Memory map"
+          subtitle="Switch views, inspect node counts, and use the graph controls below."
           headerBadges={headerBadges}
           toolbarControls={toolbarControls}
           entityTypes={legendEntityTypes}

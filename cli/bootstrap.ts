@@ -18,7 +18,15 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { buildBootstrapEvidenceBlock, collectBootstrapIntake } from "./bootstrap-intake.js";
-import { loadRepoEnv, writeBootstrapState } from "./shared.js";
+import { KnowledgeBaseIndex } from "./retrieval.js";
+import {
+  fetchDaemonJson,
+  getCliDbPath,
+  loadRepoEnv,
+  probeDaemonHealth,
+  readDaemonState,
+  writeBootstrapState,
+} from "./shared.js";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TODAY = new Date().toISOString().split("T")[0];
@@ -90,6 +98,15 @@ interface GeneratedDoc {
   content: string;
 }
 
+interface BootstrapIndexRefreshResult {
+  fileCount: number;
+  charCount: number;
+  indexedAt: string;
+  embeddingModel: string;
+  embeddingMode: string;
+  refreshedViaDaemon: boolean;
+}
+
 interface BootstrapProvider {
   name: "openai" | "anthropic" | "gemini";
   model: string;
@@ -158,7 +175,7 @@ async function runIntake(rl: ReturnType<typeof createInterface>): Promise<Bootst
   process.stdout.write("\n" + "─".repeat(60) + "\n");
   process.stdout.write("Bootstrap Onboarding\n");
   process.stdout.write(
-    "Bootstrap now reads from 001_Data_Souces and uses those source materials to fill the repo.\nOnly the company name is required here; the rest is inferred from your intake documents.\n",
+    "Bootstrap now reads from 001_Data_Souces and existing 000_Company_Memory docs to fill the repo.\nOnly the company name is required here; the rest is inferred from your intake documents and curated memory.\n",
   );
   process.stdout.write("─".repeat(60) + "\n\n");
 
@@ -211,7 +228,8 @@ ${accumulatedContext}
 
 Rules:
 - Replace ALL occurrences of [CLIENT_NAME] and [COMPANY_NAME] with "${profile.name}"
-- Ground the document in the supplied intake evidence first. Use assumptions only when the evidence is incomplete.
+- Ground the document in the supplied evidence first. Use curated Company Memory evidence as the current source of truth when it conflicts with raw intake materials; use raw data sources to fill gaps and add detail.
+- Use assumptions only when curated memory and raw intake evidence are incomplete.
 - When making an assumption, state it explicitly in natural language as an inference from available intake materials.
 - Replace ALL [INSERT_*] and [INSERT — *] placeholders with specific, relevant content
 - When cross-referencing other documents (e.g. ICP, service portfolio, GTM), use the actual content from the previously generated documents above — not generic placeholders
@@ -240,6 +258,7 @@ async function main() {
   let bootstrapTemplateFiles = 0;
   let bootstrapLocalSourceCount = 0;
   let bootstrapExternalSourceCount = 0;
+  let bootstrapCompanyMemorySourceCount = 0;
   let bootstrapWarningsCount = 0;
 
   try {
@@ -247,7 +266,7 @@ async function main() {
       "\npulseos-lite-open-source-cli bootstrap — Seed your PulseOS Lite Open Source repo with real content\n",
     );
     process.stdout.write(
-      "Bootstrap seeds documents in dependency order. It reads source material from 001_Data_Souces and keeps the originals in place.\n",
+      "Bootstrap seeds documents in dependency order. It reads raw source material from 001_Data_Souces and checks existing curated docs in 000_Company_Memory.\n",
     );
 
     // Discover and sort template files
@@ -267,11 +286,11 @@ async function main() {
     }
 
     process.stdout.write(
-      "\nReviewing source material in `001_Data_Souces/Data_Souces_Folder` and `001_Data_Souces/Data_Sources_References` before bootstrap starts...\n",
+      "\nReviewing source material in `001_Data_Souces/Data_Souces_Folder`, `001_Data_Souces/Data_Sources_References`, and existing curated docs in `000_Company_Memory` before bootstrap starts...\n",
     );
     const intakeReport = await collectBootstrapIntake(REPO_ROOT, "");
-    const totalIntakeFiles = intakeReport.localSources.length + intakeReport.externalSources.length;
-    if (totalIntakeFiles === 0) {
+    const totalRawIntakeFiles = intakeReport.localSources.length + intakeReport.externalSources.length;
+    if (totalRawIntakeFiles === 0) {
       process.stderr.write(
         "\nBootstrap could not find any usable intake material.\nAdd source files to `001_Data_Souces/Data_Souces_Folder` or add valid reference notes in `001_Data_Souces/Data_Sources_References`, then run `npm run bootstrap` again.\n",
       );
@@ -279,7 +298,7 @@ async function main() {
     }
 
     process.stdout.write(
-      `Found ${intakeReport.localSources.length} local intake files and ${intakeReport.externalSources.length} external reference files.\n`,
+      `Found ${intakeReport.localSources.length} local intake files, ${intakeReport.externalSources.length} external reference files, and ${intakeReport.companyMemorySources.length} existing Company Memory docs to use as curated context.\n`,
     );
     if (intakeReport.warnings.length > 0) {
       process.stdout.write("Bootstrap found a few intake warnings:\n");
@@ -319,6 +338,7 @@ async function main() {
     bootstrapTemplateFiles = templateFiles.length;
     bootstrapLocalSourceCount = intakeReport.localSources.length;
     bootstrapExternalSourceCount = intakeReport.externalSources.length;
+    bootstrapCompanyMemorySourceCount = intakeReport.companyMemorySources.length;
     bootstrapWarningsCount = intakeReport.warnings.length;
 
     await writeBootstrapState(
@@ -332,6 +352,9 @@ async function main() {
         failed: 0,
         localSourceCount: intakeReport.localSources.length,
         externalSourceCount: intakeReport.externalSources.length,
+        companyMemorySourceCount: intakeReport.companyMemorySources.length,
+        indexedDocumentCount: 0,
+        indexedAt: null,
         warningsCount: intakeReport.warnings.length,
         error: null,
       },
@@ -345,7 +368,7 @@ async function main() {
       `Ready to generate ${templateFiles.length} documents for: ${profile.name}\n`,
     );
     process.stdout.write(
-      "Each doc will be grounded in intake evidence first, then in previously generated docs.\n",
+      "Each doc will be grounded in curated Company Memory, raw intake evidence, and previously generated docs.\n",
     );
     const confirm = await rl.question("Start generation? [Y/n] ");
     if (confirm.trim().toLowerCase() === "n") {
@@ -389,6 +412,19 @@ async function main() {
     process.stdout.write(`Bootstrap complete.\n`);
     process.stdout.write(`  Filled:  ${succeeded} files\n`);
     if (failed > 0) process.stdout.write(`  Failed:  ${failed} files (originals preserved)\n`);
+
+    process.stdout.write("\nRefreshing Company Memory graph/index from `000_Company_Memory`...\n");
+    const indexRefresh = await refreshCompanyMemoryIndex(process.env);
+    process.stdout.write(
+      `  Indexed: ${indexRefresh.fileCount} Company Memory docs (${indexRefresh.charCount.toLocaleString()} chars)\n`,
+    );
+    process.stdout.write(
+      `  Embeddings: ${indexRefresh.embeddingModel} [${indexRefresh.embeddingMode}]\n`,
+    );
+    if (indexRefresh.refreshedViaDaemon) {
+      process.stdout.write("  Daemon graph cache: refreshed\n");
+    }
+
     await writeBootstrapState(
       {
         status: failed > 0 ? "failed" : "completed",
@@ -400,13 +436,16 @@ async function main() {
         failed,
         localSourceCount: intakeReport.localSources.length,
         externalSourceCount: intakeReport.externalSources.length,
+        companyMemorySourceCount: intakeReport.companyMemorySources.length,
+        indexedDocumentCount: indexRefresh.fileCount,
+        indexedAt: indexRefresh.indexedAt,
         warningsCount: intakeReport.warnings.length,
         error: failed > 0 ? `${failed} template files failed during bootstrap.` : null,
       },
       process.env,
     );
     process.stdout.write(
-      `\nNext steps:\n  1. Review a few docs to sanity-check quality\n  2. Run 'npm run chat' to create the SQL index, run vectorization, and interact with your seeded repo\n  3. Re-run 'npm run bootstrap' anytime to reseed unfilled docs\n`,
+      `\nNext steps:\n  1. Review a few docs to sanity-check quality\n  2. Run 'npm run chat' to interact with the refreshed Company Memory index\n  3. Run 'npm run graph' to inspect the graph backed by 000_Company_Memory docs\n`,
     );
   } catch (error) {
     if (bootstrapStateWritten) {
@@ -421,6 +460,9 @@ async function main() {
           failed: 0,
           localSourceCount: bootstrapLocalSourceCount,
           externalSourceCount: bootstrapExternalSourceCount,
+          companyMemorySourceCount: bootstrapCompanyMemorySourceCount,
+          indexedDocumentCount: 0,
+          indexedAt: null,
           warningsCount: bootstrapWarningsCount,
           error: error instanceof Error ? error.message : String(error),
         },
@@ -430,6 +472,49 @@ async function main() {
     throw error;
   } finally {
     rl.close();
+  }
+}
+
+async function refreshCompanyMemoryIndex(env: NodeJS.ProcessEnv): Promise<BootstrapIndexRefreshResult> {
+  const daemonState = await readDaemonState(env);
+  if (daemonState && (await probeDaemonHealth(daemonState.port, daemonState.token))) {
+    const result = await fetchDaemonJson<{
+      files: number;
+      charCount: number;
+      indexedAt: string;
+      embeddingModel: string;
+      embeddingMode: string;
+    }>(daemonState, "/command", {
+      method: "POST",
+      body: JSON.stringify({ name: "reload_repo", args: {} }),
+    });
+    return {
+      fileCount: result.files,
+      charCount: result.charCount,
+      indexedAt: result.indexedAt,
+      embeddingModel: result.embeddingModel,
+      embeddingMode: result.embeddingMode,
+      refreshedViaDaemon: true,
+    };
+  }
+
+  const index = new KnowledgeBaseIndex({
+    repoRoot: REPO_ROOT,
+    dbPath: getCliDbPath(env),
+    env,
+  });
+  try {
+    const result = await index.sync();
+    return {
+      fileCount: result.fileCount,
+      charCount: result.charCount,
+      indexedAt: result.indexedAt,
+      embeddingModel: result.embeddingModel,
+      embeddingMode: result.embeddingMode,
+      refreshedViaDaemon: false,
+    };
+  } finally {
+    index.close();
   }
 }
 
