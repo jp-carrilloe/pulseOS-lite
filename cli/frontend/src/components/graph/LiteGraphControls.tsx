@@ -32,7 +32,7 @@ export function LiteGraphControls({
     <div className="lite-graph-controls" data-testid="lite-graph-controls">
       <div className="lite-graph-controls-head">
         <div className="lite-graph-controls-copy">
-          <p className="lite-graph-controls-eyebrow">Graph workspace</p>
+          <p className="lite-graph-controls-eyebrow">Map controls</p>
           <div className="lite-graph-controls-title-row">
             <h3>{title}</h3>
             <LiteBadge tone="accent">{READ_LAYER_LABELS[readLayer] ?? readLayer}</LiteBadge>

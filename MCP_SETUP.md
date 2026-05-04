@@ -15,18 +15,33 @@ For Claude Code running in your terminal, configure it to launch the local MCP s
 
 ```bash
 cd cli
-npm run mcp
+node --import tsx/esm mcp-server.ts
 ```
 
-If your MCP client expects a command-based server definition, point it at the repo-local CLI process rather than a private helper file:
+Do not use `npm run mcp` as the MCP command in clients that rely on `stdio`. `npm` prints extra banner lines before the protocol stream, which can break MCP handshakes.
+
+If your MCP client reliably honors `cwd`, you can point it at the repo-local CLI process directly:
 
 ```json
 {
   "mcpServers": {
     "pulseos-lite-mcp": {
-      "command": "npm",
-      "args": ["run", "mcp"],
+      "command": "node",
+      "args": ["--import", "tsx/esm", "mcp-server.ts"],
       "cwd": "/absolute/path/to/Company Ops - Template/cli"
+    }
+  }
+}
+```
+
+If your MCP client ignores `cwd`, launches from `/`, or shows `Cannot find package 'tsx' imported from /`, use the repo wrapper script instead. It resolves the local `tsx` loader by absolute path before starting the server:
+
+```json
+{
+  "mcpServers": {
+    "pulseos-lite-mcp": {
+      "command": "/bin/zsh",
+      "args": ["/absolute/path/to/Company Ops - Template/.codex/company-ops-mcp-launch.sh"]
     }
   }
 }
@@ -41,7 +56,6 @@ To connect the Claude Desktop app to the PulseOS Lite MCP server:
 1. Open your Claude Desktop configuration file.
    - **Mac**: `~/Library/Application Support/Claude/claude_desktop_config.json`
    - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-2. Add an `mcpServers` section (or update your existing one) with the absolute path to the launch script.
 2. Add an `mcpServers` section (or update your existing one) that starts the repo-local MCP server from `cli/`.
 
 **Example `claude_desktop_config.json`:**
@@ -49,9 +63,8 @@ To connect the Claude Desktop app to the PulseOS Lite MCP server:
 {
   "mcpServers": {
     "pulseos-lite-mcp": {
-      "command": "npm",
-      "args": ["run", "mcp"],
-      "cwd": "/Users/jp/DevProjects/Company Ops - Template/cli"
+      "command": "/bin/zsh",
+      "args": ["/absolute/path/to/Company Ops - Template/.codex/company-ops-mcp-launch.sh"]
     }
   }
 }
@@ -71,9 +84,9 @@ If you are using Cursor, Cline, or another VS Code-based MCP client to interact 
 2. Configure the server:
    - **Name**: `pulseos-lite-mcp`
    - **Type**: `command`
-   - **Command**: `npm`
-   - **Args**: `run mcp`
-   - **Working directory**: `/Users/jp/DevProjects/Company Ops - Template/cli`
+   - **Command**: `/bin/zsh`
+   - **Args**: `/absolute/path/to/Company Ops - Template/.codex/company-ops-mcp-launch.sh`
+   - **Working directory**: leave blank unless your MCP client requires one
 3. Click **Save** and verify the connection is green (active).
 4. The MCP tools (e.g., `retrieve_context`, `repo_status`) will now be available when using the agent or Cursor Composer.
 
@@ -92,11 +105,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 const transport = new StdioClientTransport({
-  command: "npm",
-  args: ["run", "mcp"],
-  options: {
-    cwd: "/Users/jp/DevProjects/Company Ops - Template/cli" 
-  }
+  command: "/bin/zsh",
+  args: ["/absolute/path/to/Company Ops - Template/.codex/company-ops-mcp-launch.sh"]
 });
 
 const client = new Client({ name: "gemini-workflow-client", version: "1.0.0" }, { capabilities: {} });
@@ -112,5 +122,6 @@ const response = await client.callTool({
 
 ## Troubleshooting
 - **No Tools Showing Up**: Ensure CLI dependencies are installed (`cd cli && npm install`).
-- **Paths**: If you move the repo, update the MCP client working directory so it still points to `.../cli`.
-- **Graph Relationships Missing**: The MCP retrieval layer depends on the same SQLite index as the graph UI. If document links seem missing, run `cd cli && npm run index` or use the graph UI `Settings` tab and rebuild the graph.
+- **`Cannot find package 'tsx' imported from /`**: Your MCP client started the server from the wrong directory or ignored `cwd`. Switch that client to the wrapper script shown above.
+- **Paths**: If you move the repo, update the MCP client config so the wrapper script or `cwd` still points to this repo.
+- **Graph Relationships Missing or New Docs Not Showing**: The MCP retrieval layer depends on the same SQLite index as the graph UI. If document links seem missing, or if newly added Markdown files in `000_Company_Memory` do not appear, run `cd cli && npm run index`, use `/reload` inside chat, or click `Rebuild index` / `Rebuild graph/index` in the graph UI. A browser refresh only reloads the last indexed SQLite snapshot.

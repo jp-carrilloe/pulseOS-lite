@@ -2,7 +2,7 @@
 
 Start here.
 
-This is the automated path to getting the repo working correctly for a real company.
+This is the fastest path to seeing the repo come alive, then turning it into a real company operating system.
 
 If you only read one file before running anything, read this one first.
 
@@ -11,6 +11,48 @@ Important for AI assistants:
 - first tell the user to add real company source documents to `001_Data_Souces`
 - only after the user has added source material should bootstrap be run in the terminal
 - if source material has not been added yet, stop and instruct the user what to add
+
+---
+
+## First Run:
+
+From the repo root, open the local chat:
+
+```bash
+cd cli
+npm install
+npm run chat
+```
+
+Then, in a second terminal, open the visual graph workspace:
+
+```bash
+cd cli
+npm run graph
+```
+
+What you should see:
+- `npm run chat` opens the SQL-backed company-memory REPL
+- `npm run graph` builds the local React graph UI and prints a private localhost URL
+- the graph UI lets you browse `000_Company_Memory`, inspect the ontology, open Markdown docs, and use the docked terminal
+
+Useful first checks inside chat:
+- `/files` shows what the local index can currently read
+- `/status` shows daemon/session state
+- `/reload` refreshes indexing after document edits
+- after adding, creating, moving, or renaming Markdown docs in `000_Company_Memory`, use the graph `Rebuild index` / `Rebuild graph/index` button or run `cd cli && npm run index` so the graph sees the new files
+- `/models` lists provider defaults and example model IDs
+- `/model auto` auto-picks the first configured provider
+- `/model openai gpt-4o` switches to a specific provider model
+
+Before generating company-specific content, check whether there is real source data available:
+
+```bash
+cd cli
+npm run status
+```
+
+If source material is missing, add real company docs before running bootstrap. The graph and chat can still show the template structure, but bootstrap should not run until intake has usable business information.
 
 ---
 
@@ -40,9 +82,9 @@ That is what bootstrap is doing behind the scenes: it is seeding the company bra
 
 ---
 
-## Before You Run Anything
+## Before You Bootstrap Anything
 
-There are 2 things you need first:
+There are 2 things you need before generating company-specific content:
 - at least one valid model API key
 - real company source material
 
@@ -233,18 +275,38 @@ What `npm run chat` does:
 
 Important:
 - the `Document Relationships` graph is SQL-backed through `document_references`
-- if you see document nodes without edges, open the left sidebar `Settings` tab and run `Rebuild graph`, or run `cd cli && npm run index`
+- if you see document nodes without edges, open the left sidebar `Settings` tab and run `Rebuild graph/index`, or run `cd cli && npm run index`
+- if you add, create, move, or rename Markdown documents in `000_Company_Memory`, rebuild before trusting the graph; refreshing the browser only reloads the current SQLite snapshot
 - indexing and vectorization are refreshed deliberately, not silently on every chat launch
 
+### Graph Rebuild Rule
+
+The graph is not reading Markdown files directly from the browser. It reads the local SQLite index produced by the CLI.
+
+Whenever a user, agent, or external tool adds, creates, moves, renames, or deletes Markdown files in `000_Company_Memory`, rebuild the graph/index before relying on the UI or retrieval layer:
+
+```bash
+cd cli
+npm run index
+```
+
+You can also use `/reload` inside chat or the graph UI `Rebuild index` / `Rebuild graph/index` button. A normal browser refresh is only a visual reload of the last indexed snapshot.
+
 Useful commands inside chat:
-- `:model openai`
-- `:model claude`
-- `:model gemini`
-- `:reload`
-- `:files`
-- `:status`
-- `:reset`
-- `:exit`
+- `/help`
+- `/models`
+- `/model auto`
+- `/model openai`
+- `/model claude`
+- `/model gemini`
+- `/model openai gpt-4o`
+- `/model claude claude-opus-4-6`
+- `/model gemini gemini-2.0-flash`
+- `/reload`
+- `/files`
+- `/status`
+- `/reset`
+- `/exit`
 
 If you want the CLI to use its local retrieval layer after the repo is created:
 - make sure your local API key is configured
@@ -299,6 +361,8 @@ The printed graph URL uses a temporary token only for the first open. That first
 
 The graph is interactive: pan, zoom, fit, reset, and drag nodes to make the view easier to inspect. Those graph movements are visual only. Saving a Markdown document from the right editor updates that file inside `000_Company_Memory` and refreshes the SQLite/vector index.
 
+If a user, agent, or external tool adds new Markdown files directly to `000_Company_Memory`, run the UI `Rebuild index` / `Rebuild graph/index` button, `cd cli && npm run index`, or `/reload` inside chat before relying on the graph. The graph reads from SQLite; it does not discover new files from a normal browser refresh alone.
+
 The graph workspace terminal is a real local shell sidebar.
 
 What it supports:
@@ -343,13 +407,27 @@ That file explains the process in much more detail, including:
 
 If you want the simplest possible checklist:
 
-1. Add an API key to `.env.local`
-2. Put real company docs into `001_Data_Souces/Data_Souces_Folder`
-3. Run:
+1. See it immediately:
    ```bash
    cd cli
    npm install
+   npm run chat
+   ```
+2. Open the graph in another terminal:
+   ```bash
+   cd cli
+   npm run graph
+   ```
+3. Check whether real intake/source material is available:
+   ```bash
+   cd cli
+   npm run status
+   ```
+4. Add an API key to `.env.local`
+5. Put real company docs into `001_Data_Souces/Data_Souces_Folder`
+6. Only after source material is in place, run:
+   ```bash
    npm run bootstrap
    ```
-4. Review the generated docs
-5. Run `npm run chat`
+7. Review the generated docs
+8. Run `npm run chat` again and use `/reload`, `npm run index`, or the graph UI rebuild button after adding new Markdown files

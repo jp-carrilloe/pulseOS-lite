@@ -6,6 +6,7 @@ export const LOCAL_INTAKE_DIR = "001_Data_Souces/Data_Souces_Folder";
 export const REFERENCE_DIR = "001_Data_Souces/Data_Sources_References";
 export const LEGACY_LOCAL_INTAKE_DIR = "001_Source_Intake/Data_Souces_Folder";
 export const LEGACY_REFERENCE_DIR = "001_Source_Intake/Data_Sources_References";
+export const COMPANY_MEMORY_DIR = "000_Company_Memory";
 const SUPPORTED_EXTENSIONS = new Set([".md", ".txt", ".json", ".csv"]);
 const SKIP_DIRS = new Set(["node_modules"]);
 const MAX_EXCERPT_LENGTH = 1600;
@@ -22,7 +23,7 @@ export interface ExternalReferenceNote {
 }
 
 export interface IntakeSource {
-  sourceType: "local_intake" | "external_reference";
+  sourceType: "local_intake" | "external_reference" | "company_memory";
   path: string;
   relativePath: string;
   text: string;
@@ -34,6 +35,7 @@ export interface IntakeReport {
   companyName: string;
   localSources: IntakeSource[];
   externalSources: IntakeSource[];
+  companyMemorySources: IntakeSource[];
   parsedReferences: ExternalReferenceNote[];
   warnings: string[];
 }
@@ -43,6 +45,7 @@ export async function collectBootstrapIntake(repoRoot: string, companyName: stri
   const localSources = await collectFirstAvailableLocalSources(repoRoot, warnings);
   const parsedReferences = await collectFirstAvailableReferenceNotes(repoRoot, warnings);
   const externalSources: IntakeSource[] = [];
+  const companyMemorySources = await collectCompanyMemorySources(repoRoot, warnings);
 
   for (const reference of parsedReferences) {
     if (!reference.valid || !reference.path) continue;
@@ -54,9 +57,14 @@ export async function collectBootstrapIntake(repoRoot: string, companyName: stri
     companyName,
     localSources,
     externalSources,
+    companyMemorySources,
     parsedReferences,
     warnings,
   };
+}
+
+async function collectCompanyMemorySources(repoRoot: string, warnings: string[]): Promise<IntakeSource[]> {
+  return collectSupportedFiles(path.join(repoRoot, COMPANY_MEMORY_DIR), "company_memory", warnings, repoRoot);
 }
 
 async function collectFirstAvailableLocalSources(repoRoot: string, warnings: string[]): Promise<IntakeSource[]> {
@@ -114,6 +122,9 @@ async function collectSupportedFiles(
         const text = await fsp.readFile(fullPath, "utf8");
         const normalizedText = normalizeText(text);
         if (!normalizedText) continue;
+        if (sourceType === "company_memory" && !isUsableCompanyMemoryEvidence(fullPath, normalizedText, repoRoot)) {
+          continue;
+        }
         results.push({
           sourceType,
           path: fullPath,
@@ -187,13 +198,16 @@ export function buildBootstrapEvidenceBlock(
   templatePath?: string,
   maxSources = 8,
 ): string {
-  const allSources = [...report.localSources, ...report.externalSources];
-  const selectedSources = templatePath ? rankRelevantSources(allSources, templatePath).slice(0, maxSources) : allSources.slice(0, maxSources);
+  const allSources = [...report.companyMemorySources, ...report.localSources, ...report.externalSources];
+  const selectedSources = templatePath
+    ? selectRelevantEvidenceSources(report, templatePath, maxSources)
+    : allSources.slice(0, maxSources);
 
   const lines = [
     "## Intake Evidence",
     "",
     `- **Company Name:** ${report.companyName}`,
+    `- **Curated Company Memory Files:** ${report.companyMemorySources.length}`,
     `- **Local Intake Files:** ${report.localSources.length}`,
     `- **External Reference Files:** ${report.externalSources.length}`,
   ];
@@ -236,6 +250,29 @@ export function buildBootstrapEvidenceBlock(
   return lines.join("\n");
 }
 
+function selectRelevantEvidenceSources(report: IntakeReport, templatePath: string, maxSources: number): IntakeSource[] {
+  const rawSources = [...report.localSources, ...report.externalSources];
+  if (report.companyMemorySources.length === 0 || rawSources.length === 0) {
+    return rankRelevantSources([...report.companyMemorySources, ...rawSources], templatePath).slice(0, maxSources);
+  }
+
+  const memoryQuota = Math.max(1, Math.ceil(maxSources / 2));
+  const rawQuota = Math.max(1, maxSources - memoryQuota);
+  const selected: IntakeSource[] = [];
+  const seen = new Set<string>();
+  const add = (source: IntakeSource) => {
+    if (seen.has(source.relativePath)) return;
+    seen.add(source.relativePath);
+    selected.push(source);
+  };
+
+  for (const source of rankRelevantSources(report.companyMemorySources, templatePath).slice(0, memoryQuota)) add(source);
+  for (const source of rankRelevantSources(rawSources, templatePath).slice(0, rawQuota)) add(source);
+  for (const source of rankRelevantSources([...report.companyMemorySources, ...rawSources], templatePath)) add(source);
+
+  return selected.slice(0, maxSources);
+}
+
 function rankRelevantSources(sources: IntakeSource[], templatePath: string): IntakeSource[] {
   const templateTokens = new Set(tokenize(templatePath));
   return [...sources].sort((left, right) => scoreSource(right, templateTokens) - scoreSource(left, templateTokens));
@@ -258,6 +295,17 @@ function summarizeSource(filePath: string, text: string): string {
   const firstLine = normalizeText(text.split("\n").find((line) => line.trim()) ?? "");
   const base = `${path.basename(filePath)}: ${firstLine || "Supporting company material."}`;
   return base.slice(0, MAX_SUMMARY_LENGTH);
+}
+
+function isUsableCompanyMemoryEvidence(fullPath: string, text: string, repoRoot: string): boolean {
+  const relativePath = toDisplayPath(fullPath, repoRoot);
+  const basename = path.basename(fullPath).toLowerCase();
+  if (basename === "agent.md" || basename.endsWith("_agent.md")) return false;
+  if (basename.startsWith("readme")) return false;
+  if (relativePath.includes("/000_Agent_Shortcuts/")) return false;
+  if (text.includes("[INSERT") || text.includes("[CLIENT_NAME]") || text.includes("[COMPANY_NAME]")) return false;
+  if (/Status:\*\*\s*Template/i.test(text)) return false;
+  return true;
 }
 
 function normalizeText(value: string): string {

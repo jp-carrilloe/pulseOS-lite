@@ -30,7 +30,8 @@ Bootstrap now asks only for the company name, then reads source material from `0
 Workflow note:
 - `npm run bootstrap` seeds the documents
 - `npm run chat` or daemon startup uses the existing SQL index
-- `npm run index` or `:reload` manually refreshes indexing and vectorization
+- `npm run index`, `/reload`, or the graph UI `Rebuild index` / `Rebuild graph/index` button refreshes indexing and vectorization
+- after adding, creating, moving, renaming, or deleting Markdown documents in `000_Company_Memory`, rebuild before relying on the graph; a browser refresh only reloads the last SQLite snapshot
 
 The local SQLite layer also includes provider-neutral CRM sync tables:
 - `crm_objects`
@@ -45,17 +46,19 @@ Bootstrap safety rule:
 
 **REPL commands while chatting:**
 ```
-:model openai|claude|gemini  — switch model mid-session
-:reset                        — clear conversation history
-:reload                       — manually re-index repo files after edits
-:files                        — list what's indexed
-:status                       — daemon info
-:exit                         — quit
+/model auto                   — auto-pick the first configured provider
+/model openai gpt-4o          — switch provider and concrete model ID
+/models                       — list provider defaults and examples
+/reset                        — clear conversation history
+/reload                       — manually re-index repo files after edits or new docs
+/files                        — list what's indexed
+/status                       — daemon info
+/exit                         — quit
 ```
 
 **Daemon lifecycle:**
 ```bash
-npm run index          # manual DB/table/index/vectorization setup without chat
+npm run index          # manual DB/table/index/vectorization rebuild without chat
 npm run status         # workflow health check: bootstrap, intake, SQL, vectorization
 npm run daemon:start   # start background daemon using the existing SQL index
 npm run daemon:stop    # stop it

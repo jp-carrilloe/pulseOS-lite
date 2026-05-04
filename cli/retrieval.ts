@@ -15,6 +15,7 @@ const MAX_RETRIEVAL_RESULTS = 8;
 const MAX_PROMPT_CHARS = 120_000;
 const MAX_CHUNK_CHARS = 1800;
 const MAX_RETRIEVAL_CANDIDATES = 64;
+const COMPANY_MEMORY_ROOT = "000_Company_Memory";
 
 export interface IndexedDocumentRecord {
   id: string;
@@ -1259,21 +1260,22 @@ export async function scanKnowledgeBaseMarkdown(repoRoot: string): Promise<Scann
     }
   }
 
-  await walk(repoRoot);
+  await walk(path.join(repoRoot, COMPANY_MEMORY_ROOT));
   results.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
   return results;
 }
 
 function isNonKnowledgeBasePath(relativePath: string): boolean {
   return (
-	    relativePath === "001_Data_Souces" ||
-	    relativePath.startsWith("001_Data_Souces/") ||
-	    relativePath === "001_Source_Intake" ||
-	    relativePath.startsWith("001_Source_Intake/") ||
-	    relativePath === "000_Acme_Sample_Company_Memory" ||
-	    relativePath.startsWith("000_Acme_Sample_Company_Memory/")
-	  );
-	}
+    (relativePath !== COMPANY_MEMORY_ROOT && !relativePath.startsWith(`${COMPANY_MEMORY_ROOT}/`)) ||
+    relativePath === "001_Data_Souces" ||
+    relativePath.startsWith("001_Data_Souces/") ||
+    relativePath === "001_Source_Intake" ||
+    relativePath.startsWith("001_Source_Intake/") ||
+    relativePath === "000_Acme_Sample_Company_Memory" ||
+    relativePath.startsWith("000_Acme_Sample_Company_Memory/")
+  );
+}
 
 function summarizeMarkdown(relativePath: string, content: string, updatedAt: string, indexedAt: string) {
   const title = extractTitle(relativePath, content);
