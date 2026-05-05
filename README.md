@@ -209,7 +209,7 @@ Important:
 > **🔒 Privacy & Security:** All information, API keys, and data inputs run entirely locally on your machine and are securely stored within your local environment.
 
 For the full setup flow, process explanation, and agent structure, read **[01_RUNME.md](./01_RUNME.md)** first and then **[03_HOW_IT_WORKS.md](./03_HOW_IT_WORKS.md)** for the deeper “How It Works” walkthrough.
-For MCP/client integration, also read **[05_MCP_SETUP.md](./05_MCP_SETUP.md)**.
+For MCP/client integration, also read **[05_MCP_SETUP.md](./05_MCP_SETUP.md)**. *(Note: If you use Claude Code, the MCP server is already auto-configured out-of-the-box via the hidden `.claude.json` file in this repo!)*
 
 ---
 

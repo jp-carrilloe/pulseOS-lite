@@ -339,7 +339,7 @@ If you want to trigger that layer, run:
 - `npm run daemon:start`, or
 - `:reload` after chat has started
 
-If you want to connect the same company brain through MCP-compatible clients after setup, read [05_MCP_SETUP.md](./05_MCP_SETUP.md).
+If you want to connect the same company brain through MCP-compatible clients after setup, read [05_MCP_SETUP.md](./05_MCP_SETUP.md). *(Note: If you use Claude Code, the MCP server is already auto-configured out-of-the-box via the hidden `.claude.json` file!)*
 
 To view the basic company-memory ontology visually, run:
 

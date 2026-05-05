@@ -606,11 +606,11 @@ Simple rule:
 
 If you want to use this repo through MCP-style tooling, the practical pattern is:
 1. keep this repo clean and up to date
-2. either expose it as an accessible local workspace/filesystem context or start the local MCP server with `cd cli && npm run mcp`
+2. either expose it as an accessible local workspace/filesystem context or start the local MCP server using the wrapper script in `.codex/pulseos-lite-mcp-launch.sh`
 3. tell the model explicitly that this repo is the company brain
 4. reference the relevant folders or docs when you want grounded output
 
-The step-by-step MCP/client setup guide lives in [05_MCP_SETUP.md](./05_MCP_SETUP.md).
+The step-by-step MCP/client setup guide lives in [05_MCP_SETUP.md](./05_MCP_SETUP.md). *(Note: If you use Claude Code, the MCP server is already auto-configured out-of-the-box via the hidden `.claude.json` file!)*
 
 The local MCP server exposes a small tool surface:
 - `repo_status`
