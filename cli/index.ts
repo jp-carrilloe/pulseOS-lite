@@ -79,7 +79,7 @@ async function main(argv = process.argv.slice(2), env: NodeJS.ProcessEnv = proce
 
 function printHelp() {
   process.stdout.write(`
-pulseos-lite-open-source-cli — Chat with your PulseOS Lite Open Source repo using Claude, OpenAI, or Gemini
+pulseos-lite-cli — Chat with your PulseOS-Lite repo using Claude, OpenAI, or Gemini
 
 Workflow:
   npm run bootstrap          — seed the markdown documents
@@ -264,7 +264,7 @@ async function printWorkflowStatus(env: NodeJS.ProcessEnv): Promise<void> {
   }
 
   const lines = [
-    "PulseOS Lite Open Source Workflow Status",
+    "PulseOS-Lite Workflow Status",
     "=======================================",
     "",
     "Bootstrap:",
@@ -382,7 +382,7 @@ async function runInteractiveChat(
   let selection = resolveChatModelSelection(flags.model, flags["model-id"] ?? flags.modelId ?? flags["chat-model"], env);
   assertModelCredentials(selection.provider, env);
 
-  process.stdout.write("Starting pulseos-lite-open-source-cli daemon...\n");
+  process.stdout.write("Starting pulseos-lite-cli daemon...\n");
   const state = await ensureRuntime(env);
   process.stdout.write("Connected. The daemon checks 000_Company_Memory on startup and waits for any graph/index refresh before answering.\n\n");
 

@@ -263,7 +263,7 @@ function createSingleTerminalEventResponse(event: TerminalEvent, status = 200): 
 // ── AI Providers ─────────────────────────────────────────────────────────────
 
 function buildSystemPrompt(repoContext: string): string {
-  return `You are an intelligent AI assistant embedded in the PulseOS Lite Open Source repository. You are working against a local retrieved context rather than the full repo, so stay grounded in the provided documents and say when something is missing.
+  return `You are an intelligent AI assistant embedded in the PulseOS-Lite repository. You are working against a local retrieved context rather than the full repo, so stay grounded in the provided documents and say when something is missing.
 
 - Answering questions about any document, strategy, or operational detail
 - Drafting new documents or sections in the existing style
@@ -2451,7 +2451,7 @@ function buildRetrievalQuery(messages: ChatMessage[], latestMessage: string): st
 export async function startDaemonServer(env: NodeJS.ProcessEnv = process.env): Promise<void> {
   await loadRepoEnv(env);
 
-  process.stdout.write("[pulseos-lite-open-source-cli] Loading Company Memory knowledge base...\n");
+  process.stdout.write("[pulseos-lite-cli] Loading Company Memory knowledge base...\n");
   const kbIndex = new KnowledgeBaseIndex({
     repoRoot: REPO_ROOT,
     dbPath: getCliDbPath(env),
@@ -2511,19 +2511,19 @@ export async function startDaemonServer(env: NodeJS.ProcessEnv = process.env): P
   });
 
   server = serve({ fetch: app.fetch, hostname: "127.0.0.1", port }, () => {
-    process.stdout.write(`[pulseos-lite-open-source-cli] Daemon running on port ${port} (pid ${process.pid})\n`);
+    process.stdout.write(`[pulseos-lite-cli] Daemon running on port ${port} (pid ${process.pid})\n`);
   });
 
   process.on("SIGINT", () => void shutdown());
   process.on("SIGTERM", () => void shutdown());
 
   await writeDaemonState(state, env);
-  process.stdout.write("[pulseos-lite-open-source-cli] Checking 000_Company_Memory against the SQLite graph/index...\n");
+  process.stdout.write("[pulseos-lite-cli] Checking 000_Company_Memory against the SQLite graph/index...\n");
   indexingPromise = (async () => {
     const result = await kbIndex.ensureCurrent();
     await kbIndex.inspectRebuildStatus({ persistLog: true });
     process.stdout.write(
-      `[pulseos-lite-open-source-cli] Company Memory graph/index is current with ${result.fileCount} documents (${result.charCount.toLocaleString()} chars) using ${result.embeddingModel} [${result.embeddingMode}].\n`,
+      `[pulseos-lite-cli] Company Memory graph/index is current with ${result.fileCount} documents (${result.charCount.toLocaleString()} chars) using ${result.embeddingModel} [${result.embeddingMode}].\n`,
     );
   })();
 
@@ -2537,7 +2537,7 @@ export async function startDaemonServer(env: NodeJS.ProcessEnv = process.env): P
     readyState.ready = false;
     readyState.error = indexingError.message;
     process.stderr.write(
-      `[pulseos-lite-open-source-cli] Company Memory graph/index refresh failed: ${indexingError.message}\n`,
+      `[pulseos-lite-cli] Company Memory graph/index refresh failed: ${indexingError.message}\n`,
     );
   }
   resetIdleTimer();

@@ -1,8 +1,8 @@
 {
-  "name": "pulseos-lite-open-source-cli",
+  "name": "pulseos-lite-cli",
   "version": "1.0.0",
   "type": "module",
-  "description": "PulseOS Lite Open Source repo daemon — chat with your repo via Claude, OpenAI, or Gemini",
+  "description": "PulseOS-Lite repo daemon — chat with your repo via Claude, OpenAI, or Gemini",
   "scripts": {
     "start": "node --import tsx/esm index.ts",
     "chat": "node --import tsx/esm index.ts chat",

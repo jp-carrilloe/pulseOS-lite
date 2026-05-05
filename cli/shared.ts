@@ -65,7 +65,7 @@ export function getCliHome(env: NodeJS.ProcessEnv = process.env): string {
   const configuredHome =
     env.PULSEOS_LITE_OPEN_SOURCE_CLI_HOME?.trim() ?? env.PULSEOS_CLI_HOME?.trim();
   if (configuredHome) return path.resolve(configuredHome);
-  return path.join(REPO_ROOT, "cli", ".pulseos-lite-open-source-cli-state");
+  return path.join(REPO_ROOT, "cli", ".pulseos-lite-cli-state");
 }
 
 export function getDaemonStateFilePath(env: NodeJS.ProcessEnv = process.env): string {
