@@ -13,7 +13,7 @@ By connecting this MCP server, your AI assistants can:
 
 If you are using Claude Code in your terminal, **you don't need to configure anything!**
 
-This repository includes a `claude.json` file at the root which automatically configures the MCP server for Claude Code. It looks exactly like this:
+This repository includes a `.claude.json` file at the root which automatically configures the MCP server for Claude Code without polluting your personal permissions. It looks exactly like this:
 
 ```json
 {
@@ -30,7 +30,7 @@ This repository includes a `claude.json` file at the root which automatically co
 
 When you run `claude` inside this repository, it will automatically detect and start the `pulseos-lite-mcp` server using the included wrapper script.
 
-*(Note: Do not use `npm run mcp` as the MCP command in any clients that rely on `stdio`. `npm` prints extra banner lines before the protocol stream, which can break MCP handshakes. This is why our `claude.json` points directly to the wrapper script instead.)*
+*(Note: Do not use `npm run mcp` as the MCP command in any clients that rely on `stdio`. `npm` prints extra banner lines before the protocol stream, which can break MCP handshakes. This is why our `.claude.json` points directly to the wrapper script instead.)*
 
 ---
 

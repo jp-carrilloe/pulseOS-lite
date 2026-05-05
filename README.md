@@ -1,15 +1,15 @@
 # PulseOS-Lite — The OS for AI Native Companies
 
+<div align="center">
+  <!-- TODO: Replace the file below with your actual screenshot or GIF of the graph -->
+  <img src="./assets/graph-demo.gif" alt="PulseOS-Lite Knowledge Graph Demo" width="100%" />
+</div>
+
 > "Complexity is the enemy of execution. Strategy is the art of focusing on the right things."
 
 This is the strategic hub for **PulseOS-Lite**. PulseOS Lite is a lightweight approach of PulseOS to provide a company memory and operational system for the agentic workflow, agentic workforce, and AI-native companies.
 
 **Built for builders who value strategic clarity and 100x execution velocity.**
-
----
-
-## 🤝 Attribution
-Part of this repository's architecture and 100x efficiency philosophy are inspired by the [gstack](https://github.com/garrytan/gstack) methodology by Garry Tan. We acknowledge and appreciate the open-source concepts of "Boil the Lake" and the dual-layer agent framework which serve as the foundation of this engine's execution logic.
 
 ---
 
@@ -269,6 +269,11 @@ The long-term goal is to make PulseOS an open standard for agentic memory and th
 - model-agnostic inference optimization at scale
 
 We are a small team backed by investors and currently building the platform. The work sits at the intersection of agent infrastructure, knowledge graphs, secure runtimes, memory systems, and inference optimization.
+---
+
+## 🤝 Attribution
+Part of this repository's architecture and 100x efficiency philosophy are inspired by the [gstack](https://github.com/garrytan/gstack) methodology by Garry Tan. We acknowledge and appreciate the open-source concepts of "Boil the Lake" and the dual-layer agent framework which serve as the foundation of this engine's execution logic.
+
 
 ---
 
