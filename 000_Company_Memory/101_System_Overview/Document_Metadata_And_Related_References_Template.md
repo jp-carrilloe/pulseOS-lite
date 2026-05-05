@@ -8,7 +8,7 @@
 ---
 
 ## Purpose
-Provide a reusable standard for writing the end-of-document metadata and related-document reference sections across PulseOS Lite Open Source docs.
+Provide a reusable standard for writing the end-of-document metadata and related-document reference sections across PulseOS-Lite docs.
 
 This template is designed for project docs, PRDs, specs, operating notes, and internal planning documents that need a clean footer showing ownership, role, and adjacent source material.
 

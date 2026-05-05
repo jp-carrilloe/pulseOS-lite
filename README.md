@@ -1,8 +1,8 @@
-# PulseOS Lite Open Source — The OS for AI Native Companies
+# PulseOS-Lite — The OS for AI Native Companies
 
 > "Complexity is the enemy of execution. Strategy is the art of focusing on the right things."
 
-This is the strategic hub for **PulseOS Lite Open Source**. PulseOS Lite is a lightweight approach of PulseOS to provide a company memory and operational system for the agentic workflow, agentic workforce, and AI-native companies.
+This is the strategic hub for **PulseOS-Lite**. PulseOS Lite is a lightweight approach of PulseOS to provide a company memory and operational system for the agentic workflow, agentic workforce, and AI-native companies.
 
 **Built for builders who value strategic clarity and 100x execution velocity.**
 
@@ -13,7 +13,7 @@ Part of this repository's architecture and 100x efficiency philosophy are inspir
 
 ---
 
-## The PulseOS Lite Open Source Standard: High-Alpha Execution
+## The PulseOS-Lite Standard: High-Alpha Execution
 
 We don't do "templates." we do **Alpha**. Every file in this repo is a living component of our growth engine, governed by three core laws:
 
@@ -23,7 +23,7 @@ We don't do "templates." we do **Alpha**. Every file in this repo is a living co
 
 ### The Compression Advantage
 
-| Task type                   | Traditional Team | PulseOS Lite Open Source | Compression |
+| Task type                   | Traditional Team | PulseOS-Lite | Compression |
 |-----------------------------|------------------|----------------------|-------------|
 | GTM Strategy & Positioning  | 14 days          | 4 hours              | ~30x        |
 | Financial Growth Models     | 5 days           | 1 hour               | ~40x        |
@@ -110,7 +110,7 @@ Keeping that information current is the responsibility of the user. Bootstrap gi
 The local CLI creates a SQLite database for retrieval.
 
 By default it lives at:
-- `cli/.pulseos-lite-open-source-cli-state/knowledge-base.sqlite`
+- `cli/.pulseos-lite-cli-state/knowledge-base.sqlite`
 
 The main tables are:
 - `documents`
@@ -275,7 +275,7 @@ We are a small team backed by investors and currently building the platform. The
 ## License
 MIT — Fork it, build it, ship it.
 
-*Powered by PulseOS Lite Open Source — Built by JP Carrillo for Strategic Clarity at Scale.*
+*Powered by PulseOS-Lite — Built by JP Carrillo for Strategic Clarity at Scale.*
 
 ---
 

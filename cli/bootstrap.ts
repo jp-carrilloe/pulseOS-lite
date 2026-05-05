@@ -1,5 +1,5 @@
 /**
- * pulseos-lite-open-source-cli bootstrap
+ * pulseos-lite-cli bootstrap
  *
  * Fills every template document in the repo with real company content.
  * Works recursively in dependency order — foundation docs are generated first
@@ -263,7 +263,7 @@ async function main() {
 
   try {
     process.stdout.write(
-      "\npulseos-lite-open-source-cli bootstrap — Seed your PulseOS Lite Open Source repo with real content\n",
+      "\npulseos-lite-cli bootstrap — Seed your PulseOS-Lite repo with real content\n",
     );
     process.stdout.write(
       "Bootstrap seeds documents in dependency order. It reads raw source material from 001_Data_Souces and checks existing curated docs in 000_Company_Memory.\n",

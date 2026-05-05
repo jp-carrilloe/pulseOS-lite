@@ -714,7 +714,7 @@ export class KnowledgeBaseIndex {
     const matches = await this.retrieve(query, MAX_RETRIEVAL_RESULTS);
     if (matches.length === 0) {
       return [
-        "# PulseOS Lite Open Source Knowledge Base",
+        "# PulseOS-Lite Knowledge Base",
         "",
         "No indexed knowledge-base documents were available for this query.",
       ].join("\n");
@@ -733,7 +733,7 @@ export class KnowledgeBaseIndex {
     });
 
     let context = [
-      "# PulseOS Lite Open Source Knowledge Base",
+      "# PulseOS-Lite Knowledge Base",
       "",
       "Use the retrieved company-brain documents below as the primary source of truth. Be specific, cite paths when relevant, and say when the answer is not fully grounded in the indexed docs.",
       "",
