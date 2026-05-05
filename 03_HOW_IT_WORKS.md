@@ -2,7 +2,7 @@
 
 This guide is the detailed, step-by-step explanation of how to use this repo.
 
-If you are new here, start with [@RUNME.md](./@RUNME.md) first. That file is the short version. This file is the full walkthrough.
+If you are new here, start with [01_RUNME.md](./01_RUNME.md) first. That file is the short version. This file is the full walkthrough.
 
 The goal of this repo is simple:
 - you add real company source material
@@ -610,7 +610,7 @@ If you want to use this repo through MCP-style tooling, the practical pattern is
 3. tell the model explicitly that this repo is the company brain
 4. reference the relevant folders or docs when you want grounded output
 
-The step-by-step MCP/client setup guide lives in [MCP_SETUP.md](./MCP_SETUP.md).
+The step-by-step MCP/client setup guide lives in [05_MCP_SETUP.md](./05_MCP_SETUP.md).
 
 The local MCP server exposes a small tool surface:
 - `repo_status`
@@ -670,7 +670,7 @@ If the output feels weak, the first thing to improve is usually the source mater
 
 If you want the simplest possible workflow, use this:
 
-1. Open [@RUNME.md](./@RUNME.md)
+1. Open [01_RUNME.md](./01_RUNME.md)
 2. Add an API key to `.env.local`
 3. Put real company docs into `001_Data_Souces/Data_Souces_Folder`
 4. Run:

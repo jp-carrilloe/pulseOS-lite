@@ -14,7 +14,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 - Bootstrap is now source-driven and validates real intake documents before onboarding continues
-- `@RUNME.md` is the primary onboarding entry point and `HOW_IT_WORKS.md` now serves as the “How It Works” guide
+- `01_RUNME.md` is the primary onboarding entry point and `03_HOW_IT_WORKS.md` now serves as the “How It Works” guide
 - Meeting transcripts now live under Operations instead of the source-intake area
 
 ---

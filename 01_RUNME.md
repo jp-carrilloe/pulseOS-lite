@@ -339,7 +339,7 @@ If you want to trigger that layer, run:
 - `npm run daemon:start`, or
 - `:reload` after chat has started
 
-If you want to connect the same company brain through MCP-compatible clients after setup, read [MCP_SETUP.md](./MCP_SETUP.md).
+If you want to connect the same company brain through MCP-compatible clients after setup, read [05_MCP_SETUP.md](./05_MCP_SETUP.md).
 
 To view the basic company-memory ontology visually, run:
 
@@ -392,7 +392,7 @@ The CLI bootstrap is still the most structured way to do the initial setup.
 ## If You Want the Full Explanation
 
 Read:
-- [HOW_IT_WORKS.md](./HOW_IT_WORKS.md)
+- [03_HOW_IT_WORKS.md](./03_HOW_IT_WORKS.md)
 
 That file explains the process in much more detail, including:
 - how the repo structure works
