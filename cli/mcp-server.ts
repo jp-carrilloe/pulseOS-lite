@@ -1,7 +1,6 @@
 import { Buffer } from "node:buffer";
 import process from "node:process";
 
-import { KnowledgeBaseIndex } from "./retrieval.js";
 import { REPO_ROOT, getCliDbPath, loadRepoEnv } from "./shared.js";
 
 type JsonRpcId = string | number | null;
@@ -78,6 +77,10 @@ const TOOLS: ToolDefinition[] = [
     },
   },
 ];
+
+silenceNodeSqliteExperimentalWarning();
+
+const { KnowledgeBaseIndex } = await import("./retrieval.js");
 
 await loadRepoEnv(process.env);
 const kbIndex = new KnowledgeBaseIndex({
@@ -238,6 +241,20 @@ function writeMessage(message: unknown) {
   const body = Buffer.from(JSON.stringify(message), "utf8");
   process.stdout.write(`Content-Length: ${body.length}\r\n\r\n`);
   process.stdout.write(body);
+}
+
+function silenceNodeSqliteExperimentalWarning() {
+  const originalEmitWarning = process.emitWarning.bind(process);
+  process.emitWarning = ((warning: string | Error, ...args: unknown[]) => {
+    const message = typeof warning === "string" ? warning : warning.message;
+    if (
+      message.includes("SQLite is an experimental feature")
+      || (typeof args[0] === "string" && args[0] === "ExperimentalWarning")
+    ) {
+      return;
+    }
+    return originalEmitWarning(warning as never, ...(args as []));
+  }) as typeof process.emitWarning;
 }
 
 function shutdown() {
