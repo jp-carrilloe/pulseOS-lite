@@ -317,16 +317,18 @@ async function main() {
     intakeReport.companyName = profile.name;
 
     if (hasAcmeSampleCompanyMemory(REPO_ROOT)) {
-      process.stdout.write(
-        [
-          "",
-          `Sample company memory detected: ${ACME_SAMPLE_MEMORY_DIR}`,
-          "This sample folder is included intentionally as a public reference/template.",
-          "Bootstrap will not delete it automatically when you seed a real company.",
-          "If you do not want to keep it alongside your own company memory, archive or delete it manually after bootstrap.",
-          "",
-        ].join("\n"),
+      process.stdout.write(`\nSample company memory detected: ${ACME_SAMPLE_MEMORY_DIR}\n`);
+      process.stdout.write("This sample folder is included as a public reference/template.\n");
+      const deleteSample = await rl.question(
+        `Do you want to delete the sample folder to keep your repo clean? [y/N] `,
       );
+      if (deleteSample.trim().toLowerCase() === "y") {
+        process.stdout.write(`Deleting ${ACME_SAMPLE_MEMORY_DIR}... `);
+        await fsp.rm(path.join(REPO_ROOT, ACME_SAMPLE_MEMORY_DIR), { recursive: true, force: true });
+        process.stdout.write("done\n");
+      } else {
+        process.stdout.write("Keeping sample folder.\n");
+      }
     }
 
     process.stdout.write("\nValidating available model providers for bootstrap...\n");

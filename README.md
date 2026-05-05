@@ -40,7 +40,7 @@ We don't do "templates." we do **Alpha**. Every file in this repo is a living co
 2. **Add Source Material First:**
    Put company knowledge base material into [`001_Data_Souces`](./001_Data_Souces/).
 
-   This repo also includes [`000_Acme_Sample_Company_Memory`](./000_Acme_Sample_Company_Memory/) as a public sample/template. It is reference material only. Bootstrap will not delete it automatically when you seed a real company.
+   This repo also includes [`000_Acme_Sample_Company_Memory`](./000_Acme_Sample_Company_Memory/) as a public sample/template. It is reference material only. Running bootstrap to seed with your real company information will ask you if you want to delete the sample company memory before seeding the real company memory.
 
    Good inputs include:
    - strategy docs

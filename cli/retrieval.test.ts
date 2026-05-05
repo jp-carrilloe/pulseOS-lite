@@ -8,7 +8,7 @@ import test from "node:test";
 import { KnowledgeBaseIndex } from "./retrieval.js";
 
 async function createTempRepo() {
-  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "company-ops-kb-"));
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "pulseos-lite-kb-"));
   await fsp.mkdir(path.join(root, "000_Company_Memory", "102_Corporate_Strategy_and_Foundation"), { recursive: true });
   await fsp.mkdir(path.join(root, "000_Company_Memory", "202_Go-to-Market_Strategy"), { recursive: true });
   await fsp.mkdir(path.join(root, "001_Data_Souces", "Data_Souces_Folder"), { recursive: true });

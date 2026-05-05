@@ -8,7 +8,7 @@ import test from "node:test";
 import { ACME_SAMPLE_MEMORY_DIR, hasAcmeSampleCompanyMemory } from "./bootstrap.js";
 
 test("hasAcmeSampleCompanyMemory detects the public sample folder when present", async () => {
-  const repoRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "company-ops-bootstrap-sample-"));
+  const repoRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "pulseos-lite-bootstrap-sample-"));
   const sampleDir = path.join(repoRoot, ACME_SAMPLE_MEMORY_DIR);
 
   await fsp.mkdir(sampleDir, { recursive: true });
@@ -18,7 +18,7 @@ test("hasAcmeSampleCompanyMemory detects the public sample folder when present",
 });
 
 test("sample company memory can remain in the repo without bootstrap deleting it", async () => {
-  const repoRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "company-ops-bootstrap-sample-"));
+  const repoRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "pulseos-lite-bootstrap-sample-"));
   const sampleDir = path.join(repoRoot, ACME_SAMPLE_MEMORY_DIR);
   const companyMemoryDir = path.join(repoRoot, "000_Company_Memory");
 

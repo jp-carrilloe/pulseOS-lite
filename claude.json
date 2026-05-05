@@ -3,7 +3,7 @@
     "pulseos-lite-mcp": {
       "command": "/bin/zsh",
       "args": [
-        "./.codex/company-ops-mcp-launch.sh"
+        "./.codex/pulseos-lite-mcp-launch.sh"
       ]
     }
   }
