@@ -6,6 +6,7 @@ interface LiteGraphControlsProps {
   subtitle: string;
   headerBadges?: ReactNode;
   toolbarControls?: ReactNode;
+  maintenanceControls?: ReactNode;
   entityTypes: string[];
   relationshipTypes: string[];
   readLayer: string;
@@ -23,6 +24,7 @@ export function LiteGraphControls({
   subtitle,
   headerBadges,
   toolbarControls,
+  maintenanceControls,
   entityTypes,
   relationshipTypes,
   readLayer,
@@ -82,6 +84,16 @@ export function LiteGraphControls({
           </section>
         </div>
       </details>
+
+      {maintenanceControls ? (
+        <details className="lite-graph-maintenance-tray">
+          <summary>
+            <span>Settings and maintenance</span>
+            <span className="muted-copy">Documents, terminal, and index controls</span>
+          </summary>
+          <div className="lite-graph-maintenance-body">{maintenanceControls}</div>
+        </details>
+      ) : null}
     </div>
   );
 }

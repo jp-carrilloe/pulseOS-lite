@@ -13,6 +13,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - README, LICENSE, CONTRIBUTING, CODE_OF_CONDUCT, issue templates
 - Portability & Upgrades section in onboarding documentation
 - Interactive CLI prompt to cleanly delete sample memory (`000_Acme_Sample_Company_Memory`) during `npm run bootstrap`
+- Graph workspace mini IDE with docked multi-tab Markdown editing, save/save-all flows, dirty indicators, and a resizable editor pane
+- Graph workspace terminal dock toggle so the local shell can sit on the right or bottom
 
 ### Changed
 - Complete rename and rebranding across the repository from "PulseOS Lite Open Source" to "PulseOS-Lite"
@@ -21,6 +23,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Bootstrap is now source-driven and validates real intake documents before onboarding continues
 - `01_RUNME.md` is the primary onboarding entry point and `03_HOW_IT_WORKS.md` now serves as the “How It Works” guide
 - Meeting transcripts now live under Operations instead of the source-intake area
+- The graph UI no longer uses a blocking document modal; the graph controls stay visible when the map is hidden, and the editor/terminal can share the workspace like a lightweight IDE
 
 ---
 

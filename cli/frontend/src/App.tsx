@@ -100,7 +100,7 @@ export function App() {
   const TERMINAL_MAX_WIDTH = 420;
   const TERMINAL_MIN_HEIGHT = 220;
   const TERMINAL_MAX_HEIGHT = 420;
-  const MIN_MAIN_CONTENT_WIDTH = 640;
+  const MIN_MAIN_CONTENT_WIDTH = 320;
   const MIN_MAIN_CONTENT_HEIGHT = 320;
   const SHELL_GUTTER = 12;
   const WORKSPACE_PADDING = 12;
@@ -839,8 +839,7 @@ export function App() {
                 .join(" ")}
               style={documentPanelOpen && graphVisible ? { gridTemplateColumns: `minmax(0, 1fr) ${RESIZE_HANDLE_WIDTH}px ${documentPanelWidth}px` } : undefined}
             >
-              {graphVisible ? (
-                <div className="graph-shell">
+              <div className={graphVisible ? "graph-shell" : "graph-shell graph-shell-surface-hidden"}>
                   {compatibilityError ? (
                     <LiteEmptyState
                       title="Graph workspace paused"
@@ -854,6 +853,7 @@ export function App() {
                         key={`${mode}:${reloadKey}`}
                         snapshot={graphSnapshot}
                         colorForType={getGraphEntityColor}
+                        hideSurface={!graphVisible}
                         selectedNodeId={selectedNode?.id ?? null}
                         onNodeSelect={handleNodeSelect}
                         onNodeOpen={handleNodeOpen}
@@ -869,40 +869,51 @@ export function App() {
                           </>
                         }
                         toolbarControls={
-                          <>
-                            <LiteButton
-                              variant="secondary"
-                              onClick={() => {
-                                if (documentPanelOpen) {
-                                  closeDocumentPanel();
-                                  return;
-                                }
-                                setDocumentPanelVisible(true);
-                              }}
-                            >
-                              {documentPanelOpen ? "Hide editor" : "View documents"}
-                            </LiteButton>
-                            <LiteButton
-                              variant="secondary"
-                              onClick={() => {
-                                if (graphVisible) {
-                                  setGraphVisible(false);
-                                  setDocumentPanelVisible(true);
-                                  return;
-                                }
-                                setGraphVisible(true);
-                              }}
-                            >
-                              {graphVisible ? "Hide map" : "Show map"}
-                            </LiteButton>
-                            {uiCapabilities?.features.terminalPanel ? (
-                              <LiteButton variant="secondary" onClick={() => setTerminalPanelOpen((value) => !value)}>
-                                {terminalPanelOpen ? "Hide terminal" : "View terminal"}
-                              </LiteButton>
-                            ) : null}
-                            <div className="graph-inline-mode-switch" role="group" aria-label="Graph mode">
+                          <div className="graph-toolbar-cluster">
+                            <div className="graph-toolbar-toggle-strip" role="group" aria-label="Workspace panels">
                               <LiteButton
-                                className="graph-tooltip-target"
+                                className="graph-toolbar-compact-button"
+                                variant={documentPanelOpen ? "primary" : "secondary"}
+                                onClick={() => {
+                                  if (documentPanelOpen) {
+                                    closeDocumentPanel();
+                                    return;
+                                  }
+                                  setDocumentPanelVisible(true);
+                                }}
+                                title={documentPanelOpen ? "Hide editor" : "Show editor"}
+                              >
+                                Editor
+                              </LiteButton>
+                              <LiteButton
+                                className="graph-toolbar-compact-button"
+                                variant={graphVisible ? "primary" : "secondary"}
+                                onClick={() => {
+                                  if (graphVisible) {
+                                    setGraphVisible(false);
+                                    setDocumentPanelVisible(true);
+                                    return;
+                                  }
+                                  setGraphVisible(true);
+                                }}
+                                title={graphVisible ? "Hide memory map" : "Show memory map"}
+                              >
+                                Map
+                              </LiteButton>
+                              {uiCapabilities?.features.terminalPanel ? (
+                                <LiteButton
+                                  className="graph-toolbar-compact-button"
+                                  variant={terminalPanelOpen ? "primary" : "secondary"}
+                                  onClick={() => setTerminalPanelOpen((value) => !value)}
+                                  title={terminalPanelOpen ? "Hide terminal" : "Show terminal"}
+                                >
+                                  Term
+                                </LiteButton>
+                              ) : null}
+                            </div>
+                            <div className="graph-inline-mode-switch graph-toolbar-mode-strip" role="group" aria-label="Graph mode">
+                              <LiteButton
+                                className="graph-tooltip-target graph-toolbar-compact-button"
                                 data-tooltip="Show the folder hierarchy view"
                                 variant={mode === "ontology" ? "primary" : "secondary"}
                                 onClick={() => setMode("ontology")}
@@ -911,17 +922,17 @@ export function App() {
                                 Ontology
                               </LiteButton>
                               <LiteButton
-                                className="graph-tooltip-target"
+                                className="graph-tooltip-target graph-toolbar-compact-button"
                                 data-tooltip="Show document-to-document references"
                                 variant={mode === "documents" ? "primary" : "secondary"}
                                 onClick={() => setMode("documents")}
                                 title="Document Relationships"
                               >
-                                Documents
+                                Docs
                               </LiteButton>
                             </div>
                             <LiteButton
-                              className="graph-tooltip-target"
+                              className="graph-tooltip-target graph-toolbar-refresh-button"
                               data-tooltip="Refresh graph data already stored in SQLite"
                               variant="ghost"
                               onClick={() => void loadWorkspace()}
@@ -930,13 +941,12 @@ export function App() {
                             >
                               ↻
                             </LiteButton>
-                          </>
+                          </div>
                         }
                       />
                     </GraphErrorBoundary>
                   )}
-                </div>
-              ) : null}
+              </div>
 
               {documentPanelOpen ? (
                 <>
