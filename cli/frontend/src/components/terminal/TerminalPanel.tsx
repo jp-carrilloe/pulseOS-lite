@@ -9,9 +9,22 @@ import { LiteBadge, LiteButton, LiteEmptyState } from "../ui";
 interface TerminalPanelProps {
   open: boolean;
   onClose: () => void;
+  width?: number;
+  height?: number;
+  dockMode?: "right" | "bottom";
+  canDock?: boolean;
+  onDockModeChange?: (mode: "right" | "bottom") => void;
 }
 
-export function TerminalPanel({ open, onClose }: TerminalPanelProps) {
+export function TerminalPanel({
+  open,
+  onClose,
+  width,
+  height,
+  dockMode = "right",
+  canDock = false,
+  onDockModeChange,
+}: TerminalPanelProps) {
   const [session, setSession] = useState<TerminalSessionSummary | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,7 +123,7 @@ export function TerminalPanel({ open, onClose }: TerminalPanelProps) {
       cancelAnimationFrame(frame);
       resizeObserver.disconnect();
     };
-  }, [open]);
+  }, [dockMode, height, open, width]);
 
   useEffect(() => {
     if (!open || !session?.id) return;
@@ -251,7 +264,19 @@ export function TerminalPanel({ open, onClose }: TerminalPanelProps) {
   }
 
   return (
-    <aside className={open ? "terminal-panel open" : "terminal-panel"} aria-hidden={!open}>
+    <aside
+      className={["terminal-panel", open ? "open" : "", `dock-${dockMode}`].filter(Boolean).join(" ")}
+      aria-hidden={!open}
+      style={
+        dockMode === "bottom"
+          ? height
+            ? { height: `${height}px` }
+            : undefined
+          : width
+            ? { width: `${width}px` }
+            : undefined
+      }
+    >
       <div className="terminal-panel-card">
         <div className="terminal-panel-head">
           <div className="terminal-panel-copy">
@@ -261,7 +286,7 @@ export function TerminalPanel({ open, onClose }: TerminalPanelProps) {
               <button
                 type="button"
                 className="graph-icon-button graph-tooltip-target terminal-info-button"
-                data-tooltip="Run PulseOS for chat. Use git, npm, rg, claude, gemini, or cd cli && npm run graph directly."
+                data-tooltip="Run PulseOS chat on OpenAI GPT-5.4 Mini. You can also use git, npm, rg, or cd cli && npm run graph directly."
                 aria-label="Terminal help"
               >
                 i
@@ -270,6 +295,22 @@ export function TerminalPanel({ open, onClose }: TerminalPanelProps) {
           </div>
           <div className="terminal-panel-actions">
             {statusBadge}
+            {canDock ? (
+              <div className="graph-inline-mode-switch terminal-dock-switch" role="group" aria-label="Terminal dock position">
+                <LiteButton
+                  variant={dockMode === "right" ? "primary" : "secondary"}
+                  onClick={() => onDockModeChange?.("right")}
+                >
+                  Right
+                </LiteButton>
+                <LiteButton
+                  variant={dockMode === "bottom" ? "primary" : "secondary"}
+                  onClick={() => onDockModeChange?.("bottom")}
+                >
+                  Bottom
+                </LiteButton>
+              </div>
+            ) : null}
             <LiteButton variant="ghost" onClick={onClose}>
               Close
             </LiteButton>
@@ -282,9 +323,9 @@ export function TerminalPanel({ open, onClose }: TerminalPanelProps) {
           </LiteButton>
           <LiteButton
             variant="secondary"
-            onClick={() => void runPresetCommand("cd cli && npm run chat")}
+            onClick={() => void runPresetCommand("cd cli && npm run chat -- --model openai --model-id gpt-5.4-mini")}
             disabled={busy}
-            title="Run cd cli && npm run chat"
+            title="Run cd cli && npm run chat -- --model openai --model-id gpt-5.4-mini"
           >
             Run PulseOS
           </LiteButton>
