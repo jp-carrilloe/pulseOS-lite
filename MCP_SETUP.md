@@ -28,7 +28,7 @@ If your MCP client reliably honors `cwd`, you can point it at the repo-local CLI
     "pulseos-lite-mcp": {
       "command": "node",
       "args": ["--import", "tsx/esm", "mcp-server.ts"],
-      "cwd": "/absolute/path/to/Company Ops - Template/cli"
+      "cwd": "/absolute/path/to/PulseOS Lite Open Source/cli"
     }
   }
 }
@@ -41,7 +41,7 @@ If your MCP client ignores `cwd`, launches from `/`, or shows `Cannot find packa
   "mcpServers": {
     "pulseos-lite-mcp": {
       "command": "/bin/zsh",
-      "args": ["/absolute/path/to/Company Ops - Template/.codex/company-ops-mcp-launch.sh"]
+      "args": ["/absolute/path/to/PulseOS Lite Open Source/.codex/pulseos-lite-mcp-launch.sh"]
     }
   }
 }
@@ -64,7 +64,7 @@ To connect the Claude Desktop app to the PulseOS Lite MCP server:
   "mcpServers": {
     "pulseos-lite-mcp": {
       "command": "/bin/zsh",
-      "args": ["/absolute/path/to/Company Ops - Template/.codex/company-ops-mcp-launch.sh"]
+      "args": ["/absolute/path/to/PulseOS Lite Open Source/.codex/pulseos-lite-mcp-launch.sh"]
     }
   }
 }
@@ -85,7 +85,7 @@ If you are using Cursor, Cline, or another VS Code-based MCP client to interact 
    - **Name**: `pulseos-lite-mcp`
    - **Type**: `command`
    - **Command**: `/bin/zsh`
-   - **Args**: `/absolute/path/to/Company Ops - Template/.codex/company-ops-mcp-launch.sh`
+   - **Args**: `/absolute/path/to/PulseOS Lite Open Source/.codex/pulseos-lite-mcp-launch.sh`
    - **Working directory**: leave blank unless your MCP client requires one
 3. Click **Save** and verify the connection is green (active).
 4. The MCP tools (e.g., `retrieve_context`, `repo_status`) will now be available when using the agent or Cursor Composer.
@@ -106,7 +106,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 const transport = new StdioClientTransport({
   command: "/bin/zsh",
-  args: ["/absolute/path/to/Company Ops - Template/.codex/company-ops-mcp-launch.sh"]
+  args: ["/absolute/path/to/PulseOS Lite Open Source/.codex/pulseos-lite-mcp-launch.sh"]
 });
 
 const client = new Client({ name: "gemini-workflow-client", version: "1.0.0" }, { capabilities: {} });

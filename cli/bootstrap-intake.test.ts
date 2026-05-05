@@ -11,7 +11,7 @@ import {
 } from "./bootstrap-intake.js";
 
 async function createTempRepo() {
-  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "company-ops-bootstrap-"));
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "pulseos-lite-bootstrap-"));
   await fsp.mkdir(path.join(root, "001_Data_Souces", "Data_Souces_Folder"), { recursive: true });
   await fsp.mkdir(path.join(root, "001_Data_Souces", "Data_Sources_References"), { recursive: true });
   await fsp.mkdir(path.join(root, "001_Source_Intake", "Data_Souces_Folder"), { recursive: true });
