@@ -34,7 +34,7 @@ We don't do "templates." we do **Alpha**. Every file in this repo is a living co
 
 ## 🚀 Quick Start
 
-1. **Start with [`@RUNME.md`](./@RUNME.md):**
+1. **Start with [`01_RUNME.md`](./01_RUNME.md):**
    That is the main onboarding document and the right place for a new user to begin.
 
 2. **Add Source Material First:**
@@ -208,8 +208,8 @@ Important:
 
 > **🔒 Privacy & Security:** All information, API keys, and data inputs run entirely locally on your machine and are securely stored within your local environment.
 
-For the full setup flow, process explanation, and agent structure, read **[@RUNME.md](./@RUNME.md)** first and then **[HOW_IT_WORKS.md](./HOW_IT_WORKS.md)** for the deeper “How It Works” walkthrough.
-For MCP/client integration, also read **[MCP_SETUP.md](./MCP_SETUP.md)**.
+For the full setup flow, process explanation, and agent structure, read **[01_RUNME.md](./01_RUNME.md)** first and then **[03_HOW_IT_WORKS.md](./03_HOW_IT_WORKS.md)** for the deeper “How It Works” walkthrough.
+For MCP/client integration, also read **[05_MCP_SETUP.md](./05_MCP_SETUP.md)**.
 
 ---
 

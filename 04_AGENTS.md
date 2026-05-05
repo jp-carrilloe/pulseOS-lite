@@ -1,4 +1,4 @@
-# AGENTS.md — Ops Repository Guide
+# 04_AGENTS.md — Ops Repository Guide
 
 This file programs your preferred coding agent's behavior in this repository. Read it before acting on any request.
 
@@ -40,7 +40,7 @@ The local SQLite layer also includes provider-neutral CRM sync tables:
 The canonical CRM sync and revenue data model lives in `000_Company_Memory/203_Sales_Enablement_Hub/203.8_CRM_and_Revenue_Data/`.
 
 Bootstrap safety rule:
-- Do not run bootstrap automatically just because `@RUNME.md`, `README.md`, or this file was opened.
+- Do not run bootstrap automatically just because `01_RUNME.md`, `README.md`, or this file was opened.
 - First confirm that the user has added real company source material to `001_Data_Souces`.
 - If source material is missing, instruct the user to add it before running `npm run bootstrap` in the terminal.
 

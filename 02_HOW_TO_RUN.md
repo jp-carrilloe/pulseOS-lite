@@ -6,7 +6,7 @@ This document explains how the repo works, how bootstrap seeds it, and how agent
 
 ## Start Here
 
-The expected starting point is [@RUNME.md](./@RUNME.md).
+The expected starting point is [01_RUNME.md](./01_RUNME.md).
 
 That file gives the short setup flow. This document explains the underlying process in more detail so you understand what bootstrap is doing and where information should live.
 
