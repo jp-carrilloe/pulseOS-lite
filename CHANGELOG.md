@@ -11,8 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 - Initial open source release
 - README, LICENSE, CONTRIBUTING, CODE_OF_CONDUCT, issue templates
+- Portability & Upgrades section in onboarding documentation
+- Interactive CLI prompt to cleanly delete sample memory (`000_Acme_Sample_Company_Memory`) during `npm run bootstrap`
 
 ### Changed
+- Complete rename and rebranding across the repository from "PulseOS Lite Open Source" to "PulseOS-Lite"
+- Core documentation files are now numbered (`01_RUNME.md`, `02_HOW_TO_RUN.md`, etc.) to force natural sorting in file explorers
+- Updated MCP integration documentation and renamed launch script to `pulseos-lite-mcp-launch.sh`
 - Bootstrap is now source-driven and validates real intake documents before onboarding continues
 - `01_RUNME.md` is the primary onboarding entry point and `03_HOW_IT_WORKS.md` now serves as the “How It Works” guide
 - Meeting transcripts now live under Operations instead of the source-intake area
