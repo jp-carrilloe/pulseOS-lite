@@ -1,8 +1,7 @@
 # PulseOS-Lite — The OS for AI Native Companies
 
 <div align="center">
-  <!-- TODO: Replace the file below with your actual screenshot or GIF of the graph -->
-  <img src="./assets/graph-demo.gif" alt="PulseOS-Lite Knowledge Graph Demo" width="100%" />
+  <img src="./docs/assets/pulseos-lite-graph-workspace-preview.png" alt="PulseOS Lite graph workspace preview" width="100%" />
 </div>
 
 > "Complexity is the enemy of execution. Strategy is the art of focusing on the right things."
@@ -129,7 +128,8 @@ The `ontology_domain` is the document's structural placement in the company brai
 What uses this database today:
 - the local CLI chat flow (`npm run chat`) uses the SQLite database and stored vectors to retrieve relevant company-brain documents before answering
 - the local daemon uses the same database, so a different terminal can access the same indexed company brain as long as it runs from this repo's `cli/` folder
-- the local graph UI (`npm run graph`) uses the same SQLite index in two focused views: Company Ontology for the folder hierarchy, and Document Relationships for a gravity-style Markdown reference map with quiet connector lines and hover-only document labels; the graph can be panned, zoomed, fitted, reset, and manually rearranged by dragging nodes
+- the local graph UI (`npm run graph`) uses the same SQLite index in two focused views: Company Ontology for the folder hierarchy, and Document Relationships for a gravity-style Markdown reference map with quiet connector lines and hover-only document labels; the graph can be panned, zoomed, fitted, reset, manually rearranged by dragging nodes, hidden without losing the control bar, and reopened from the same toolbar
+- the graph UI now includes a docked mini IDE for Markdown editing: multiple open document tabs, save/save-all, dirty-state indicators, a resizable editor pane, and a local terminal that can dock right or bottom
 - `npm run index` can create or refresh the same database without opening chat
 - `npm run status` checks whether the database, tables, and latest indexing/vectorization run are healthy
 
@@ -152,7 +152,7 @@ Commands:
 - `npm run chat`
   starts the daemon, creates or refreshes the SQL index, and runs vectorization
 - `npm run graph`
-  starts the daemon and prints a private local browser URL for the interactive two-mode ontology/document graph UI
+  starts the daemon and prints a private local browser URL for the interactive two-mode ontology/document graph UI with a docked document IDE and terminal
 - `npm run index`
   manually creates or refreshes the SQLite database, SQL tables, document relationships, summaries, and vectors; run this after new Markdown documents are added outside the graph editor
 - `npm run status`

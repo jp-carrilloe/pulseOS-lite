@@ -28,6 +28,7 @@ interface GraphCanvasProps {
   snapshot: GraphSnapshot;
   colorForType: (type: string) => string;
   mode?: "full" | "compact";
+  hideSurface?: boolean;
   searchText?: string;
   selectedEntityTypes?: Set<string>;
   selectedRelationshipTypes?: Set<string>;
@@ -38,6 +39,7 @@ interface GraphCanvasProps {
   selectedNodeId?: string | null;
   headerBadges?: ReactNode;
   toolbarControls?: ReactNode;
+  maintenanceControls?: ReactNode;
   fitTrigger?: number;
   relayoutTrigger?: number;
 }
@@ -200,6 +202,7 @@ export function GraphCanvas({
   snapshot,
   colorForType,
   mode = "full",
+  hideSurface = false,
   searchText,
   selectedEntityTypes,
   selectedRelationshipTypes,
@@ -210,6 +213,7 @@ export function GraphCanvas({
   selectedNodeId,
   headerBadges,
   toolbarControls,
+  maintenanceControls,
   fitTrigger,
   relayoutTrigger,
 }: GraphCanvasProps) {
@@ -668,9 +672,10 @@ export function GraphCanvas({
       {mode === "full" ? (
         <LiteGraphControls
           title="Memory map"
-          subtitle="Switch views, inspect node counts, and use the graph controls below."
+          subtitle="Switch views, inspect node counts, and keep expensive index operations tucked into maintenance."
           headerBadges={headerBadges}
           toolbarControls={toolbarControls}
+          maintenanceControls={maintenanceControls}
           entityTypes={legendEntityTypes}
           relationshipTypes={legendRelationshipTypes}
           readLayer={snapshot.meta.readLayer}
@@ -678,87 +683,94 @@ export function GraphCanvas({
         />
       ) : null}
 
-      <div className="lite-graph-surface">
-        <div className="lite-graph-surface-tools">
-          <div className="lite-graph-dock-group">
-            <span className="graph-dock-label">View</span>
-            <div className="lite-graph-mini-dock" role="group" aria-label="Graph view controls">
-              <button
-                type="button"
-                className="graph-icon-button graph-tooltip-target"
-                data-tooltip="Reset to the default graph view"
-                onClick={resetDefaultView}
-                title="Default view"
-                aria-label="Default view"
-              >
-                ↺
-              </button>
-              <button
-                type="button"
-                className="graph-icon-button graph-tooltip-target"
-                data-tooltip="Zoom in"
-                onClick={zoomIn}
-                title="Zoom in"
-                aria-label="Zoom in"
-              >
-                +
-              </button>
-              <button
-                type="button"
-                className="graph-icon-button graph-tooltip-target"
-                data-tooltip="Zoom out"
-                onClick={zoomOut}
-                title="Zoom out"
-                aria-label="Zoom out"
-              >
-                −
-              </button>
-              <button
-                type="button"
-                className="graph-icon-button graph-tooltip-target"
-                data-tooltip="Fit the graph to the viewport"
-                onClick={fitGraph}
-                title="Fit graph"
-                aria-label="Fit graph"
-              >
-                ⤢
-              </button>
-              {toolbarControls ? <div className="lite-graph-mini-divider" aria-hidden="true" /> : null}
-              {toolbarControls ? <div className="lite-graph-mini-extra">{toolbarControls}</div> : null}
-            </div>
-          </div>
-
-          <div className="lite-graph-dock-group">
-            <span className="graph-dock-label">Layout</span>
-            <div className="lite-graph-mini-dock lite-graph-layout-dock" role="group" aria-label="Graph layout">
-              {LAYOUT_OPTIONS.map((option) => (
+      {!hideSurface ? (
+        <div className="lite-graph-surface">
+          <div className="lite-graph-surface-tools">
+            <div className="lite-graph-dock-group">
+              <span className="graph-dock-label">View</span>
+              <div className="lite-graph-mini-dock" role="group" aria-label="Graph view controls">
                 <button
-                  key={option.id}
                   type="button"
-                  className={layoutName === option.id ? "graph-icon-button graph-tooltip-target active" : "graph-icon-button graph-tooltip-target"}
-                  data-tooltip={option.label}
-                  onClick={() => applyLayout(option.id)}
-                  title={option.label}
-                  aria-label={option.label}
+                  className="graph-icon-button graph-tooltip-target"
+                  data-tooltip="Reset to the default graph view"
+                  onClick={resetDefaultView}
+                  title="Default view"
+                  aria-label="Default view"
                 >
-                  {option.icon}
+                  ↺
                 </button>
-              ))}
+                <button
+                  type="button"
+                  className="graph-icon-button graph-tooltip-target"
+                  data-tooltip="Zoom in"
+                  onClick={zoomIn}
+                  title="Zoom in"
+                  aria-label="Zoom in"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  className="graph-icon-button graph-tooltip-target"
+                  data-tooltip="Zoom out"
+                  onClick={zoomOut}
+                  title="Zoom out"
+                  aria-label="Zoom out"
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  className="graph-icon-button graph-tooltip-target"
+                  data-tooltip="Fit the graph to the viewport"
+                  onClick={fitGraph}
+                  title="Fit graph"
+                  aria-label="Fit graph"
+                >
+                  ⤢
+                </button>
+              </div>
+            </div>
+
+            <div className="lite-graph-dock-group">
+              <span className="graph-dock-label">Layout</span>
+              <div className="lite-graph-mini-dock lite-graph-layout-dock" role="group" aria-label="Graph layout">
+                {LAYOUT_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={layoutName === option.id ? "graph-icon-button graph-tooltip-target active" : "graph-icon-button graph-tooltip-target"}
+                    data-tooltip={option.label}
+                    onClick={() => applyLayout(option.id)}
+                    title={option.label}
+                    aria-label={option.label}
+                  >
+                    {option.icon}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
+          <div className="lite-graph-surface-canvas">
+            <CytoscapeComponent
+              elements={[]}
+              stylesheet={cognitiveStylesheet}
+              cy={handleCyReady}
+              className="lite-graph-cytoscape"
+              style={{ width: "100%", height: "100%" }}
+              minZoom={0.05}
+              maxZoom={3}
+            />
+          </div>
         </div>
-        <div className="lite-graph-surface-canvas">
-          <CytoscapeComponent
-            elements={[]}
-            stylesheet={cognitiveStylesheet}
-            cy={handleCyReady}
-            className="lite-graph-cytoscape"
-            style={{ width: "100%", height: "100%" }}
-            minZoom={0.05}
-            maxZoom={3}
-          />
+      ) : (
+        <div className="lite-graph-surface lite-graph-surface-hidden">
+          <div className="lite-graph-surface-hidden-copy">
+            <span className="graph-dock-label">Memory map hidden</span>
+            <p className="muted-copy">Use the Map toggle above to bring the graph canvas back.</p>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
