@@ -372,6 +372,17 @@ What it supports:
 
 ---
 
+## Portability & Upgrades
+
+PulseOS-Lite is designed with portability in mind. The company brain lives entirely in your Markdown files and source documents, not locked inside a proprietary database.
+
+If you ever want to upgrade to a newer version of the repository, all you need to do is:
+1. Copy your existing `001_Data_Souces` and `000_Company_Memory` folders.
+2. Paste them into the new version of the repository.
+3. Run `npm run index` (or launch `npm run chat` and type `/reload`) to seamlessly rebuild the graph, vector embeddings, and local SQLite index.
+
+---
+
 ## Two Ways to Seed the Repo
 
 There are 2 supported ways to seed the company brain:
