@@ -11,41 +11,26 @@ By connecting this MCP server, your AI assistants can:
 
 ## 1. Setup for Claude Code (Terminal)
 
-For Claude Code running in your terminal, configure it to launch the local MCP server from this repo with:
+If you are using Claude Code in your terminal, **you don't need to configure anything!**
 
-```bash
-cd cli
-node --import tsx/esm mcp-server.ts
-```
-
-Do not use `npm run mcp` as the MCP command in clients that rely on `stdio`. `npm` prints extra banner lines before the protocol stream, which can break MCP handshakes.
-
-If your MCP client reliably honors `cwd`, you can point it at the repo-local CLI process directly:
-
-```json
-{
-  "mcpServers": {
-    "pulseos-lite-mcp": {
-      "command": "node",
-      "args": ["--import", "tsx/esm", "mcp-server.ts"],
-      "cwd": "/absolute/path/to/PulseOS-Lite/cli"
-    }
-  }
-}
-```
-
-If your MCP client ignores `cwd`, launches from `/`, or shows `Cannot find package 'tsx' imported from /`, use the repo wrapper script instead. It resolves the local `tsx` loader by absolute path before starting the server:
+This repository includes a `claude.json` file at the root which automatically configures the MCP server for Claude Code. It looks exactly like this:
 
 ```json
 {
   "mcpServers": {
     "pulseos-lite-mcp": {
       "command": "/bin/zsh",
-      "args": ["/absolute/path/to/PulseOS-Lite/.codex/pulseos-lite-mcp-launch.sh"]
+      "args": [
+        "./.codex/pulseos-lite-mcp-launch.sh"
+      ]
     }
   }
 }
 ```
+
+When you run `claude` inside this repository, it will automatically detect and start the `pulseos-lite-mcp` server using the included wrapper script.
+
+*(Note: Do not use `npm run mcp` as the MCP command in any clients that rely on `stdio`. `npm` prints extra banner lines before the protocol stream, which can break MCP handshakes. This is why our `claude.json` points directly to the wrapper script instead.)*
 
 ---
 
