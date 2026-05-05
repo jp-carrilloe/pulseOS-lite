@@ -1,4 +1,4 @@
-# PulseOS Lite Open Source — The OS for 
+# PulseOS Lite Open Source — The OS for AI Native Companies
 
 > "Complexity is the enemy of execution. Strategy is the art of focusing on the right things."
 
