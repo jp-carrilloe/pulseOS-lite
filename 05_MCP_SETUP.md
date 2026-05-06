@@ -7,6 +7,12 @@ By connecting this MCP server, your AI assistants can:
 - Retrieve semantic context from the company brain
 - Get rebuild advice or trigger index rebuilds manually
 
+The MCP server reads the same persistent local workspace storage as the CLI and graph UI:
+- default workspace root: `~/.pulseos/workspaces/<workspace-id>/`
+- preferred override: `PULSEOS_HOME`
+- optional explicit workspace selector: `PULSEOS_WORKSPACE_ID`
+- legacy compatibility overrides still supported: `PULSEOS_LITE_OPEN_SOURCE_CLI_HOME`, `PULSEOS_CLI_HOME`
+
 ---
 
 ## 1. Setup for Claude Code (Terminal)
@@ -109,4 +115,5 @@ const response = await client.callTool({
 - **No Tools Showing Up**: Ensure CLI dependencies are installed (`cd cli && npm install`).
 - **`Cannot find package 'tsx' imported from /`**: Your MCP client started the server from the wrong directory or ignored `cwd`. Switch that client to the wrapper script shown above.
 - **Paths**: If you move the repo, update the MCP client config so the wrapper script or `cwd` still points to this repo.
+- **Workspace Storage Location**: The MCP server no longer expects its SQLite state to live inside `cli/`. If you need a non-default location, set `PULSEOS_HOME` before launching the MCP client so the CLI, daemon, graph UI, and MCP server all land on the same workspace.
 - **Graph Relationships Missing or New Docs Not Showing**: The MCP retrieval layer depends on the same SQLite index as the graph UI. If document links seem missing, or if newly added Markdown files in `000_Company_Memory` do not appear, run `cd cli && npm run index`, use `/reload` inside chat, or click `Rebuild index` / `Rebuild graph/index` in the graph UI. A browser refresh only reloads the last indexed SQLite snapshot.

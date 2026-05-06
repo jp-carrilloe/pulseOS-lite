@@ -109,7 +109,22 @@ Keeping that information current is the responsibility of the user. Bootstrap gi
 The local CLI creates a SQLite database for retrieval.
 
 By default it lives at:
-- `cli/.pulseos-lite-cli-state/knowledge-base.sqlite`
+- `~/.pulseos/workspaces/<workspace-id>/knowledge-base.sqlite`
+
+The rest of the local runtime state lives alongside it:
+- `~/.pulseos/workspaces/<workspace-id>/daemon-state.json`
+- `~/.pulseos/workspaces/<workspace-id>/bootstrap-state.json`
+- `~/.pulseos/workspaces/<workspace-id>/snapshots/`
+- `~/.pulseos/workspaces/<workspace-id>/logs/`
+- `~/.pulseos/workspaces/<workspace-id>/cache/`
+
+Overrides:
+- `PULSEOS_HOME`
+  preferred root override, for example `/data/pulseos` in Docker
+- `PULSEOS_WORKSPACE_ID`
+  explicit workspace selector when you want multiple repos or environments under one PulseOS home
+- `PULSEOS_LITE_OPEN_SOURCE_CLI_HOME` or `PULSEOS_CLI_HOME`
+  legacy direct workspace-dir overrides that still work for backward compatibility
 
 The main tables are:
 - `documents`
@@ -127,7 +142,7 @@ The `ontology_domain` is the document's structural placement in the company brai
 
 What uses this database today:
 - the local CLI chat flow (`npm run chat`) uses the SQLite database and stored vectors to retrieve relevant company-brain documents before answering
-- the local daemon uses the same database, so a different terminal can access the same indexed company brain as long as it runs from this repo's `cli/` folder
+- the local daemon uses the same workspace database, so a different terminal can access the same indexed company brain without storing mutable state inside the repo
 - the local graph UI (`npm run graph`) uses the same SQLite index in two focused views: Company Ontology for the folder hierarchy, and Document Relationships for a gravity-style Markdown reference map with quiet connector lines and hover-only document labels; the graph can be panned, zoomed, fitted, reset, manually rearranged by dragging nodes, hidden without losing the control bar, and reopened from the same toolbar
 - the graph UI now includes a docked mini IDE for Markdown editing: multiple open document tabs, save/save-all, dirty-state indicators, a resizable editor pane, and a local terminal that can dock right or bottom
 - `npm run index` can create or refresh the same database without opening chat
@@ -186,6 +201,20 @@ If you want to force a full re-index from the terminal, run:
 cd cli
 node --import tsx/esm index-kb.ts --force
 ```
+
+### Persistent Workspace Storage
+
+PulseOS stores operational memory outside the repository by default.
+
+That means:
+- deleting or recloning the repo does not delete the local company-memory database
+- branch switching does not become accidental database state management
+- Docker rebuilds can keep the same workspace memory when `~/.pulseos` is mounted as a volume
+- Git remains code and Markdown sync, not database sync
+
+Recommended container pattern:
+- mount `~/.pulseos` to `/data/pulseos`
+- set `PULSEOS_HOME=/data/pulseos`
 
 ### Cloud AI Workspace Company Memory
 

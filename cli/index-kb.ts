@@ -1,15 +1,16 @@
-import { REPO_ROOT, getCliDbPath, loadRepoEnv } from "./shared.js";
-import { KnowledgeBaseIndex } from "./retrieval.js";
+import { REPO_ROOT, ensureCliWorkspaceReady, getCliDbPath, loadRepoEnv } from "./shared.js";
+import { openWorkspaceStore } from "./workspace-store.js";
 
 async function main(argv = process.argv.slice(2), env: NodeJS.ProcessEnv = process.env) {
   await loadRepoEnv(env);
+  const workspace = await ensureCliWorkspaceReady(env, { log: (message) => process.stdout.write(message) });
   const force = argv.includes("--force");
   const dbPath = getCliDbPath(env);
-  const index = new KnowledgeBaseIndex({ repoRoot: REPO_ROOT, dbPath, env });
+  const index = openWorkspaceStore({ repoRoot: REPO_ROOT, dbPath, env });
 
   try {
     process.stdout.write(
-      `Preparing local knowledge-base index at:\n${dbPath}\n`,
+      `Preparing local knowledge-base index for workspace ${workspace.paths.workspaceId} at:\n${dbPath}\n`,
     );
     process.stdout.write(
       force

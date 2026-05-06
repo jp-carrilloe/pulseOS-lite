@@ -1,9 +1,13 @@
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import net from "node:net";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  prepareWorkspaceStorage,
+  resolveWorkspacePaths,
+  snapshotWorkspaceDatabase,
+} from "./workspace-storage.js";
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -62,22 +66,39 @@ export interface BootstrapState {
 }
 
 export function getCliHome(env: NodeJS.ProcessEnv = process.env): string {
-  const configuredHome =
-    env.PULSEOS_LITE_OPEN_SOURCE_CLI_HOME?.trim() ?? env.PULSEOS_CLI_HOME?.trim();
-  if (configuredHome) return path.resolve(configuredHome);
-  return path.join(REPO_ROOT, "cli", ".pulseos-lite-cli-state");
+  return resolveWorkspacePaths(REPO_ROOT, env).workspaceRoot;
+}
+
+export function getCliWorkspaceId(env: NodeJS.ProcessEnv = process.env): string {
+  return resolveWorkspacePaths(REPO_ROOT, env).workspaceId;
+}
+
+export function getCliHomeRoot(env: NodeJS.ProcessEnv = process.env): string {
+  return resolveWorkspacePaths(REPO_ROOT, env).homeRoot;
+}
+
+export function getCliSnapshotsDir(env: NodeJS.ProcessEnv = process.env): string {
+  return resolveWorkspacePaths(REPO_ROOT, env).snapshotsDir;
+}
+
+export function getCliLogsDir(env: NodeJS.ProcessEnv = process.env): string {
+  return resolveWorkspacePaths(REPO_ROOT, env).logsDir;
+}
+
+export function getCliCacheDir(env: NodeJS.ProcessEnv = process.env): string {
+  return resolveWorkspacePaths(REPO_ROOT, env).cacheDir;
 }
 
 export function getDaemonStateFilePath(env: NodeJS.ProcessEnv = process.env): string {
-  return path.join(getCliHome(env), "daemon-state.json");
+  return resolveWorkspacePaths(REPO_ROOT, env).daemonStateFilePath;
 }
 
 export function getBootstrapStateFilePath(env: NodeJS.ProcessEnv = process.env): string {
-  return path.join(getCliHome(env), "bootstrap-state.json");
+  return resolveWorkspacePaths(REPO_ROOT, env).bootstrapStateFilePath;
 }
 
 export function getCliDbPath(env: NodeJS.ProcessEnv = process.env): string {
-  return path.join(getCliHome(env), "knowledge-base.sqlite");
+  return resolveWorkspacePaths(REPO_ROOT, env).dbPath;
 }
 
 export function getDaemonIdleMs(env: NodeJS.ProcessEnv = process.env): number {
@@ -136,6 +157,20 @@ export async function readBootstrapState(env: NodeJS.ProcessEnv = process.env): 
   } catch {
     return null;
   }
+}
+
+export async function ensureCliWorkspaceReady(
+  env: NodeJS.ProcessEnv = process.env,
+  options?: { log?: (message: string) => void },
+) {
+  return prepareWorkspaceStorage({ repoRoot: REPO_ROOT, env, log: options?.log });
+}
+
+export async function createWorkspaceSnapshot(
+  env: NodeJS.ProcessEnv = process.env,
+  options?: { timestamp?: string },
+): Promise<string | null> {
+  return snapshotWorkspaceDatabase({ repoRoot: REPO_ROOT, env, timestamp: options?.timestamp });
 }
 
 export async function probeDaemonHealth(port: number, token: string): Promise<boolean> {

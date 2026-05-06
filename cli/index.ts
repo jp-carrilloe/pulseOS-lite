@@ -7,8 +7,11 @@ import { fileURLToPath } from "node:url";
 import { collectBootstrapIntake } from "./bootstrap-intake.js";
 import {
   REPO_ROOT,
+  ensureCliWorkspaceReady,
   getBootstrapStateFilePath,
   getCliDbPath,
+  getCliHome,
+  getCliHomeRoot,
   type DaemonState,
   type ModelName,
   delay,
@@ -41,6 +44,18 @@ async function main(argv = process.argv.slice(2), env: NodeJS.ProcessEnv = proce
   await loadRepoEnv(env);
   const args = parseCliArgs(argv);
   const [command, subcommand] = args.positionals;
+  const shouldPrepareWorkspace =
+    command === undefined
+    || command === "chat"
+    || command === "graph"
+    || command === "status"
+    || (command === "daemon" && subcommand === "start");
+  if (shouldPrepareWorkspace) {
+    const workspace = await ensureCliWorkspaceReady(env, { log: (message) => process.stdout.write(message) });
+    process.stdout.write(
+      `Workspace storage: ${workspace.paths.workspaceRoot}\n`,
+    );
+  }
 
   try {
     switch (`${command ?? ""} ${subcommand ?? ""}`.trim()) {
@@ -109,6 +124,8 @@ Environment variables (set in .env at repo root):
   ANTHROPIC_API_KEY
   OPENAI_API_KEY
   GEMINI_API_KEY
+  PULSEOS_HOME
+  PULSEOS_WORKSPACE_ID
   PULSEOS_CHAT_OPENAI_MODEL
   PULSEOS_CHAT_ANTHROPIC_MODEL
   PULSEOS_CHAT_GEMINI_MODEL
@@ -266,6 +283,10 @@ async function printWorkflowStatus(env: NodeJS.ProcessEnv): Promise<void> {
   const lines = [
     "PulseOS-Lite Workflow Status",
     "=======================================",
+    "",
+    "Workspace:",
+    `- Home root: ${getCliHomeRoot(env)}`,
+    `- Workspace root: ${getCliHome(env)}`,
     "",
     "Bootstrap:",
   ];
