@@ -28,4 +28,5 @@ yarn-error.log*
 .codex/*
 !.codex/company-ops-mcp-launch.sh
 cli/.pulseos-cli-state/
+cli/.pulseos-lite-cli-state/
 cli/.pulseos-lite-open-source-cli-state/

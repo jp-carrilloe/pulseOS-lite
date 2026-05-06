@@ -316,6 +316,13 @@ If you want the CLI to use its local retrieval layer after the repo is created:
 - `npm run index` or `:reload` manually refreshes indexing and vectorization
 - the SQL index and vector-based retrieval are part of the local CLI workflow, not just the cloud seeding workflow
 
+Persistent workspace storage:
+- by default the CLI stores its mutable state in `~/.pulseos/workspaces/<workspace-id>/`
+- this includes `knowledge-base.sqlite`, daemon/bootstrap state files, snapshots, logs, and cache
+- `PULSEOS_HOME` changes the root directory
+- `PULSEOS_WORKSPACE_ID` selects a specific workspace inside that home
+- GitHub syncs the repo contents, not the operational memory database
+
 The local SQL/vector layer stores:
 - `documents`
   metadata, summaries, and `ontology_domain` placement for indexed company-brain docs

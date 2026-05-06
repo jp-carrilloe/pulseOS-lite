@@ -18,8 +18,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { buildBootstrapEvidenceBlock, collectBootstrapIntake } from "./bootstrap-intake.js";
-import { KnowledgeBaseIndex } from "./retrieval.js";
 import {
+  ensureCliWorkspaceReady,
   fetchDaemonJson,
   getCliDbPath,
   loadRepoEnv,
@@ -27,6 +27,7 @@ import {
   readDaemonState,
   writeBootstrapState,
 } from "./shared.js";
+import { openWorkspaceStore } from "./workspace-store.js";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TODAY = new Date().toISOString().split("T")[0];
@@ -251,6 +252,7 @@ Rules:
 
 async function main() {
   await loadRepoEnv(process.env);
+  const workspace = await ensureCliWorkspaceReady(process.env, { log: (message) => process.stdout.write(message) });
   const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
   let bootstrapStateWritten = false;
   let bootstrapStartedAt: string | null = null;
@@ -265,6 +267,7 @@ async function main() {
     process.stdout.write(
       "\npulseos-lite-cli bootstrap — Seed your PulseOS-Lite repo with real content\n",
     );
+    process.stdout.write(`Workspace storage: ${workspace.paths.workspaceRoot}\n`);
     process.stdout.write(
       "Bootstrap seeds documents in dependency order. It reads raw source material from 001_Data_Souces and checks existing curated docs in 000_Company_Memory.\n",
     );
@@ -478,6 +481,7 @@ async function main() {
 }
 
 async function refreshCompanyMemoryIndex(env: NodeJS.ProcessEnv): Promise<BootstrapIndexRefreshResult> {
+  await ensureCliWorkspaceReady(env, { log: (message) => process.stdout.write(message) });
   const daemonState = await readDaemonState(env);
   if (daemonState && (await probeDaemonHealth(daemonState.port, daemonState.token))) {
     const result = await fetchDaemonJson<{
@@ -500,7 +504,7 @@ async function refreshCompanyMemoryIndex(env: NodeJS.ProcessEnv): Promise<Bootst
     };
   }
 
-  const index = new KnowledgeBaseIndex({
+  const index = openWorkspaceStore({
     repoRoot: REPO_ROOT,
     dbPath: getCliDbPath(env),
     env,

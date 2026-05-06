@@ -116,6 +116,18 @@ cd cli && npm install
 npm run chat
 ```
 
+### 3.1 Persistent Workspace Storage
+
+The CLI now stores mutable runtime state outside the repo by default.
+
+- default workspace root: `~/.pulseos/workspaces/<workspace-id>/`
+- stored there: `knowledge-base.sqlite`, daemon state, bootstrap state, snapshots, logs, and cache
+- preferred override: `PULSEOS_HOME`
+- optional explicit workspace selector: `PULSEOS_WORKSPACE_ID`
+- legacy direct workspace overrides still work: `PULSEOS_LITE_OPEN_SOURCE_CLI_HOME`, `PULSEOS_CLI_HOME`
+
+This keeps Git focused on code and Markdown documents instead of pretending it is a database replication layer.
+
 ### 4. Keep the Graph Current
 
 The graph UI reads the local SQLite index, not the Markdown folders directly. If you add, create, move, rename, or delete Markdown documents in `000_Company_Memory`, rebuild the graph/index before relying on the graph or retrieval results.
@@ -128,6 +140,10 @@ npm run index
 ```
 
 A browser refresh only reloads the last indexed snapshot; it does not discover newly created Markdown files by itself.
+
+If you are containerizing the CLI or daemon:
+- mount `~/.pulseos` as a persistent volume
+- set `PULSEOS_HOME` to the mounted path inside the container
 
 ### Model Switching
 You can switch models mid-conversation, enabling you to run whatever foundation model you prefer:

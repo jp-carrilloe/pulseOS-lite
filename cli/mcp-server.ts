@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import process from "node:process";
 
-import { REPO_ROOT, getCliDbPath, loadRepoEnv } from "./shared.js";
+import { REPO_ROOT, ensureCliWorkspaceReady, getCliDbPath, loadRepoEnv } from "./shared.js";
 
 type JsonRpcId = string | number | null;
 
@@ -80,10 +80,10 @@ const TOOLS: ToolDefinition[] = [
 
 silenceNodeSqliteExperimentalWarning();
 
-const { KnowledgeBaseIndex } = await import("./retrieval.js");
-
 await loadRepoEnv(process.env);
-const kbIndex = new KnowledgeBaseIndex({
+await ensureCliWorkspaceReady(process.env);
+const { openWorkspaceStore } = await import("./workspace-store.js");
+const kbIndex = openWorkspaceStore({
   repoRoot: REPO_ROOT,
   dbPath: getCliDbPath(process.env),
   env: process.env,

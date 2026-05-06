@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import os from "node:os";
+import path from "node:path";
+import fsp from "node:fs/promises";
 import test from "node:test";
 
 test("mcp server initialize handshake does not write warnings to stderr", async () => {
+  const isolatedWorkspace = await fsp.mkdtemp(path.join(os.tmpdir(), "pulseos-lite-mcp-test-"));
   const child = spawn("node", ["--import", "tsx/esm", "mcp-server.ts"], {
     cwd: process.cwd(),
     stdio: ["pipe", "pipe", "pipe"],
+    env: { ...process.env, PULSEOS_CLI_HOME: isolatedWorkspace },
   });
 
   const stderrChunks: Buffer[] = [];

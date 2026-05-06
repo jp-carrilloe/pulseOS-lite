@@ -12,6 +12,7 @@ import {
   REPO_ROOT,
   type DaemonState,
   type ModelName,
+  ensureCliWorkspaceReady,
   getAvailablePort,
   getCliDbPath,
   getDefaultChatModel,
@@ -21,7 +22,8 @@ import {
   removeDaemonState,
   writeDaemonState,
 } from "./shared.js";
-import { KnowledgeBaseIndex, type KnowledgeGraphSnapshot, type RebuildAdvisorStatus } from "./retrieval.js";
+import type { KnowledgeGraphSnapshot, RebuildAdvisorStatus } from "./retrieval.js";
+import { openWorkspaceStore } from "./workspace-store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const COMPANY_MEMORY_ROOT = "000_Company_Memory";
@@ -2450,9 +2452,13 @@ function buildRetrievalQuery(messages: ChatMessage[], latestMessage: string): st
 
 export async function startDaemonServer(env: NodeJS.ProcessEnv = process.env): Promise<void> {
   await loadRepoEnv(env);
+  const workspace = await ensureCliWorkspaceReady(env, { log: (message) => process.stdout.write(message) });
 
-  process.stdout.write("[pulseos-lite-cli] Loading Company Memory knowledge base...\n");
-  const kbIndex = new KnowledgeBaseIndex({
+  process.stdout.write(
+    `[pulseos-lite-cli] Loading Company Memory knowledge base for workspace ${workspace.paths.workspaceId}...\n`,
+  );
+  process.stdout.write(`[pulseos-lite-cli] Workspace storage: ${workspace.paths.workspaceRoot}\n`);
+  const kbIndex = openWorkspaceStore({
     repoRoot: REPO_ROOT,
     dbPath: getCliDbPath(env),
     env,

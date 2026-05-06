@@ -15,6 +15,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Interactive CLI prompt to cleanly delete sample memory (`000_Acme_Sample_Company_Memory`) during `npm run bootstrap`
 - Graph workspace mini IDE with docked multi-tab Markdown editing, save/save-all flows, dirty indicators, and a resizable editor pane
 - Graph workspace terminal dock toggle so the local shell can sit on the right or bottom
+- Local-first workspace storage resolver with `PULSEOS_HOME` and `PULSEOS_WORKSPACE_ID`
+- Reserved workspace directories for snapshots, logs, and cache under `~/.pulseos/workspaces/<workspace-id>/`
+- One-time auto-migration from legacy repo-local CLI state into the new persistent workspace home
+- Workspace-storage tests covering path resolution, compatibility overrides, and migration safety
 
 ### Changed
 - Complete rename and rebranding across the repository from "PulseOS Lite Open Source" to "PulseOS-Lite"
@@ -24,6 +28,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `01_RUNME.md` is the primary onboarding entry point and `03_HOW_IT_WORKS.md` now serves as the “How It Works” guide
 - Meeting transcripts now live under Operations instead of the source-intake area
 - The graph UI no longer uses a blocking document modal; the graph controls stay visible when the map is hidden, and the editor/terminal can share the workspace like a lightweight IDE
+- Default CLI persistence moved out of `cli/` and into `~/.pulseos/workspaces/<workspace-id>/`
+- Chat, graph, daemon, bootstrap, index, and MCP flows now resolve the same shared workspace path before touching SQLite state
+- Documentation now treats Git as code and Markdown sync, not database sync, and recommends mounting `PULSEOS_HOME` as the durable Docker volume root
 
 ---
 

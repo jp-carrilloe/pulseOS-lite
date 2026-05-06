@@ -529,6 +529,12 @@ The graph read path is now more SQL-native than before:
 - document-to-document links are persisted during indexing into `document_references`
 - graph reads no longer need to reopen every Markdown file just to rebuild reference edges
 
+The persistence model is now local-first and repo-external:
+- mutable runtime state lives in `~/.pulseos/workspaces/<workspace-id>/` by default
+- that workspace holds `knowledge-base.sqlite`, daemon/bootstrap state, snapshots, logs, and cache
+- `PULSEOS_HOME` can remap the root, which is the recommended Docker volume mount pattern
+- the repo stays focused on code, configs, and Markdown company memory, while Git remains code sync rather than database sync
+
 The retrieval prompt path is also more stable:
 - semantic ranking still uses summary vectors from `knowledge_vectors`
 - the full prompt context for top matches is assembled from persisted `document_chunks`
