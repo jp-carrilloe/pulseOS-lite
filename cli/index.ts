@@ -124,6 +124,10 @@ Environment variables (set in .env at repo root):
   ANTHROPIC_API_KEY
   OPENAI_API_KEY
   GEMINI_API_KEY
+  PULSEOS_CLAUDE_AUTH_MODE
+  PULSEOS_CLAUDE_BIN
+  PULSEOS_OPENAI_AUTH_MODE
+  PULSEOS_OPENAI_CODEX_BIN
   PULSEOS_HOME
   PULSEOS_WORKSPACE_ID
   PULSEOS_CHAT_OPENAI_MODEL
@@ -234,6 +238,9 @@ async function printWorkflowStatus(env: NodeJS.ProcessEnv): Promise<void> {
   const daemonPidAlive = daemonState ? isProcessAlive(daemonState.pid) : false;
   const dbPath = getCliDbPath(env);
   const dbExists = fs.existsSync(dbPath);
+  const openAiStatus = await getModelCredentialStatus("openai", env);
+  const claudeStatus = await getModelCredentialStatus("claude", env);
+  const geminiStatus = await getModelCredentialStatus("gemini", env);
 
   let documentCount = 0;
   let vectorCount = 0;
@@ -330,6 +337,11 @@ async function printWorkflowStatus(env: NodeJS.ProcessEnv): Promise<void> {
     }
   }
 
+  lines.push("", "Model auth:");
+  lines.push(`- OpenAI: ${openAiStatus.ok ? `available via ${openAiStatus.method}` : `unavailable — ${openAiStatus.message}`}`);
+  lines.push(`- Claude: ${claudeStatus.ok ? `available via ${claudeStatus.method}` : `unavailable — ${claudeStatus.message}`}`);
+  lines.push(`- Gemini: ${geminiStatus.ok ? `available via ${geminiStatus.method}` : `unavailable — ${geminiStatus.message}`}`);
+
   lines.push("", "SQL + vectorization:");
   lines.push(`- Database path: ${dbPath}`);
   lines.push(`- Database exists: ${dbExists ? "yes" : "no"}`);
@@ -400,8 +412,12 @@ async function runInteractiveChat(
   flags: Record<string, string | boolean>,
   env: NodeJS.ProcessEnv,
 ): Promise<void> {
-  let selection = resolveChatModelSelection(flags.model, flags["model-id"] ?? flags.modelId ?? flags["chat-model"], env);
-  assertModelCredentials(selection.provider, env);
+  let selection = await resolveChatModelSelection(
+    flags.model,
+    flags["model-id"] ?? flags.modelId ?? flags["chat-model"],
+    env,
+  );
+  await assertModelCredentials(selection.provider, env);
 
   process.stdout.write("Starting pulseos-lite-cli daemon...\n");
   const state = await ensureRuntime(env);
@@ -486,14 +502,14 @@ async function handleReplCommand(
         return null;
       }
 
-      const nextSelection = resolveChatModelSelection(args[0], args[1] ?? "auto", env);
-      assertModelCredentials(nextSelection.provider, env);
+      const nextSelection = await resolveChatModelSelection(args[0], args[1] ?? "auto", env);
+      await assertModelCredentials(nextSelection.provider, env);
       process.stdout.write(`Switched to ${nextSelection.provider}:${nextSelection.modelId}.\n`);
       return nextSelection;
     }
 
     case "models": {
-      printModelOptions(env);
+      await printModelOptions(env);
       return null;
     }
 
@@ -554,13 +570,13 @@ function printWelcome(selection: ChatModelSelection) {
   process.stdout.write(renderWelcomeBox(lines));
 }
 
-function resolveChatModelSelection(
+async function resolveChatModelSelection(
   providerInput: string | boolean | undefined,
   modelIdInput: string | boolean | undefined,
   env: NodeJS.ProcessEnv,
-): ChatModelSelection {
+): Promise<ChatModelSelection> {
   const providerValue = typeof providerInput === "string" ? providerInput.trim().toLowerCase() : "";
-  const provider = providerValue && providerValue !== "auto" ? parseModelProvider(providerValue) : selectAutoProvider(env);
+  const provider = providerValue && providerValue !== "auto" ? parseModelProvider(providerValue) : await selectAutoProvider(env);
   const requestedModelId = typeof modelIdInput === "string" ? modelIdInput.trim() : "";
   const modelId = requestedModelId && requestedModelId !== "auto" ? requestedModelId : getDefaultChatModel(provider, env);
   return { provider, modelId };
@@ -571,24 +587,24 @@ function parseModelProvider(value: string): ModelName {
   throw new Error(`Unknown model provider "${value}". Use one of: auto, openai, claude, gemini.`);
 }
 
-function selectAutoProvider(env: NodeJS.ProcessEnv): ModelName {
+async function selectAutoProvider(env: NodeJS.ProcessEnv): Promise<ModelName> {
   for (const provider of MODEL_PROVIDERS) {
-    if (getModelCredentialStatus(provider, env).ok) return provider;
+    if ((await getModelCredentialStatus(provider, env)).ok) return provider;
   }
   throw new Error(
-    "No configured chat provider was found for `auto`.\nAdd `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`/`GOOGLE_API_KEY` to `.env` or `.env.local`.",
+    "No configured chat provider was found for `auto`.\nAdd `OPENAI_API_KEY`, run `codex login`, add `ANTHROPIC_API_KEY`, run `claude auth login`, or configure `GEMINI_API_KEY` / `GOOGLE_API_KEY` in `.env` or `.env.local`.",
   );
 }
 
-function printModelOptions(env: NodeJS.ProcessEnv) {
+async function printModelOptions(env: NodeJS.ProcessEnv) {
   process.stdout.write("Available chat model selectors:\n");
   process.stdout.write("  /model auto                       auto-pick the first configured provider\n");
   for (const provider of MODEL_PROVIDERS) {
-    const credential = getModelCredentialStatus(provider, env);
+    const credential = await getModelCredentialStatus(provider, env);
     const defaultModel = getDefaultChatModel(provider, env);
     const examples = SUGGESTED_CHAT_MODELS[provider].join(", ");
     process.stdout.write(
-      `  /model ${provider} auto                 use ${provider}'s default (${defaultModel}) ${credential.ok ? "[key found]" : "[missing key]"}\n`,
+      `  /model ${provider} auto                 use ${provider}'s default (${defaultModel}) ${credential.ok ? `[${credential.method}]` : "[unavailable]"}\n`,
     );
     process.stdout.write(`  /model ${provider} <model-id>           examples: ${examples}\n`);
   }
@@ -648,10 +664,16 @@ function isWideCodePoint(code: number) {
   );
 }
 
-function assertModelCredentials(model: ModelName, env: NodeJS.ProcessEnv) {
-  const status = getModelCredentialStatus(model, env);
+async function assertModelCredentials(model: ModelName, env: NodeJS.ProcessEnv) {
+  const status = await getModelCredentialStatus(model, env);
   if (!status.ok) {
-    throw new Error(`${status.message}\nAdd ${status.keyName} to \`.env\` or \`.env.local\` at the repo root, then run the command again.`);
+    const remediation =
+      status.keyName === "codex login"
+        ? "Run `codex login` first, or switch OpenAI back to `OPENAI_API_KEY`."
+        : status.keyName === "claude auth login"
+          ? "Run `claude auth login` first, or switch Claude back to `ANTHROPIC_API_KEY`."
+          : `Add ${status.keyName} to \`.env\` or \`.env.local\` at the repo root, then run the command again.`;
+    throw new Error(`${status.message}\n${remediation}`);
   }
 }
 

@@ -3,6 +3,7 @@ import fsp from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { getModelCredentialStatus as resolveModelCredentialStatus, type ProviderCredentialStatus } from "./auth.js";
 import {
   prepareWorkspaceStorage,
   resolveWorkspacePaths,
@@ -291,41 +292,9 @@ export async function loadRepoEnv(env: NodeJS.ProcessEnv = process.env): Promise
   }
 }
 
-export function getModelCredentialStatus(model: ModelName, env: NodeJS.ProcessEnv = process.env): {
-  ok: boolean;
-  keyName: string;
-  message: string;
-} {
-  switch (model) {
-    case "openai": {
-      const value = env.OPENAI_API_KEY?.trim();
-      return value
-        ? { ok: true, keyName: "OPENAI_API_KEY", message: "OpenAI API key found." }
-        : {
-            ok: false,
-            keyName: "OPENAI_API_KEY",
-            message: "OpenAI is the default chat model, but no `OPENAI_API_KEY` was found.",
-          };
-    }
-    case "claude": {
-      const value = env.ANTHROPIC_API_KEY?.trim();
-      return value
-        ? { ok: true, keyName: "ANTHROPIC_API_KEY", message: "Anthropic API key found." }
-        : {
-            ok: false,
-            keyName: "ANTHROPIC_API_KEY",
-            message: "Claude was selected, but no `ANTHROPIC_API_KEY` was found.",
-          };
-    }
-    case "gemini": {
-      const value = env.GEMINI_API_KEY?.trim() ?? env.GOOGLE_API_KEY?.trim();
-      return value
-        ? { ok: true, keyName: env.GEMINI_API_KEY?.trim() ? "GEMINI_API_KEY" : "GOOGLE_API_KEY", message: "Gemini API key found." }
-        : {
-            ok: false,
-            keyName: "GEMINI_API_KEY or GOOGLE_API_KEY",
-            message: "Gemini was selected, but neither `GEMINI_API_KEY` nor `GOOGLE_API_KEY` was found.",
-          };
-    }
-  }
+export async function getModelCredentialStatus(
+  model: ModelName,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<ProviderCredentialStatus> {
+  return resolveModelCredentialStatus(model, env);
 }

@@ -98,9 +98,16 @@ npm run index
 
 or use `/reload` inside chat, or click `Rebuild index` / `Rebuild graph/index` in the graph UI. Until that rebuild runs, the graph may show the previous indexed snapshot.
 
-The bootstrap engine now auto-detects your available model provider and prefers `OPENAI_API_KEY` first, then Anthropic, then Gemini.
+The bootstrap engine now auto-detects your available model provider. For OpenAI, it can use either:
+- `OPENAI_API_KEY`, or
+- a local signed-in Codex session
 
-If you want to use the local CLI runtime, SQL-backed indexing, or vectorization/retrieval after the repo is created, you still need a valid local provider API key. A hosted Codex, Claude, or Gemini subscription alone is not enough for that local pipeline.
+Anthropic and Gemini still require their provider API keys.
+
+Important Phase 1 auth rule:
+- PulseOS chat and bootstrap can use a local Codex session for OpenAI
+- retrieval embeddings still use `OPENAI_API_KEY` when present
+- without `OPENAI_API_KEY`, retrieval falls back to heuristic vectors
 
 Keeping that information current is the responsibility of the user. Bootstrap gives the initial population layer, but the company brain stays useful only if the user continues to add or reference updated source material over time.
 
@@ -171,7 +178,7 @@ Commands:
 - `npm run index`
   manually creates or refreshes the SQLite database, SQL tables, document relationships, summaries, and vectors; run this after new Markdown documents are added outside the graph editor
 - `npm run status`
-  checks bootstrap status, intake readiness, daemon state, SQL table creation, and the latest indexing/vectorization status
+  checks bootstrap status, intake readiness, daemon state, auth availability, SQL table creation, and the latest indexing/vectorization status
 - `npm run daemon:start`
   starts the daemon directly and also creates or refreshes the SQL index plus vectorization
 - `:reload`
@@ -201,6 +208,48 @@ If you want to force a full re-index from the terminal, run:
 cd cli
 node --import tsx/esm index-kb.ts --force
 ```
+
+### OpenAI Auth Modes
+
+PulseOS supports these OpenAI auth modes for chat and bootstrap:
+- `PULSEOS_OPENAI_AUTH_MODE=auto`
+  prefer `OPENAI_API_KEY`, otherwise fall back to a local signed-in Codex session
+- `PULSEOS_OPENAI_AUTH_MODE=api_key`
+  require `OPENAI_API_KEY`
+- `PULSEOS_OPENAI_AUTH_MODE=codex_cli_session`
+  require `codex login`
+
+Optional override:
+- `PULSEOS_OPENAI_CODEX_BIN`
+  choose a non-default `codex` binary path
+
+If you want to switch an existing machine from API-key auth to subscription-backed Codex auth:
+1. ensure the Codex CLI is installed
+2. run `codex login`
+3. set `PULSEOS_OPENAI_AUTH_MODE=codex_cli_session` or leave it on `auto`
+
+Current limitation:
+- Codex-session auth is used for OpenAI chat and bootstrap only
+- embeddings are still API-key-backed or heuristic
+
+### Claude Auth Modes
+
+PulseOS supports these Claude auth modes for chat and bootstrap:
+- `PULSEOS_CLAUDE_AUTH_MODE=auto`
+  prefer `ANTHROPIC_API_KEY`, otherwise fall back to a local signed-in Claude Code session
+- `PULSEOS_CLAUDE_AUTH_MODE=api_key`
+  require `ANTHROPIC_API_KEY`
+- `PULSEOS_CLAUDE_AUTH_MODE=claude_cli_session`
+  require `claude auth login`
+
+Optional override:
+- `PULSEOS_CLAUDE_BIN`
+  choose a non-default `claude` binary path
+
+If you want to switch an existing machine from API-key auth to subscription-backed Claude auth:
+1. ensure the Claude CLI is installed
+2. run `claude auth login`
+3. set `PULSEOS_CLAUDE_AUTH_MODE=claude_cli_session` or leave it on `auto`
 
 ### Persistent Workspace Storage
 

@@ -89,18 +89,31 @@ This is why `@ARK` and the folder agents matter: bootstrap is effectively seedin
 
 The CLI (`cli/`) is your primary gateway. It provides bootstrap plus a local chat daemon.
 
-### 1. Configure API Keys
-Before running the daemon or bootstrap, supply API keys for the foundation models. Copy the `.env.example` file, rename it to `.env.local` (or `.env`), and fill in the key(s) for your preferred model:
+### 1. Configure Provider Access
+Before running the daemon or bootstrap, configure at least one usable model path. Copy the `.env.example` file, rename it to `.env.local` (or `.env`), and fill in the key(s) for your preferred model when needed:
 - `ANTHROPIC_API_KEY`
 - `OPENAI_API_KEY`
 - `GEMINI_API_KEY`
 
-Bootstrap now auto-detects providers in this order:
+OpenAI now supports two local auth paths for chat and bootstrap:
 1. `OPENAI_API_KEY`
-2. `ANTHROPIC_API_KEY`
-3. `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+2. a local signed-in Codex session from `codex login`
 
-If your OpenAI key is present, bootstrap uses GPT-4o automatically.
+Claude now supports two local auth paths for chat and bootstrap:
+1. `ANTHROPIC_API_KEY`
+2. a local signed-in Claude Code session from `claude auth login`
+
+Gemini still requires a provider API key.
+
+Optional OpenAI auth controls:
+- `PULSEOS_OPENAI_AUTH_MODE=auto|api_key|codex_cli_session`
+- `PULSEOS_OPENAI_CODEX_BIN=/path/to/codex`
+
+Optional Claude auth controls:
+- `PULSEOS_CLAUDE_AUTH_MODE=auto|api_key|claude_cli_session`
+- `PULSEOS_CLAUDE_BIN=/path/to/claude`
+
+If your OpenAI or Claude API key is present, PulseOS prefers it in `auto` mode. Otherwise it can use the matching local signed-in CLI session when available.
 
 ### 2. Bootstrap the Repo
 ```bash
@@ -127,6 +140,13 @@ The CLI now stores mutable runtime state outside the repo by default.
 - legacy direct workspace overrides still work: `PULSEOS_LITE_OPEN_SOURCE_CLI_HOME`, `PULSEOS_CLI_HOME`
 
 This keeps Git focused on code and Markdown documents instead of pretending it is a database replication layer.
+
+### 3.2 Embedding Limitation
+
+In Phase 1:
+- OpenAI Codex-session auth is used for chat and bootstrap
+- embeddings still use `OPENAI_API_KEY` when available
+- without that key, indexing and retrieval fall back to heuristic vectors
 
 ### 4. Keep the Graph Current
 
