@@ -14,9 +14,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import Anthropic from "@anthropic-ai/sdk";
-import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { generateClaudeText, generateOpenAiText, validateClaudeAccess, validateOpenAiAccess } from "./auth.js";
 import { buildBootstrapEvidenceBlock, collectBootstrapIntake } from "./bootstrap-intake.js";
 import {
   ensureCliWorkspaceReady,
@@ -545,63 +544,50 @@ async function createBootstrapProvider(env: NodeJS.ProcessEnv = process.env): Pr
       "Checked providers in this order: OpenAI, Anthropic, Gemini.",
       "Validation failures:",
       ...failures.map((failure) => `- ${failure}`),
-      "Add a working `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`/`GOOGLE_API_KEY` to `.env.local` or `.env`, then run `npm run bootstrap` again.",
+      "Add a working `OPENAI_API_KEY`, sign in with `codex login`, add `ANTHROPIC_API_KEY`, sign in with `claude auth login`, or configure `GEMINI_API_KEY` / `GOOGLE_API_KEY`, then run `npm run bootstrap` again.",
     ].join("\n"),
   );
 }
 
 function buildBootstrapProviders(env: NodeJS.ProcessEnv = process.env): BootstrapProvider[] {
   const providers: BootstrapProvider[] = [];
-  const openAiKey = env.OPENAI_API_KEY?.trim() ?? loadEnvKey("OPENAI_API_KEY");
-  if (openAiKey) {
-    const client = new OpenAI({ apiKey: openAiKey });
-    const model = env.PULSEOS_BOOTSTRAP_OPENAI_MODEL?.trim() || "gpt-4o";
-    providers.push({
-      name: "openai",
-      model,
-      async validate() {
-        await client.models.retrieve(model);
-      },
-      async fillTemplate({ systemPrompt, userPrompt, fallback }) {
-        const response = await client.chat.completions.create({
-          model,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-        });
-        return response.choices[0]?.message?.content?.trim() || fallback;
-      },
-    });
-  }
+  const model = env.PULSEOS_BOOTSTRAP_OPENAI_MODEL?.trim() || "gpt-4o";
+  providers.push({
+    name: "openai",
+    model,
+    async validate() {
+      await validateOpenAiAccess(model, env, REPO_ROOT);
+    },
+    async fillTemplate({ systemPrompt, userPrompt, fallback }) {
+      const response = await generateOpenAiText({
+        systemPrompt,
+        userPrompt,
+        modelId: model,
+        env,
+        workingDirectory: REPO_ROOT,
+      });
+      return response.trim() || fallback;
+    },
+  });
 
-  const anthropicKey = env.ANTHROPIC_API_KEY?.trim() ?? loadEnvKey("ANTHROPIC_API_KEY");
-  if (anthropicKey) {
-    const client = new Anthropic({ apiKey: anthropicKey });
-    const model = env.PULSEOS_BOOTSTRAP_ANTHROPIC_MODEL?.trim() || "claude-opus-4-6";
-    providers.push({
-      name: "anthropic",
-      model,
-      async validate() {
-        await client.messages.create({
-          model,
-          max_tokens: 1,
-          messages: [{ role: "user", content: "Reply with OK." }],
-        } as Parameters<typeof client.messages.create>[0]);
-      },
-      async fillTemplate({ systemPrompt, userPrompt, fallback }) {
-        const response = await client.messages.create({
-          model,
-          max_tokens: 8192,
-          system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
-          messages: [{ role: "user", content: userPrompt }],
-          betas: ["prompt-caching-2024-07-31"],
-        } as Parameters<typeof client.messages.create>[0]);
-        const block = (response as Anthropic.Messages.Message).content[0];
-        return block?.type === "text" ? block.text : fallback;
-      },
-    });
-  }
+  const anthropicModel = env.PULSEOS_BOOTSTRAP_ANTHROPIC_MODEL?.trim() || "claude-opus-4-6";
+  providers.push({
+    name: "anthropic",
+    model: anthropicModel,
+    async validate() {
+      await validateClaudeAccess(anthropicModel, env, REPO_ROOT);
+    },
+    async fillTemplate({ systemPrompt, userPrompt, fallback }) {
+      const response = await generateClaudeText({
+        systemPrompt,
+        userPrompt,
+        modelId: anthropicModel,
+        env,
+        workingDirectory: REPO_ROOT,
+      });
+      return response.trim() || fallback;
+    },
+  });
 
   const geminiKey =
     env.GEMINI_API_KEY?.trim() ??
@@ -633,7 +619,7 @@ function buildBootstrapProviders(env: NodeJS.ProcessEnv = process.env): Bootstra
 
   if (providers.length === 0) {
     throw new Error(
-      "Bootstrap could not find any configured model API key.\nAdd `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`/`GOOGLE_API_KEY` to `.env.local` or `.env`, then run `npm run bootstrap` again.",
+      "Bootstrap could not find any usable model provider.\nAdd `OPENAI_API_KEY`, sign in with `codex login`, add `ANTHROPIC_API_KEY`, sign in with `claude auth login`, or configure `GEMINI_API_KEY` / `GOOGLE_API_KEY`, then run `npm run bootstrap` again.",
     );
   }
 

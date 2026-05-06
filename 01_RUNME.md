@@ -309,12 +309,32 @@ Useful commands inside chat:
 - `/exit`
 
 If you want the CLI to use its local retrieval layer after the repo is created:
-- make sure your local API key is configured
+- make sure your local provider auth is configured
 - then run the CLI locally
 - `bootstrap` seeds the documents
 - `chat` or daemon startup uses the existing SQL index
 - `npm run index` or `:reload` manually refreshes indexing and vectorization
 - the SQL index and vector-based retrieval are part of the local CLI workflow, not just the cloud seeding workflow
+
+OpenAI auth modes:
+- `OPENAI_API_KEY`
+  direct provider auth
+- `codex login`
+  supported local subscription-backed auth for PulseOS chat and bootstrap
+- `PULSEOS_OPENAI_AUTH_MODE=auto|api_key|codex_cli_session`
+  controls how PulseOS resolves OpenAI access
+
+Claude auth modes:
+- `ANTHROPIC_API_KEY`
+  direct provider auth
+- `claude auth login`
+  supported local Claude Code session auth for PulseOS chat and bootstrap
+- `PULSEOS_CLAUDE_AUTH_MODE=auto|api_key|claude_cli_session`
+  controls how PulseOS resolves Claude access
+
+Phase 1 limitation:
+- embeddings still use `OPENAI_API_KEY` when present
+- otherwise retrieval falls back to heuristic vectors
 
 Persistent workspace storage:
 - by default the CLI stores its mutable state in `~/.pulseos/workspaces/<workspace-id>/`

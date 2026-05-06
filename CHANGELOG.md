@@ -19,6 +19,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Reserved workspace directories for snapshots, logs, and cache under `~/.pulseos/workspaces/<workspace-id>/`
 - One-time auto-migration from legacy repo-local CLI state into the new persistent workspace home
 - Workspace-storage tests covering path resolution, compatibility overrides, and migration safety
+- Local delivery backlog and project brief for Codex subscription auth work in `600_Projects`
+- OpenAI auth abstraction with support for `PULSEOS_OPENAI_AUTH_MODE=auto|api_key|codex_cli_session`
+- Local Codex-session-backed OpenAI path for CLI chat and bootstrap
+- Claude auth abstraction with support for `PULSEOS_CLAUDE_AUTH_MODE=auto|api_key|claude_cli_session`
+- Local Claude-session-backed Anthropic path for CLI chat and bootstrap
+- Auth tests covering API-key and Codex-session resolution
 
 ### Changed
 - Complete rename and rebranding across the repository from "PulseOS Lite Open Source" to "PulseOS-Lite"
@@ -31,6 +37,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Default CLI persistence moved out of `cli/` and into `~/.pulseos/workspaces/<workspace-id>/`
 - Chat, graph, daemon, bootstrap, index, and MCP flows now resolve the same shared workspace path before touching SQLite state
 - Documentation now treats Git as code and Markdown sync, not database sync, and recommends mounting `PULSEOS_HOME` as the durable Docker volume root
+- `npm run status` now reports model auth availability, including Codex-session-backed OpenAI detection
+- OpenAI chat/bootstrap no longer require a manually pasted API key when a local Codex session is available; embeddings still fall back to API key or heuristic mode
+- Claude chat/bootstrap no longer require a manually pasted API key when a local Claude Code session is available
 
 ---
 

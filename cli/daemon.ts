@@ -5,9 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Hono, type Context, type Next } from "hono";
 import { serve } from "@hono/node-server";
-import Anthropic from "@anthropic-ai/sdk";
-import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { generateClaudeText, generateOpenAiText } from "./auth.js";
 import {
   REPO_ROOT,
   type DaemonState,
@@ -284,21 +283,19 @@ async function chatWithClaude(
   systemPrompt: string,
   modelId: string,
 ): Promise<string> {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const response = await client.messages.create({
-    model: modelId,
-    max_tokens: 4096,
-    // Cache the large system prompt (repo context) across turns — saves ~90% on input tokens
-    system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
-    messages: [
-      ...messages.map((m) => ({ role: m.role, content: m.content })),
-      { role: "user", content: newMessage },
-    ],
-    betas: ["prompt-caching-2024-07-31"],
-  } as Parameters<typeof client.messages.create>[0]);
-  const res = response as Anthropic.Messages.Message;
-  const block = res.content[0];
-  return block.type === "text" ? block.text : "";
+  return generateClaudeText({
+    systemPrompt,
+    userPrompt: [
+      "Conversation history:",
+      ...messages.map((message, index) => `${index + 1}. ${message.role.toUpperCase()}: ${message.content}`),
+      `USER: ${newMessage}`,
+      "",
+      "Return only the assistant reply for the latest user message.",
+    ].join("\n"),
+    modelId,
+    env: process.env,
+    workingDirectory: REPO_ROOT,
+  });
 }
 
 async function chatWithOpenAI(
@@ -307,16 +304,19 @@ async function chatWithOpenAI(
   systemPrompt: string,
   modelId: string,
 ): Promise<string> {
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const response = await client.chat.completions.create({
-    model: modelId,
-    messages: [
-      { role: "system", content: systemPrompt },
-      ...messages.map((m) => ({ role: m.role, content: m.content })),
-      { role: "user", content: newMessage },
-    ],
+  return generateOpenAiText({
+    systemPrompt,
+    userPrompt: [
+      "Conversation history:",
+      ...messages.map((message, index) => `${index + 1}. ${message.role.toUpperCase()}: ${message.content}`),
+      `USER: ${newMessage}`,
+      "",
+      "Return only the assistant reply for the latest user message.",
+    ].join("\n"),
+    modelId,
+    env: process.env,
+    workingDirectory: REPO_ROOT,
   });
-  return response.choices[0]?.message?.content ?? "";
 }
 
 async function chatWithGemini(
