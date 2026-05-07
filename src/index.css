@@ -107,9 +107,9 @@ All colors MUST be HSL.
   body {
     @apply bg-background text-foreground;
     background-image:
-      radial-gradient(ellipse 90% 60% at 50% -10%, hsl(165 95% 55% / 0.12), transparent 60%),
-      radial-gradient(ellipse 70% 50% at 90% 10%, hsl(280 90% 65% / 0.08), transparent 60%),
-      radial-gradient(ellipse 60% 40% at 10% 30%, hsl(200 90% 60% / 0.06), transparent 60%);
+      radial-gradient(ellipse 60% 50% at 30% 20%, hsl(200 80% 20% / 0.5), transparent 60%),
+      radial-gradient(ellipse 50% 40% at 80% 10%, hsl(190 70% 15% / 0.4), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 50% 90%, hsl(200 60% 12% / 0.5), transparent 70%);
     background-attachment: fixed;
   }
 }
@@ -123,18 +123,23 @@ All colors MUST be HSL.
   }
   .grid-bg {
     background-image:
-      linear-gradient(hsl(180 30% 50% / 0.05) 1px, transparent 1px),
-      linear-gradient(90deg, hsl(180 30% 50% / 0.05) 1px, transparent 1px);
-    background-size: 48px 48px;
-    mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black, transparent 80%);
+      linear-gradient(hsl(190 50% 50% / 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(190 50% 50% / 0.04) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, black, transparent 85%);
   }
   .glow { box-shadow: var(--shadow-glow); }
   .card-surface {
-    background: linear-gradient(180deg, hsl(220 18% 9% / 0.8), hsl(220 20% 6% / 0.6));
-    backdrop-filter: blur(8px);
-    border: 1px solid hsl(180 30% 50% / 0.08);
+    background: linear-gradient(180deg, hsl(215 45% 7% / 0.85), hsl(215 50% 5% / 0.7));
+    backdrop-filter: blur(10px);
+    border: 1px solid hsl(190 50% 40% / 0.12);
     box-shadow: var(--shadow-card);
   }
+  .pill {
+    border: 1px solid hsl(190 50% 40% / 0.25);
+    background: hsl(215 45% 8% / 0.6);
+  }
+}
 }
 
 @keyframes pulse-dot {
