@@ -95,3 +95,30 @@ test("gemini still uses API-key-only availability", async () => {
   assert.equal(gemini.ok, true);
   assert.equal(gemini.method, "api_key");
 });
+
+test("codex-backed openai requests fall back to stdout when no output file is written", async () => {
+  let callCount = 0;
+  const runner: ExecRunner = async (_command, args) => {
+    callCount += 1;
+    if (args[0] === "login" && args[1] === "status") {
+      return { stdout: "Logged in using ChatGPT", stderr: "" };
+    }
+    return { stdout: "UI ready:\nhttp://127.0.0.1:3747/ui?token=test", stderr: "" };
+  };
+
+  const { generateOpenAiText } = await import("./auth.js");
+  const response = await generateOpenAiText(
+    {
+      systemPrompt: "Return the user text.",
+      userPrompt: "run ui",
+      modelId: "gpt-5.4",
+      env: { PULSEOS_OPENAI_AUTH_MODE: "codex_cli_session" },
+      workingDirectory: process.cwd(),
+    },
+    runner,
+  );
+
+  assert.equal(callCount, 2);
+  assert.match(response, /UI ready:/);
+  assert.match(response, /127\.0\.0\.1/);
+});

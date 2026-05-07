@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectBootstrapIntake } from "./bootstrap-intake.js";
 import { actionBlock, bold, bullet, dim, kv, section, tone } from "./terminal-format.js";
+import { buildUiBundle, ensureUiReady } from "./ui-runtime.js";
 import {
   REPO_ROOT,
   ensureCliWorkspaceReady,
@@ -23,8 +24,6 @@ import {
   getModelCredentialStatus,
   SUGGESTED_CHAT_MODELS,
   loadRepoEnv,
-  probeUiBootstrapUrl,
-  probeUiCapabilities,
   probeDaemonHealth,
   readBootstrapState,
   readDaemonState,
@@ -117,6 +116,7 @@ ${section("Usage")}
 ${section("Chat Commands")}
   /model auto                  — auto-pick the first configured provider
   /model openai gpt-5.4        — switch provider and model id
+  /ui                          — build the browser UI and print the local URL
   /models                      — list configured provider examples
   /reset                       — clear conversation history
   /reload                      — manually re-index repo files/new docs and re-run vectorization
@@ -379,14 +379,8 @@ async function printWorkflowStatus(env: NodeJS.ProcessEnv): Promise<void> {
 async function printUiUrl(env: NodeJS.ProcessEnv): Promise<void> {
   process.stdout.write(`${section("UI Startup")}\n${bullet("Building and starting the PulseOS Company Memory UI...", "info")}\n`);
   const state = await ensureRuntime(env);
-  const graphReady = await probeUiBootstrapUrl(state.port, state.token);
-  const capabilitiesReady = await probeUiCapabilities(state.port, state.token);
-  if (!graphReady || !capabilitiesReady) {
-    throw new Error(
-      "The daemon started, but the UI compatibility handshake did not become ready.\nTry `npm run daemon:stop` and then `npm run ui` again.",
-    );
-  }
-  const url = `http://127.0.0.1:${state.port}/ui?token=${encodeURIComponent(state.token)}`;
+  await buildUiBundle(env);
+  const url = await ensureUiReady(state);
   process.stdout.write(
     [
       "",
@@ -436,7 +430,16 @@ async function runInteractiveChat(
 
   process.stdout.write(`${section("Chat Startup")}\n${bullet("Starting pulseos-lite-cli daemon...", "info")}\n`);
   const state = await ensureRuntime(env);
-  process.stdout.write(`${kv("Status", "connected", "success")}\n${bullet("The daemon checks 000_Company_Memory on startup and waits for any graph/index refresh before answering.")}\n${bullet("Run `npm run ui` in another terminal if you want the full browser workspace.", "info")}\n\n`);
+  process.stdout.write(`${kv("Status", "connected", "success")}\n${bullet("The daemon checks 000_Company_Memory on startup and waits for any graph/index refresh before answering.")}\n`);
+  try {
+    process.stdout.write(`${bullet("Building the browser UI for this session...", "info")}\n`);
+    await buildUiBundle(env);
+    const uiUrl = await ensureUiReady(state);
+    process.stdout.write(`${kv("UI", "ready", "success")}\n${bullet(uiUrl, "info")}\n`);
+  } catch (error) {
+    process.stdout.write(`${kv("UI", "not ready", "warning")}\n${bullet(error instanceof Error ? error.message : String(error), "warning")}\n`);
+  }
+  process.stdout.write("\n");
 
   const sessionId = "main";
 
@@ -525,6 +528,14 @@ async function handleReplCommand(
 
     case "models": {
       await printModelOptions(env);
+      return null;
+    }
+
+    case "ui": {
+      process.stdout.write("Building browser UI...\n");
+      await buildUiBundle(env);
+      const uiUrl = await ensureUiReady(state);
+      process.stdout.write(`UI ready:\n${uiUrl}\n`);
       return null;
     }
 
