@@ -29,11 +29,18 @@ const Index = () => {
           <a href="#problem" className="hover:text-foreground transition-colors">Docs</a>
           <a href="#contact" className="hover:text-foreground transition-colors">Sign In</a>
         </nav>
-        <Button asChild size="sm" className="rounded-full bg-primary text-primary-foreground glow hover:bg-primary/90">
-          <a href="https://github.com/jp-carrilloe/pulseOS-lite" target="_blank" rel="noreferrer">
-            Get the repo <ArrowRight className="h-3.5 w-3.5" />
-          </a>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild size="sm" variant="outline" className="rounded-full border-border/60 bg-secondary/40 hover:bg-secondary">
+            <a href="#" target="_blank" rel="noreferrer">
+              Check demo
+            </a>
+          </Button>
+          <Button asChild size="sm" className="rounded-full bg-primary text-primary-foreground glow hover:bg-primary/90">
+            <a href="https://github.com/jp-carrilloe/pulseOS-lite" target="_blank" rel="noreferrer">
+              Get the repo <ArrowRight className="h-3.5 w-3.5" />
+            </a>
+          </Button>
+        </div>
       </header>
 
       {/* Hero */}
@@ -66,9 +73,6 @@ const Index = () => {
                 <a href="https://github.com/jp-carrilloe/pulseOS-lite" target="_blank" rel="noreferrer">
                   Try PulseOS Lite <ArrowRight className="h-4 w-4" />
                 </a>
-              </Button>
-              <Button asChild size="lg" variant="outline" className="rounded-full border-border/60 bg-secondary/40 hover:bg-secondary">
-                <a href="#what">Read the thinking</a>
               </Button>
             </div>
           </div>
@@ -236,7 +240,7 @@ const Index = () => {
         </p>
         <div className="mt-10 flex flex-wrap justify-center gap-3">
           <Button asChild size="lg" className="rounded-full glow bg-primary text-primary-foreground hover:bg-primary/90">
-            <a href="mailto:juan@tintto.com?subject=Karpathy%20LLM%20Wiki">
+            <a href="mailto:juan@tintto.com">
               <Mail className="h-4 w-4" /> juan@tintto.com
             </a>
           </Button>
@@ -246,7 +250,7 @@ const Index = () => {
             </a>
           </Button>
         </div>
-        <p className="mt-4 text-xs text-muted-foreground">Subject line: "Karpathy LLM Wiki"</p>
+        
       </section>
 
       <footer className="relative z-10 mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 border-t border-border/40 px-8 py-10 text-xs text-muted-foreground md:flex-row">
