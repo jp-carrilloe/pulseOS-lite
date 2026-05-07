@@ -361,15 +361,22 @@ async function runCodexExecPrompt(
       outputFile,
       prompt,
     ];
-    await runner(getCodexBinary(env), args, {
+    const { stdout, stderr } = await runner(getCodexBinary(env), args, {
       env,
       cwd: workingDirectory,
       timeoutMs: getCodexTimeoutMs(env),
     });
-    if (!fs.existsSync(outputFile)) {
+    if (fs.existsSync(outputFile)) {
+      const fileOutput = (await fsp.readFile(outputFile, "utf8")).trim();
+      if (fileOutput) return fileOutput;
+    }
+    const fallbackOutput = [stdout, stderr]
+      .map((value) => value.trim())
+      .find((value) => value.length > 0);
+    if (!fallbackOutput) {
       throw new Error("Codex completed without writing a final response.");
     }
-    return (await fsp.readFile(outputFile, "utf8")).trim();
+    return fallbackOutput;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Codex session execution failed. ${message}`);

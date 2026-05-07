@@ -19,6 +19,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { generateClaudeText, generateOpenAiText, validateClaudeAccess, validateOpenAiAccess } from "./auth.js";
 import { buildBootstrapEvidenceBlock, collectBootstrapIntake } from "./bootstrap-intake.js";
 import { actionBlock, bold, bullet, dim, kv, section, tone } from "./terminal-format.js";
+import { buildUiBundle, ensureUiReady } from "./ui-runtime.js";
 import {
   ensureCliWorkspaceReady,
   fetchDaemonJson,
@@ -468,6 +469,21 @@ async function main() {
       process.stdout.write(`${kv("Daemon graph cache", "refreshed", "success")}\n`);
     }
 
+    let uiUrl: string | null = null;
+    process.stdout.write(`\n${section("UI Build")}\n${bullet("Building the browser UI for this bootstrap run...", "info")}\n`);
+    try {
+      await buildUiBundle(process.env);
+      const daemonState = await readDaemonState(process.env);
+      if (daemonState && (await probeDaemonHealth(daemonState.port, daemonState.token))) {
+        uiUrl = await ensureUiReady(daemonState);
+        process.stdout.write(`${kv("UI", "ready", "success")}\n${bullet(uiUrl, "info")}\n`);
+      } else {
+        process.stdout.write(`${kv("UI", "not ready", "warning")}\n${bullet("The index refresh completed, but no healthy daemon was available to serve the UI yet.", "warning")}\n`);
+      }
+    } catch (error) {
+      process.stdout.write(`${kv("UI", "not ready", "warning")}\n${bullet(error instanceof Error ? error.message : String(error), "warning")}\n`);
+    }
+
     await writeBootstrapState(
       {
         status: failed > 0 ? "failed" : "completed",
@@ -490,7 +506,7 @@ async function main() {
     process.stdout.write(`\n${actionBlock("Best next action", [
       "Review a few docs to sanity-check quality.",
       "Run `npm run chat` to interact with the refreshed Company Memory index.",
-      "Run `npm run ui` to inspect the Company Memory workspace in the browser.",
+      uiUrl ? `Open the ready UI: ${uiUrl}` : "Run `npm run ui` to inspect the Company Memory workspace in the browser.",
     ], failed > 0 ? "warning" : "success")}\n`);
   } catch (error) {
     if (bootstrapStateWritten) {
