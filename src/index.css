@@ -140,7 +140,6 @@ All colors MUST be HSL.
     background: hsl(215 45% 8% / 0.6);
   }
 }
-}
 
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; transform: scale(1); }
