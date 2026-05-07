@@ -70,14 +70,14 @@ We don't do "templates." we do **Alpha**. Every file in this repo is a living co
 
 Canonical company memory lives under [`000_Company_Memory`](./000_Company_Memory/). Bootstrap and direct LLM seeding use the raw source material in `001_Data_Souces`, then write durable company knowledge into the numbered folders inside `000_Company_Memory`.
 
-Bootstrap now asks only for the company name, but only after it has confirmed that real source material exists. It then reads:
+Bootstrap now asks only for the company name, but only after it has confirmed that real source material exists. If the intake is still empty, it hands off to the local chat session instead of exiting so you can keep working inside the daemon-backed CLI. It then reads:
 - local files from [`001_Data_Souces/Data_Souces_Folder`](./001_Data_Souces/Data_Souces_Folder/)
 - external folder references from [`001_Data_Souces/Data_Sources_References`](./001_Data_Souces/Data_Sources_References/)
 
 In simple terms:
 - `bootstrap` seeds the documents
 - `chat` or daemon startup uses the existing SQL index
-- `npm run index` or the graph `Rebuild graph/index` action refreshes indexing and vectorization manually
+- `npm run index` or the UI `Rebuild graph/index` action refreshes indexing and vectorization manually
 - when you add, create, move, rename, or delete Markdown documents in `000_Company_Memory` outside the graph editor, rebuild before relying on the graph; a browser refresh only reloads the current SQL-backed snapshot
 
 Important relationship note:
@@ -150,14 +150,14 @@ The `ontology_domain` is the document's structural placement in the company brai
 What uses this database today:
 - the local CLI chat flow (`npm run chat`) uses the SQLite database and stored vectors to retrieve relevant company-brain documents before answering
 - the local daemon uses the same workspace database, so a different terminal can access the same indexed company brain without storing mutable state inside the repo
-- the local graph UI (`npm run graph`) uses the same SQLite index in two focused views: Company Ontology for the folder hierarchy, and Document Relationships for a gravity-style Markdown reference map with quiet connector lines and hover-only document labels; the graph can be panned, zoomed, fitted, reset, manually rearranged by dragging nodes, hidden without losing the control bar, and reopened from the same toolbar
-- the graph UI now includes a docked mini IDE for Markdown editing: multiple open document tabs, save/save-all, dirty-state indicators, a resizable editor pane, and a local terminal that can dock right or bottom
+- the local UI (`npm run ui`) uses the same SQLite index in two focused views: Company Ontology for the folder hierarchy, and Document Relationships for a gravity-style Markdown reference map with quiet connector lines and hover-only document labels; the graph can be panned, zoomed, fitted, reset, manually rearranged by dragging nodes, hidden without losing the control bar, and reopened from the same toolbar
+- the UI now includes a docked mini IDE for Markdown editing: multiple open document tabs, save/save-all, dirty-state indicators, a resizable editor pane, and a local terminal that can dock right or bottom
 - `npm run index` can create or refresh the same database without opening chat
 - `npm run status` checks whether the database, tables, and latest indexing/vectorization run are healthy
 
 ### 💻 IDE-First & Agent-First Architecture
 
-The UI provided by `npm run graph` is primarily a visually friendly interface. While it is useful as an additional visual guide to the company structure, **the true power of the company memory is harnessed directly via the CLI and your IDE**. 
+The UI provided by `npm run ui` is primarily a visually friendly interface. While it is useful as an additional visual guide to the company structure, **the true power of the company memory is harnessed directly via the CLI and your IDE**. 
 
 The best way to run the CLI, the agents, and the company memory is natively inside your preferred IDE (Cursor, VS Code, Antigravity, etc.). 
 
@@ -173,8 +173,8 @@ Commands:
   seeds the markdown documents only
 - `npm run chat`
   starts the daemon, creates or refreshes the SQL index, and runs vectorization
-- `npm run graph`
-  starts the daemon and prints a private local browser URL for the interactive two-mode ontology/document graph UI with a docked document IDE and terminal
+- `npm run ui`
+  starts the daemon and prints a private local browser URL for the interactive Company Memory UI with ontology/document relationship views, a docked document IDE, and a local terminal
 - `npm run index`
   manually creates or refreshes the SQLite database, SQL tables, document relationships, summaries, and vectors; run this after new Markdown documents are added outside the graph editor
 - `npm run status`
@@ -213,7 +213,7 @@ node --import tsx/esm index-kb.ts --force
 
 PulseOS supports these OpenAI auth modes for chat and bootstrap:
 - `PULSEOS_OPENAI_AUTH_MODE=auto`
-  prefer `OPENAI_API_KEY`, otherwise fall back to a local signed-in Codex session
+  prefer a local signed-in Codex session, otherwise fall back to `OPENAI_API_KEY`
 - `PULSEOS_OPENAI_AUTH_MODE=api_key`
   require `OPENAI_API_KEY`
 - `PULSEOS_OPENAI_AUTH_MODE=codex_cli_session`
@@ -226,7 +226,8 @@ Optional override:
 If you want to switch an existing machine from API-key auth to subscription-backed Codex auth:
 1. ensure the Codex CLI is installed
 2. run `codex login`
-3. set `PULSEOS_OPENAI_AUTH_MODE=codex_cli_session` or leave it on `auto`
+3. leave `PULSEOS_OPENAI_AUTH_MODE` unset or set it to `auto`
+4. use `PULSEOS_OPENAI_AUTH_MODE=api_key` only when you want to force API-key auth instead
 
 Current limitation:
 - Codex-session auth is used for OpenAI chat and bootstrap only
@@ -250,6 +251,27 @@ If you want to switch an existing machine from API-key auth to subscription-back
 1. ensure the Claude CLI is installed
 2. run `claude auth login`
 3. set `PULSEOS_CLAUDE_AUTH_MODE=claude_cli_session` or leave it on `auto`
+
+### Default Models
+
+Current defaults:
+- OpenAI chat: `gpt-5.4`
+- OpenAI bootstrap: `gpt-5.4`
+- Claude chat: `claude-opus-4-6`
+- Gemini chat: `gemini-2.0-flash`
+
+How to change them:
+- set `PULSEOS_CHAT_OPENAI_MODEL` to change the default OpenAI chat model
+- set `PULSEOS_BOOTSTRAP_OPENAI_MODEL` to change the default OpenAI bootstrap model
+- set `PULSEOS_CHAT_ANTHROPIC_MODEL` to change the default Claude chat model
+- set `PULSEOS_CHAT_GEMINI_MODEL` to change the default Gemini chat model
+
+Examples:
+
+```bash
+PULSEOS_CHAT_OPENAI_MODEL=gpt-5.4-mini npm run chat
+PULSEOS_BOOTSTRAP_OPENAI_MODEL=gpt-5.4-mini npm run bootstrap
+```
 
 ### Persistent Workspace Storage
 

@@ -167,6 +167,7 @@ async function getOpenAiCredentialStatus(
 ): Promise<ProviderCredentialStatus> {
   const authMode = getOpenAiAuthMode(env);
   const apiKey = env.OPENAI_API_KEY?.trim();
+  const codex = authMode === "api_key" ? null : await getCodexLoginStatus(env, runner);
 
   if (authMode === "api_key") {
     return apiKey
@@ -187,7 +188,6 @@ async function getOpenAiCredentialStatus(
   }
 
   if (authMode === "codex_cli_session") {
-    const codex = await getCodexLoginStatus(env, runner);
     return codex.available && codex.loggedIn
       ? {
           ok: true,
@@ -205,32 +205,33 @@ async function getOpenAiCredentialStatus(
         };
   }
 
+  if (codex.available && codex.loggedIn) {
+    return {
+      ok: true,
+      keyName: "codex login",
+      message: "Using local Codex session auth for OpenAI.",
+      method: "codex_cli_session",
+      configuredMode: authMode,
+    };
+  }
+
   if (apiKey) {
     return {
       ok: true,
       keyName: "OPENAI_API_KEY",
-      message: "OpenAI API key found.",
+      message: "OpenAI API key found. No usable Codex session was detected, so `auto` mode will use the API key.",
       method: "api_key",
       configuredMode: authMode,
     };
   }
 
-  const codex = await getCodexLoginStatus(env, runner);
-  return codex.available && codex.loggedIn
-    ? {
-        ok: true,
-        keyName: "codex login",
-        message: "Using local Codex session auth for OpenAI.",
-        method: "codex_cli_session",
-        configuredMode: authMode,
-      }
-    : {
-        ok: false,
-        keyName: "OPENAI_API_KEY or codex login",
-        message: `OpenAI is the default chat model, but no \`OPENAI_API_KEY\` was found and no usable Codex session was detected. ${codex.detail}`.trim(),
-        method: "none",
-        configuredMode: authMode,
-      };
+  return {
+    ok: false,
+    keyName: "codex login or OPENAI_API_KEY",
+    message: `OpenAI is the default chat model, but no usable Codex session was detected and no \`OPENAI_API_KEY\` was found. ${codex.detail}`.trim(),
+    method: "none",
+    configuredMode: authMode,
+  };
 }
 
 async function getClaudeCredentialStatus(

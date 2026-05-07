@@ -15,13 +15,13 @@ export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url
 export type ModelName = "claude" | "openai" | "gemini";
 
 export const DEFAULT_CHAT_MODELS: Record<ModelName, string> = {
-  openai: "gpt-4o",
+  openai: "gpt-5.4",
   claude: "claude-opus-4-6",
   gemini: "gemini-2.0-flash",
 };
 
 export const SUGGESTED_CHAT_MODELS: Record<ModelName, string[]> = {
-  openai: ["gpt-4o", "gpt-4o-mini"],
+  openai: ["gpt-5.4", "gpt-5.4-mini"],
   claude: ["claude-opus-4-6", "claude-sonnet-4-5"],
   gemini: ["gemini-2.0-flash", "gemini-1.5-pro"],
 };
@@ -185,12 +185,12 @@ export async function probeDaemonHealth(port: number, token: string): Promise<bo
   }
 }
 
-export async function probeGraphBootstrapUrl(port: number, token: string): Promise<boolean> {
+export async function probeUiBootstrapUrl(port: number, token: string): Promise<boolean> {
   try {
-    const response = await fetch(`http://127.0.0.1:${port}/graph?token=${encodeURIComponent(token)}`, {
+    const response = await fetch(`http://127.0.0.1:${port}/ui?token=${encodeURIComponent(token)}`, {
       redirect: "manual",
     });
-    return response.status === 302 && response.headers.get("location") === "/graph";
+    return response.status === 302 && response.headers.get("location") === "/ui";
   } catch {
     return false;
   }

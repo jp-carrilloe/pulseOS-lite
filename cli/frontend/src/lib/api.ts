@@ -25,14 +25,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     try {
       payload = JSON.parse(rawBody) as Envelope<T> | { error?: { message?: string } };
     } catch {
-      throw new Error("The local UI received invalid JSON from the daemon. Refresh the page or restart `npm run graph`.");
+      throw new Error("The local UI received invalid JSON from the daemon. Refresh the page or restart `npm run ui`.");
     }
   }
 
   if (!response.ok) {
     const fallbackMessage =
       rawBody.trim() === "404 Not Found"
-        ? "The local graph daemon is missing a UI endpoint that this page expects. Restart `npm run graph` so the UI and daemon are on the same version."
+        ? "The local daemon is missing a UI endpoint that this page expects. Restart `npm run ui` so the UI and daemon are on the same version."
         : rawBody.trim() || "Request failed";
     throw new Error(payload && "error" in payload ? payload.error?.message ?? fallbackMessage : fallbackMessage);
   }
@@ -40,8 +40,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!payload || !("data" in payload)) {
     throw new Error(
       rawBody.trim() === "404 Not Found"
-        ? "The local graph daemon is out of date for this UI. Restart `npm run graph` and open the new link."
-        : "The local daemon returned a response this UI could not use. Refresh the page or restart `npm run graph`.",
+        ? "The local daemon is out of date for this UI. Restart `npm run ui` and open the new link."
+        : "The local daemon returned a response this UI could not use. Refresh the page or restart `npm run ui`.",
     );
   }
   return payload.data;

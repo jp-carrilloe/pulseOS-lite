@@ -96,8 +96,8 @@ Before running the daemon or bootstrap, configure at least one usable model path
 - `GEMINI_API_KEY`
 
 OpenAI now supports two local auth paths for chat and bootstrap:
-1. `OPENAI_API_KEY`
-2. a local signed-in Codex session from `codex login`
+1. a local signed-in Codex session from `codex login`
+2. `OPENAI_API_KEY`
 
 Claude now supports two local auth paths for chat and bootstrap:
 1. `ANTHROPIC_API_KEY`
@@ -113,7 +113,21 @@ Optional Claude auth controls:
 - `PULSEOS_CLAUDE_AUTH_MODE=auto|api_key|claude_cli_session`
 - `PULSEOS_CLAUDE_BIN=/path/to/claude`
 
-If your OpenAI or Claude API key is present, PulseOS prefers it in `auto` mode. Otherwise it can use the matching local signed-in CLI session when available.
+For OpenAI, PulseOS now prefers a local signed-in Codex session in `auto` mode and falls back to `OPENAI_API_KEY` only when no usable session is available.
+
+For Claude, PulseOS still prefers `ANTHROPIC_API_KEY` in `auto` mode and otherwise uses the matching local signed-in CLI session when available.
+
+Default models:
+- OpenAI chat: `gpt-5.4`
+- OpenAI bootstrap: `gpt-5.4`
+- Claude chat: `claude-opus-4-6`
+- Gemini chat: `gemini-2.0-flash`
+
+Override knobs:
+- `PULSEOS_CHAT_OPENAI_MODEL`
+- `PULSEOS_BOOTSTRAP_OPENAI_MODEL`
+- `PULSEOS_CHAT_ANTHROPIC_MODEL`
+- `PULSEOS_CHAT_GEMINI_MODEL`
 
 ### 2. Bootstrap the Repo
 ```bash
@@ -122,6 +136,8 @@ npm run bootstrap
 ```
 
 Bootstrap now asks only for the company name, then reads the intake folder and referenced external folders to generate the repo documents in dependency order.
+
+If bootstrap does not find usable intake material yet, it now opens the local chat session instead of dropping you back to the shell, so you can stay inside the daemon-backed CLI while you sort out the next step.
 
 ### 3. Basic Interaction
 ```bash
@@ -148,11 +164,11 @@ In Phase 1:
 - embeddings still use `OPENAI_API_KEY` when available
 - without that key, indexing and retrieval fall back to heuristic vectors
 
-### 4. Keep the Graph Current
+### 4. Keep the UI Current
 
-The graph UI reads the local SQLite index, not the Markdown folders directly. If you add, create, move, rename, or delete Markdown documents in `000_Company_Memory`, rebuild the graph/index before relying on the graph or retrieval results.
+The UI reads the local SQLite index, not the Markdown folders directly. If you add, create, move, rename, or delete Markdown documents in `000_Company_Memory`, rebuild the graph/index before relying on the UI or retrieval results.
 
-Use the graph UI `Rebuild index` / `Rebuild graph/index` button, `/reload` inside chat, or:
+Use the UI `Rebuild index` / `Rebuild graph/index` button, `/reload` inside chat, or:
 
 ```bash
 cd cli
@@ -228,8 +244,8 @@ If a prompt breaks this chain, ask: "Does this change in @Finance require an upd
 
 ## 🔍 Commands Reference
 - `:reload` — Refresh the AI's memory after you manually add, create, or edit files.
-- `cd cli && npm run index` — Rebuild the SQL-backed graph and retrieval index after documents are added, created, moved, renamed, or deleted outside the graph editor.
-- graph UI `Rebuild index` / `Rebuild graph/index` — Same rebuild path from the browser UI.
+- `cd cli && npm run index` — Rebuild the SQL-backed graph and retrieval index after documents are added, created, moved, renamed, or deleted outside the UI editor.
+- UI `Rebuild index` / `Rebuild graph/index` — Same rebuild path from the browser UI.
 - `:files` — Audit what the AI can see.
 - `:status` — Check which model is currently active and session lifetime.
 

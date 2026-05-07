@@ -16,7 +16,7 @@ The goal of this repo is simple:
 
 The absolute best way to run the CLI, the agents, and the company memory is normally inside your IDE, whatever that is—Cursor, VS Code, or Antigravity. 
 
-While the system provides a visually friendly UI (`npm run graph`), **most of the power is harnessed directly via the CLI**. 
+While the system provides a visually friendly UI (`npm run ui`), **most of the power is harnessed directly via the CLI**. 
 
 You can run Codex, Claude, or Gemini in your terminal or directly in the IDE and just tell them to call the CLI tools. This allows the models to handle document ingestion, semantic retrieval, and maintaining the graph. You can build your documents and agents inside the company memory graph and just use the UI as an additional visual guide. The real power is happening directly via the CLI, calling on the models to read, edit, update files and relationships, and update the knowledge graph.
 
@@ -492,12 +492,12 @@ Useful commands inside chat:
 
 Use `:reload` only when you manually add or edit repo files and want the CLI to refresh its indexed view and vectors.
 
-When you add or create new Markdown documents in `000_Company_Memory` outside the graph editor, rebuild the graph before relying on it. Use `/reload` in chat, the graph UI `Rebuild graph` button, or `cd cli && npm run index`; a normal browser refresh only reloads the current SQLite-backed graph snapshot.
+When you add or create new Markdown documents in `000_Company_Memory` outside the UI editor, rebuild the graph before relying on it. Use `/reload` in chat, the UI `Rebuild graph` button, or `cd cli && npm run index`; a normal browser refresh only reloads the current SQLite-backed graph snapshot.
 
 To inspect the company-memory structure visually, run:
 
 ```bash
-npm run graph
+npm run ui
 ```
 
 That builds the local React workspace, starts the same local daemon, and prints a private browser URL. The UI is scoped to `000_Company_Memory` and has three working areas:
