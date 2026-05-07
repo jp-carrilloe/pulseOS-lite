@@ -8,35 +8,41 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 220 20% 5%;
+    --foreground: 180 25% 92%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 220 20% 7%;
+    --card-foreground: 180 25% 92%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 220 20% 7%;
+    --popover-foreground: 180 25% 92%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 165 95% 55%;
+    --primary-foreground: 220 30% 6%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 220 18% 12%;
+    --secondary-foreground: 180 25% 92%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 220 18% 12%;
+    --muted-foreground: 200 10% 60%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 280 90% 65%;
+    --accent-foreground: 220 30% 6%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 220 18% 14%;
+    --input: 220 18% 14%;
+    --ring: 165 95% 55%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
+
+    --gradient-hero: radial-gradient(ellipse 80% 60% at 50% 0%, hsl(165 95% 55% / 0.18), transparent 70%), radial-gradient(ellipse 60% 50% at 80% 30%, hsl(280 90% 65% / 0.12), transparent 70%);
+    --gradient-text: linear-gradient(135deg, hsl(165 95% 65%), hsl(180 90% 70%) 50%, hsl(280 90% 75%));
+    --gradient-border: linear-gradient(135deg, hsl(165 95% 55% / 0.5), hsl(280 90% 65% / 0.3));
+    --shadow-glow: 0 0 60px hsl(165 95% 55% / 0.25);
+    --shadow-card: 0 8px 40px -12px hsl(220 50% 2% / 0.6);
 
     --sidebar-background: 0 0% 98%;
 
@@ -101,5 +107,42 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    background-image:
+      radial-gradient(ellipse 90% 60% at 50% -10%, hsl(165 95% 55% / 0.12), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 90% 10%, hsl(280 90% 65% / 0.08), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 10% 30%, hsl(200 90% 60% / 0.06), transparent 60%);
+    background-attachment: fixed;
   }
+}
+
+@layer utilities {
+  .text-gradient {
+    background: var(--gradient-text);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .grid-bg {
+    background-image:
+      linear-gradient(hsl(180 30% 50% / 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(180 30% 50% / 0.05) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black, transparent 80%);
+  }
+  .glow { box-shadow: var(--shadow-glow); }
+  .card-surface {
+    background: linear-gradient(180deg, hsl(220 18% 9% / 0.8), hsl(220 20% 6% / 0.6));
+    backdrop-filter: blur(8px);
+    border: 1px solid hsl(180 30% 50% / 0.08);
+    box-shadow: var(--shadow-card);
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
 }
