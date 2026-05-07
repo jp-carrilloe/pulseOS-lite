@@ -114,15 +114,15 @@ const Index = () => {
               The local-first foundation behind the full PulseOS direction. Fork it, break it, improve it.
             </p>
             <ul className="mt-8 space-y-4">
-              {[
-                ["Canonical markdown company memory", Box],
-                ["Local CLI + daemon — LLM OAuth or API keys", Terminal],
-                ["Graph UI for ontology & document relationships", Network],
-                ["Mini IDE for non-technical users, with terminal access", Terminal],
-                ["Local SQL + vector memory layer", Database],
-                ["Local-first persistent workspace", ShieldCheck],
-              ].map(([text, Icon]) => (
-                <li key={text as string} className="flex items-start gap-3">
+              {([
+                { text: "Canonical markdown company memory", Icon: Box },
+                { text: "Local CLI + daemon — LLM OAuth or API keys", Icon: Terminal },
+                { text: "Graph UI for ontology & document relationships", Icon: Network },
+                { text: "Mini IDE for non-technical users, with terminal access", Icon: Terminal },
+                { text: "Local SQL + vector memory layer", Icon: Database },
+                { text: "Local-first persistent workspace", Icon: ShieldCheck },
+              ]).map(({ text, Icon }) => (
+                <li key={text} className="flex items-start gap-3">
                   <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary">
                     <Icon className="h-3.5 w-3.5" />
                   </span>
