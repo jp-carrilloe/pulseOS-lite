@@ -52,7 +52,7 @@ const Index = () => {
           </h1>
 
           <p className="mt-7 max-w-2xl text-lg leading-relaxed text-muted-foreground">
-            PulseOS Lite is the open-source foundation of PulseOS — a local-first company memory with ontology, evidence, and a runtime for agentic workflows. Not just an LLM for the wiki.
+            PulseOS Lite is the open-source foundation of PulseOS, a local-first company memory with ontology, evidence, and a runtime for agentic workflows. It is more than an LLM layered on a wiki.
           </p>
 
           {/* Inline CTA card */}
@@ -103,14 +103,14 @@ const Index = () => {
           A company is not a pile of pages.
         </h2>
         <p className="mt-5 max-w-2xl text-muted-foreground">
-          Information is scattered across CRMs, docs, APIs, and finance systems — each capturing a fragment of reality without encoding how they relate. Humans reconstruct this implicitly. Agents cannot.
+          Information is scattered across CRMs, documents, APIs, and finance systems. Each captures a fragment of reality without encoding how they relate. Humans reconstruct this context implicitly. Agents cannot.
         </p>
 
         <div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-border/60 bg-border/40 md:grid-cols-3">
           {[
-            { title: "Agents lack the map", desc: "They don't know how systems relate, what workflows exist, or what actions are allowed." },
-            { title: "Tools stay disconnected", desc: "CRMs, docs, APIs, finance — each exposes pieces of the company, never the operating model." },
-            { title: "Context gets rebuilt", desc: "Every prompt reassembles truth from scratch. Cost up, reliability down." },
+            { title: "Agents lack the map", desc: "They do not know how systems relate, what workflows exist, or which actions are permitted." },
+            { title: "Tools stay disconnected", desc: "CRMs, documents, APIs, and finance systems each expose pieces of the company, never the operating model." },
+            { title: "Context gets rebuilt", desc: "Every prompt reassembles the truth from scratch, increasing cost and reducing reliability." },
           ].map(({ title, desc }) => (
             <div key={title} className="bg-card p-8">
               <h3 className="text-lg font-medium tracking-tight">{title}</h3>
@@ -127,17 +127,17 @@ const Index = () => {
           Company memory, ontology, evidence, runtime.
         </h2>
         <p className="mt-5 max-w-2xl text-muted-foreground">
-          The substrate agents actually need — not a vector index pointing at a wiki.
+          The substrate agents actually need, rather than a vector index pointing at a wiki.
         </p>
 
         <div className="mt-14 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[
-            { icon: FileText, title: "Canonical documents", desc: "A single, authoritative source — not five conflicting Notion pages." },
-            { icon: Network, title: "Entities & relationships", desc: "People, products, customers, contracts — connected, not flat." },
-            { icon: ShieldCheck, title: "Evidence layer", desc: "Every claim traceable to its source. A reality layer for agents." },
-            { icon: Workflow, title: "Workflows & ownership", desc: "Operating state — who owns what, what runs when, what's stuck." },
-            { icon: Boxes, title: "Runtime environment", desc: "Deploy, test, and optimize agentic workflows against the real graph." },
-            { icon: Database, title: "Persistent memory", desc: "Survives one chat, one repo clone, one model swap." },
+            { icon: FileText, title: "Canonical documents", desc: "A single, authoritative source rather than five conflicting Notion pages." },
+            { icon: Network, title: "Entities and relationships", desc: "People, products, customers, and contracts, connected rather than flat." },
+            { icon: ShieldCheck, title: "Evidence layer", desc: "Every claim is traceable to its source, providing a reality layer for agents." },
+            { icon: Workflow, title: "Workflows and ownership", desc: "Operating state that captures who owns what, what runs when, and what is blocked." },
+            { icon: Boxes, title: "Runtime environment", desc: "Deploy, test, and optimize agentic workflows against the real company graph." },
+            { icon: Database, title: "Persistent memory", desc: "Knowledge that survives a single chat, a repo clone, or a model swap." },
           ].map(({ icon: Icon, title, desc }) => (
             <div key={title} className="card-surface group relative rounded-2xl p-7 transition-all hover:border-primary/40">
               <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -164,10 +164,10 @@ const Index = () => {
             <ul className="mt-10 space-y-4">
               {([
                 { text: "Canonical markdown company memory", Icon: FileText },
-                { text: "Local CLI + daemon — LLM OAuth or API keys", Icon: Terminal },
-                { text: "Graph UI for ontology & document relationships", Icon: Network },
+                { text: "Local CLI and daemon, with LLM OAuth or API keys", Icon: Terminal },
+                { text: "Graph UI for ontology and document relationships", Icon: Network },
                 { text: "Mini IDE for non-technical users, with terminal access", Icon: Terminal },
-                { text: "Local SQL + vector memory layer", Icon: Database },
+                { text: "Local SQL and vector memory layer", Icon: Database },
                 { text: "Local-first persistent workspace", Icon: ShieldCheck },
               ]).map(({ text, Icon }) => (
                 <li key={text} className="flex items-start gap-3">
@@ -218,7 +218,7 @@ const Index = () => {
               From local memory to <span className="text-gradient">enterprise agent runtime</span>.
             </h2>
             <p className="mt-5 max-w-2xl text-muted-foreground">
-              We are taking the same foundation and building the infrastructure required to run this at company scale: memory, ontology, evidence, graph, runtime — and the agentic workflows that sit on top.
+              We are extending the same foundation into the infrastructure required to run this at company scale: memory, ontology, evidence, graph, runtime, and the agentic workflows that sit on top.
             </p>
             <pre className="mt-8 inline-block rounded-xl border border-border/60 bg-background/60 px-5 py-4 text-sm md:text-base">
 <span className="text-foreground">company</span> = <span className="text-gradient font-medium">memory</span> + <span className="text-gradient font-medium">ontology</span> + <span className="text-gradient font-medium">evidence</span> + <span className="text-gradient font-medium">runtime</span>
@@ -232,7 +232,7 @@ const Index = () => {
         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Join us</p>
         <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-5xl">We are hiring builders.</h2>
         <p className="mx-auto mt-5 max-w-xl text-muted-foreground">
-          Small team, working very hard, backed by investors. Looking for strong people who want to help build PulseOS.
+          We are a small, investor-backed team looking for strong engineers and designers who want to help build PulseOS.
         </p>
         <div className="mt-10 flex flex-wrap justify-center gap-3">
           <Button asChild size="lg" className="rounded-full glow bg-primary text-primary-foreground hover:bg-primary/90">
