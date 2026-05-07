@@ -18,14 +18,14 @@ test("getClaudeAuthMode defaults to auto", () => {
   assert.equal(getClaudeAuthMode({}), "auto");
 });
 
-test("openai auth status prefers API key in auto mode", async () => {
+test("openai auth status prefers codex session in auto mode when both are available", async () => {
   const status = await getModelCredentialStatus(
     "openai",
     { OPENAI_API_KEY: "test-key" },
     runnerWith({ stdout: "Logged in using ChatGPT" }),
   );
   assert.equal(status.ok, true);
-  assert.equal(status.method, "api_key");
+  assert.equal(status.method, "codex_cli_session");
 });
 
 test("openai auth status uses codex session in auto mode when no API key exists", async () => {
@@ -36,6 +36,16 @@ test("openai auth status uses codex session in auto mode when no API key exists"
   );
   assert.equal(status.ok, true);
   assert.equal(status.method, "codex_cli_session");
+});
+
+test("openai auth status falls back to API key in auto mode when codex session is unavailable", async () => {
+  const status = await getModelCredentialStatus(
+    "openai",
+    { OPENAI_API_KEY: "test-key" },
+    runnerWith({ error: new Error("spawn ENOENT") }),
+  );
+  assert.equal(status.ok, true);
+  assert.equal(status.method, "api_key");
 });
 
 test("openai auth status fails cleanly when codex session mode is requested but unavailable", async () => {

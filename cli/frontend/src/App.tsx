@@ -36,7 +36,7 @@ class GraphErrorBoundary extends Component<
       return (
         <LiteEmptyState
           title="Graph render failed"
-          detail={`The graph canvas crashed while rendering: ${this.state.errorMessage}. Refresh the page or run npm run graph again.`}
+          detail={`The memory map crashed while rendering: ${this.state.errorMessage}. Refresh the page or run npm run ui again.`}
         />
       );
     }
@@ -207,7 +207,7 @@ export function App() {
         setCompatibilityError(
           nextError instanceof Error
             ? nextError.message
-            : "The local graph daemon could not confirm UI compatibility. Restart `npm run graph` and open the new link.",
+            : "The local daemon could not confirm UI compatibility. Restart `npm run ui` and open the new link.",
         );
         setGraphData(null);
         setTree(null);
@@ -218,7 +218,7 @@ export function App() {
 
       if (capabilities.uiApiVersion !== REQUIRED_UI_API_VERSION) {
         setCompatibilityError(
-          `This graph page expects UI API v${REQUIRED_UI_API_VERSION}, but the running daemon reports v${capabilities.uiApiVersion}. Restart \`npm run graph\` and open the newly printed link.`,
+          `This UI page expects UI API v${REQUIRED_UI_API_VERSION}, but the running daemon reports v${capabilities.uiApiVersion}. Restart \`npm run ui\` and open the newly printed link.`,
         );
         setGraphData(null);
         setTree(null);
@@ -813,7 +813,7 @@ export function App() {
                 </LiteCardHeader>
                 <LiteCardBody>
                   <p className="muted-copy">
-                    This browser tab is talking to a daemon that does not match the current UI bundle. Restart <code>npm run graph</code>, then open the
+                    This browser tab is talking to a daemon that does not match the current UI bundle. Restart <code>npm run ui</code>, then open the
                     newly printed tokenized localhost link once so the session is refreshed.
                   </p>
                 </LiteCardBody>
@@ -823,7 +823,7 @@ export function App() {
             {error ? <div className="notice notice-error">{error}</div> : null}
             {graphSnapshotError ? (
               <div className="notice notice-error">
-                {graphSnapshotError} Refresh the graph, or run <code>npm run graph</code> again if the session is stale.
+                {graphSnapshotError} Refresh the UI data, or run <code>npm run ui</code> again if the session is stale.
               </div>
             ) : null}
             {notice ? <div className="notice notice-success">{notice}</div> : null}
@@ -843,7 +843,7 @@ export function App() {
                   {compatibilityError ? (
                     <LiteEmptyState
                       title="Graph workspace paused"
-                      detail="Restart `npm run graph`, open the new local link once, and then refresh this page so the UI and daemon are on the same version."
+                      detail="Restart `npm run ui`, open the new local link once, and then refresh this page so the UI and daemon are on the same version."
                     />
                   ) : loading ? (
                     <LiteEmptyState title="Loading graph" detail="The daemon is reading the SQLite index and Company Memory tree." />

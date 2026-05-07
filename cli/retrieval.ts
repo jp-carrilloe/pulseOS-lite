@@ -584,10 +584,10 @@ export class KnowledgeBaseIndex {
 
     const weeklySchedule = buildWeeklySchedule(status.lastIndexedAt, checkedAt);
     const reasons: string[] = [];
-    if (status.indexedDocuments === 0) reasons.push("No graph/index has been built yet for the current knowledge base.");
+    if (status.indexedDocuments === 0) reasons.push("No UI/index snapshot has been built yet for the current knowledge base.");
     if (status.indexedDocuments > 0 && expectedReferenceCount > 0 && status.referenceCount === 0) {
       reasons.push(
-        "Documents are indexed, but no document relationships are stored in the SQL graph. Rebuild graph to restore Markdown reference edges.",
+        "Documents are indexed, but no document relationships are stored in the SQL graph. Rebuild the UI index to restore Markdown reference edges.",
       );
     }
     if (pending.totalChanges > 0) {

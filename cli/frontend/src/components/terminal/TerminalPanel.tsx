@@ -286,7 +286,7 @@ export function TerminalPanel({
               <button
                 type="button"
                 className="graph-icon-button graph-tooltip-target terminal-info-button"
-                data-tooltip="Run PulseOS chat on OpenAI GPT-5.4 Mini. You can also use git, npm, rg, or cd cli && npm run graph directly."
+                data-tooltip="Run PulseOS chat on OpenAI GPT-5.4. You can also use git, npm, rg, or cd cli && npm run ui directly."
                 aria-label="Terminal help"
               >
                 i
@@ -323,9 +323,9 @@ export function TerminalPanel({
           </LiteButton>
           <LiteButton
             variant="secondary"
-            onClick={() => void runPresetCommand("cd cli && npm run chat -- --model openai --model-id gpt-5.4-mini")}
+            onClick={() => void runPresetCommand("cd cli && npm run chat -- --model openai --model-id gpt-5.4")}
             disabled={busy}
-            title="Run cd cli && npm run chat -- --model openai --model-id gpt-5.4-mini"
+            title="Run cd cli && npm run chat -- --model openai --model-id gpt-5.4"
           >
             Run PulseOS
           </LiteButton>

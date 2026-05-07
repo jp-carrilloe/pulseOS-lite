@@ -24,26 +24,26 @@ npm install
 npm run chat
 ```
 
-Then, in a second terminal, open the visual graph workspace:
+Then, in a second terminal, open the visual Company Memory UI:
 
 ```bash
 cd cli
-npm run graph
+npm run ui
 ```
 
 What you should see:
 - `npm run chat` opens the SQL-backed company-memory REPL
-- `npm run graph` builds the local React graph UI and prints a private localhost URL
-- the graph UI lets you browse `000_Company_Memory`, inspect the ontology, open Markdown docs, and use the docked terminal
+- `npm run ui` builds the local React Company Memory UI and prints a private localhost URL
+- the UI lets you browse `000_Company_Memory`, inspect the ontology, open Markdown docs, and use the docked terminal
 
 Useful first checks inside chat:
 - `/files` shows what the local index can currently read
 - `/status` shows daemon/session state
 - `/reload` refreshes indexing after document edits
-- after adding, creating, moving, or renaming Markdown docs in `000_Company_Memory`, use the graph `Rebuild index` / `Rebuild graph/index` button or run `cd cli && npm run index` so the graph sees the new files
+- after adding, creating, moving, or renaming Markdown docs in `000_Company_Memory`, use the UI `Rebuild index` / `Rebuild graph/index` button or run `cd cli && npm run index` so the index sees the new files
 - `/models` lists provider defaults and example model IDs
 - `/model auto` auto-picks the first configured provider
-- `/model openai gpt-4o` switches to a specific provider model
+- `/model openai gpt-5.4` switches to a specific provider model
 
 Before generating company-specific content, check whether there is real source data available:
 
@@ -92,27 +92,48 @@ If you skip the source material, bootstrap should stop and ask you to add it fir
 
 ---
 
-## Step 1: Add an API Key
+## Step 1: Configure Model Access
 
 At the repo root, copy `.env.example` to `.env.local` or `.env`.
 
-Then add at least one of these:
+Then configure at least one usable model path:
 - `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
 - `GEMINI_API_KEY`
 - `GOOGLE_API_KEY`
+- `codex login`
+- `claude auth login`
 
-Bootstrap checks providers in this order:
-1. `OPENAI_API_KEY`
-2. `ANTHROPIC_API_KEY`
-3. `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+PulseOS supports these OpenAI auth modes for chat and bootstrap:
+- `PULSEOS_OPENAI_AUTH_MODE=auto`
+  prefer a local signed-in Codex session, otherwise fall back to `OPENAI_API_KEY`
+- `PULSEOS_OPENAI_AUTH_MODE=api_key`
+  require `OPENAI_API_KEY`
+- `PULSEOS_OPENAI_AUTH_MODE=codex_cli_session`
+  require `codex login`
 
-If your OpenAI key is valid, bootstrap will use OpenAI first.
+Optional OpenAI override:
+- `PULSEOS_OPENAI_CODEX_BIN`
+  choose a non-default `codex` binary path
+
+PulseOS supports these Claude auth modes for chat and bootstrap:
+- `PULSEOS_CLAUDE_AUTH_MODE=auto`
+  prefer `ANTHROPIC_API_KEY`, otherwise fall back to a local signed-in Claude Code session
+- `PULSEOS_CLAUDE_AUTH_MODE=api_key`
+  require `ANTHROPIC_API_KEY`
+- `PULSEOS_CLAUDE_AUTH_MODE=claude_cli_session`
+  require `claude auth login`
+
+Bootstrap validates providers in this order:
+1. OpenAI
+2. Anthropic
+3. Gemini
 
 Important:
-- if you want to use the local CLI runtime, the SQL-backed index, or any vectorization/retrieval workflow after the files are created, you must add a valid local API key
-- a hosted Codex, Claude, or Gemini subscription by itself is not enough for the local SQL/vectorization pipeline
-- direct cloud model access can help seed documents, but local indexing and vectorization still depend on your local provider configuration
+- OpenAI chat and bootstrap can run through `codex login` without `OPENAI_API_KEY`
+- Claude chat and bootstrap can run through `claude auth login` without `ANTHROPIC_API_KEY`
+- local indexing and retrieval still work without provider API keys, but they fall back to heuristic embeddings instead of provider embeddings
+- if `OPENAI_API_KEY` is present, the indexer will use OpenAI embeddings by default and that can incur API cost
 
 ---
 
@@ -126,6 +147,8 @@ This repo also includes [000_Acme_Sample_Company_Memory](./000_Acme_Sample_Compa
 Do not skip this step.
 
 If Codex, Gemini, Claude, or another AI assistant is reading this file, it should pause here and tell the user to add source material first. It should not launch bootstrap automatically.
+
+If you run `npm run bootstrap` before adding usable intake material, PulseOS will now hand off into the local chat session instead of kicking you back to the shell. Add the source material, exit chat, then rerun bootstrap.
 
 You have 2 valid ways to do that.
 
@@ -299,7 +322,7 @@ Useful commands inside chat:
 - `/model openai`
 - `/model claude`
 - `/model gemini`
-- `/model openai gpt-4o`
+- `/model openai gpt-5.4`
 - `/model claude claude-opus-4-6`
 - `/model gemini gemini-2.0-flash`
 - `/reload`
@@ -315,6 +338,7 @@ If you want the CLI to use its local retrieval layer after the repo is created:
 - `chat` or daemon startup uses the existing SQL index
 - `npm run index` or `:reload` manually refreshes indexing and vectorization
 - the SQL index and vector-based retrieval are part of the local CLI workflow, not just the cloud seeding workflow
+- if `OPENAI_API_KEY` is absent, indexing falls back to local heuristic embeddings
 
 OpenAI auth modes:
 - `OPENAI_API_KEY`
@@ -333,7 +357,8 @@ Claude auth modes:
   controls how PulseOS resolves Claude access
 
 Phase 1 limitation:
-- embeddings still use `OPENAI_API_KEY` when present
+- embeddings use `OPENAI_API_KEY` when present
+- without `OPENAI_API_KEY`, embeddings fall back to a local heuristic mode
 - otherwise retrieval falls back to heuristic vectors
 
 Persistent workspace storage:
@@ -362,7 +387,7 @@ In this repo, **ontology** means the structural map of the company brain. In v1 
 
 If you want to trigger that layer, run:
 - `npm run chat`, or
-- `npm run graph`, or
+- `npm run ui`, or
 - `npm run daemon:start`, or
 - `:reload` after chat has started
 
@@ -371,7 +396,7 @@ If you want to connect the same company brain through MCP-compatible clients aft
 To view the basic company-memory ontology visually, run:
 
 ```bash
-npm run graph
+npm run ui
 ```
 
 That builds the local React workspace and prints a private local browser URL. The UI is scoped to `000_Company_Memory` and includes:
@@ -458,7 +483,7 @@ If you want the simplest possible checklist:
 2. Open the graph in another terminal:
    ```bash
    cd cli
-   npm run graph
+   npm run ui
    ```
 3. Check whether real intake/source material is available:
    ```bash

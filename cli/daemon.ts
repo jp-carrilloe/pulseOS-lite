@@ -120,7 +120,7 @@ class TerminalSessionManager {
     this.publish(session, {
       type: "started",
       session: { ...summary },
-      message: `PulseOS local repo shell started in ${REPO_ROOT}. Run cd cli && npm run chat for the PulseOS CLI, cd cli && npm run graph for the graph UI, or use commands like rg, git, npm, claude, and gemini if they are installed on this machine.`,
+      message: `PulseOS local repo shell started in ${REPO_ROOT}. Run cd cli && npm run chat for the PulseOS CLI, cd cli && npm run ui for the Company Memory UI, or use commands like rg, git, npm, claude, and gemini if they are installed on this machine.`,
     });
 
     child.stdout.on("data", (chunk: Buffer | string) => {
@@ -415,7 +415,7 @@ export function createDaemonApp(options: {
         {
           error: {
             code: "unauthorized",
-            message: "This graph request is no longer attached to the current local UI session. Run `npm run graph` again and open the printed link once to restore access.",
+            message: "This UI request is no longer attached to the current local UI session. Run `npm run ui` again and open the printed link once to restore access.",
           },
         },
         401,
@@ -432,7 +432,7 @@ export function createDaemonApp(options: {
         {
           error: {
             code: "unauthorized",
-            message: "Open the current `npm run graph` link once to restore the local UI session.",
+            message: "Open the current `npm run ui` link once to restore the local UI session.",
           },
         },
         401,
@@ -457,7 +457,7 @@ export function createDaemonApp(options: {
   app.get("/api/rebuild-advisor", async (ctx) => {
     if (!hasGraphSessionAccess(ctx, token)) {
       return ctx.json(
-        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        { error: { code: "unauthorized", message: "Open the current `npm run ui` link once to restore the local UI session." } },
         401,
       );
     }
@@ -468,7 +468,7 @@ export function createDaemonApp(options: {
   app.post("/api/rebuild", async (ctx) => {
     if (!hasGraphSessionAccess(ctx, token)) {
       return ctx.json(
-        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        { error: { code: "unauthorized", message: "Open the current `npm run ui` link once to restore the local UI session." } },
         401,
       );
     }
@@ -490,7 +490,7 @@ export function createDaemonApp(options: {
   app.get("/api/files/tree", async (ctx) => {
     if (!hasGraphSessionAccess(ctx, token)) {
       return ctx.json(
-        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        { error: { code: "unauthorized", message: "Open the current `npm run ui` link once to restore the local UI session." } },
         401,
       );
     }
@@ -501,7 +501,7 @@ export function createDaemonApp(options: {
   app.get("/api/files/read", async (ctx) => {
     if (!hasGraphSessionAccess(ctx, token)) {
       return ctx.json(
-        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        { error: { code: "unauthorized", message: "Open the current `npm run ui` link once to restore the local UI session." } },
         401,
       );
     }
@@ -527,7 +527,7 @@ export function createDaemonApp(options: {
   app.post("/api/files/write", async (ctx) => {
     if (!hasGraphSessionAccess(ctx, token)) {
       return ctx.json(
-        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        { error: { code: "unauthorized", message: "Open the current `npm run ui` link once to restore the local UI session." } },
         401,
       );
     }
@@ -557,7 +557,7 @@ export function createDaemonApp(options: {
   app.post("/api/terminal/session", (ctx) => {
     if (!hasGraphSessionAccess(ctx, token)) {
       return ctx.json(
-        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        { error: { code: "unauthorized", message: "Open the current `npm run ui` link once to restore the local UI session." } },
         401,
       );
     }
@@ -570,7 +570,7 @@ export function createDaemonApp(options: {
       return createSingleTerminalEventResponse(
         {
           type: "error",
-          message: "Open the current `npm run graph` link once to restore the local UI session.",
+          message: "Open the current `npm run ui` link once to restore the local UI session.",
         },
         200,
       );
@@ -583,7 +583,7 @@ export function createDaemonApp(options: {
   app.post("/api/terminal/input", async (ctx) => {
     if (!hasGraphSessionAccess(ctx, token)) {
       return ctx.json(
-        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        { error: { code: "unauthorized", message: "Open the current `npm run ui` link once to restore the local UI session." } },
         401,
       );
     }
@@ -611,7 +611,7 @@ export function createDaemonApp(options: {
   app.post("/api/terminal/resize", async (ctx) => {
     if (!hasGraphSessionAccess(ctx, token)) {
       return ctx.json(
-        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        { error: { code: "unauthorized", message: "Open the current `npm run ui` link once to restore the local UI session." } },
         401,
       );
     }
@@ -641,7 +641,7 @@ export function createDaemonApp(options: {
   app.post("/api/terminal/close", async (ctx) => {
     if (!hasGraphSessionAccess(ctx, token)) {
       return ctx.json(
-        { error: { code: "unauthorized", message: "Open the current `npm run graph` link once to restore the local UI session." } },
+        { error: { code: "unauthorized", message: "Open the current `npm run ui` link once to restore the local UI session." } },
         401,
       );
     }
@@ -657,7 +657,7 @@ export function createDaemonApp(options: {
         {
           error: {
             code: "unauthorized",
-            message: "This graph request is no longer attached to the current local UI session. Run `npm run graph` again and open the printed link once to restore access.",
+            message: "This UI request is no longer attached to the current local UI session. Run `npm run ui` again and open the printed link once to restore access.",
           },
         },
         401,
@@ -858,8 +858,8 @@ function renderGraphUnauthorizedPage(): string {
 </head>
 <body>
   <main>
-    <h1>Graph link expired or incomplete</h1>
-    <p>Run <code>npm run graph</code> from <code>cli/</code> and open the local URL it prints once. The first launch uses a short-lived local token to create a browser session, then the UI redirects to a clean localhost URL so normal refresh works.</p>
+    <h1>UI link expired or incomplete</h1>
+    <p>Run <code>npm run ui</code> from <code>cli/</code> and open the local URL it prints once. The first launch uses a short-lived local token to create a browser session, then the UI redirects to a clean localhost URL so normal refresh works.</p>
   </main>
 </body>
 </html>`;
@@ -929,8 +929,8 @@ function renderGraphBuildMissingPage(): string {
 </head>
 <body>
   <main>
-    <h1>Graph UI is not built yet</h1>
-    <p>Run <code>npm run graph</code> from <code>cli/</code>. That command builds the React graph workspace before printing the local URL.</p>
+    <h1>UI is not built yet</h1>
+    <p>Run <code>npm run ui</code> from <code>cli/</code>. That command builds the React Company Memory workspace before printing the local URL.</p>
   </main>
 </body>
 </html>`;

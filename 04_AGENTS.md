@@ -30,7 +30,7 @@ Bootstrap now asks only for the company name, then reads source material from `0
 Workflow note:
 - `npm run bootstrap` seeds the documents
 - `npm run chat` or daemon startup uses the existing SQL index
-- `npm run index`, `/reload`, or the graph UI `Rebuild index` / `Rebuild graph/index` button refreshes indexing and vectorization
+- `npm run index`, `/reload`, or the UI `Rebuild index` / `Rebuild graph/index` button refreshes indexing and vectorization
 - after adding, creating, moving, renaming, or deleting Markdown documents in `000_Company_Memory`, rebuild before relying on the graph; a browser refresh only reloads the last SQLite snapshot
 
 The local SQLite layer also includes provider-neutral CRM sync tables:
@@ -47,7 +47,7 @@ Bootstrap safety rule:
 **REPL commands while chatting:**
 ```
 /model auto                   — auto-pick the first configured provider
-/model openai gpt-4o          — switch provider and concrete model ID
+/model openai gpt-5.4         — switch provider and concrete model ID
 /models                       — list provider defaults and examples
 /reset                        — clear conversation history
 /reload                       — manually re-index repo files after edits or new docs

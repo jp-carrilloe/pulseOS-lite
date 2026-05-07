@@ -12,11 +12,13 @@
 import fsp from "node:fs/promises";
 import fs from "node:fs";
 import path from "node:path";
+import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { generateClaudeText, generateOpenAiText, validateClaudeAccess, validateOpenAiAccess } from "./auth.js";
 import { buildBootstrapEvidenceBlock, collectBootstrapIntake } from "./bootstrap-intake.js";
+import { actionBlock, bold, bullet, dim, kv, section, tone } from "./terminal-format.js";
 import {
   ensureCliWorkspaceReady,
   fetchDaemonJson,
@@ -31,6 +33,16 @@ import { openWorkspaceStore } from "./workspace-store.js";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TODAY = new Date().toISOString().split("T")[0];
 export const ACME_SAMPLE_MEMORY_DIR = "000_Acme_Sample_Company_Memory";
+
+type SpawnLike = (
+  command: string,
+  args: readonly string[],
+  options: {
+    cwd: string;
+    env: NodeJS.ProcessEnv;
+    stdio: "inherit";
+  },
+) => ChildProcess;
 
 // ── Dependency Order ──────────────────────────────────────────────────────────
 //
@@ -161,6 +173,31 @@ export function hasAcmeSampleCompanyMemory(repoRoot: string = REPO_ROOT): boolea
   return fs.existsSync(path.join(repoRoot, ACME_SAMPLE_MEMORY_DIR));
 }
 
+export function getBootstrapChatHandoffCommand() {
+  const cliRoot = path.dirname(fileURLToPath(import.meta.url));
+  return {
+    cwd: cliRoot,
+    command: process.execPath,
+    args: ["--import", "tsx/esm", path.join(cliRoot, "index.ts"), "chat"],
+  };
+}
+
+export async function handoffBootstrapToChat(
+  env: NodeJS.ProcessEnv = process.env,
+  launcher: SpawnLike = spawn,
+): Promise<number> {
+  const { command, args, cwd } = getBootstrapChatHandoffCommand();
+  return await new Promise((resolve, reject) => {
+    const child = launcher(command, args, {
+      cwd,
+      env,
+      stdio: "inherit",
+    });
+    child.once("error", reject);
+    child.once("exit", (code) => resolve(code ?? 1));
+  });
+}
+
 // ── Intake Questionnaire ──────────────────────────────────────────────────────
 
 async function runIntake(rl: ReturnType<typeof createInterface>): Promise<BootstrapProfile> {
@@ -264,54 +301,62 @@ async function main() {
 
   try {
     process.stdout.write(
-      "\npulseos-lite-cli bootstrap — Seed your PulseOS-Lite repo with real content\n",
+      `\n${section("Bootstrap")}\n${bold("pulseos-lite-cli bootstrap")} — Seed your PulseOS-Lite repo with real content\n`,
     );
-    process.stdout.write(`Workspace storage: ${workspace.paths.workspaceRoot}\n`);
+    process.stdout.write(`${kv("Workspace storage", workspace.paths.workspaceRoot)}\n`);
     process.stdout.write(
-      "Bootstrap seeds documents in dependency order. It reads raw source material from 001_Data_Souces and checks existing curated docs in 000_Company_Memory.\n",
+      `${bullet("Bootstrap seeds documents in dependency order.")}\n${bullet("It reads raw source material from 001_Data_Souces and checks existing curated docs in 000_Company_Memory.")}\n`,
     );
 
     // Discover and sort template files
-    process.stdout.write("\nScanning for unfilled template files...\n");
+    process.stdout.write(`\n${section("Template Scan")}\n${bullet("Scanning for unfilled template files...", "info")}\n`);
     const raw: TemplateFile[] = [];
     await findTemplateFiles(REPO_ROOT, REPO_ROOT, raw);
     const templateFiles = sortByDependencyOrder(raw);
 
     if (templateFiles.length === 0) {
-      process.stdout.write("No unfilled template files found. Run bootstrap again after adding new templates.\n");
+      process.stdout.write(`${kv("Status", "no unfilled template files found", "warning")}\n${actionBlock("Best next action", ["Add or restore template files, then run `npm run bootstrap` again."], "warning")}\n`);
       return;
     }
 
-    process.stdout.write(`\nFound ${templateFiles.length} template files (in generation order):\n`);
+    process.stdout.write(`\n${section("Templates Found")}\n${kv("Count", String(templateFiles.length), "success")}\n`);
     for (const f of templateFiles) {
-      process.stdout.write(`  ${f.relativePath}\n`);
+      process.stdout.write(`${bullet(tone(f.relativePath, "info"))}\n`);
     }
 
     process.stdout.write(
-      "\nReviewing source material in `001_Data_Souces/Data_Souces_Folder`, `001_Data_Souces/Data_Sources_References`, and existing curated docs in `000_Company_Memory` before bootstrap starts...\n",
+      `\n${section("Intake Review")}\n${bullet("Reviewing source material in `001_Data_Souces/Data_Souces_Folder`, `001_Data_Sources_References`, and existing curated docs in `000_Company_Memory` before bootstrap starts...", "info")}\n`,
     );
     const intakeReport = await collectBootstrapIntake(REPO_ROOT, "");
     const totalRawIntakeFiles = intakeReport.localSources.length + intakeReport.externalSources.length;
     if (totalRawIntakeFiles === 0) {
       process.stderr.write(
-        "\nBootstrap could not find any usable intake material.\nAdd source files to `001_Data_Souces/Data_Souces_Folder` or add valid reference notes in `001_Data_Souces/Data_Sources_References`, then run `npm run bootstrap` again.\n",
+        `\n${section("Bootstrap Blocked")}\n${kv("Reason", "no usable intake material found", "danger")}\n${bullet("Add source files to `001_Data_Souces/Data_Souces_Folder` or add valid reference notes in `001_Data_Sources_References`.", "warning")}\n`,
       );
+      process.stdout.write(
+        `\n${actionBlock("Best next action", [
+          "PulseOS will open chat so you can keep working with the daemon and auth already wired up.",
+          "Add source material, then leave chat with `/exit`.",
+          "Run `npm run bootstrap` again when you are ready to seed the docs.",
+        ], "warning")}\n\n`,
+      );
+      const exitCode = await handoffBootstrapToChat(process.env);
+      if (exitCode !== 0) {
+        process.exitCode = exitCode;
+      }
       return;
     }
 
-    process.stdout.write(
-      `Found ${intakeReport.localSources.length} local intake files, ${intakeReport.externalSources.length} external reference files, and ${intakeReport.companyMemorySources.length} existing Company Memory docs to use as curated context.\n`,
-    );
+    process.stdout.write(`${kv("Local intake files", String(intakeReport.localSources.length), "success")}\n`);
+    process.stdout.write(`${kv("External reference files", String(intakeReport.externalSources.length), intakeReport.externalSources.length > 0 ? "success" : "muted")}\n`);
+    process.stdout.write(`${kv("Existing Company Memory docs", String(intakeReport.companyMemorySources.length), intakeReport.companyMemorySources.length > 0 ? "success" : "muted")}\n`);
     if (intakeReport.warnings.length > 0) {
-      process.stdout.write("Bootstrap found a few intake warnings:\n");
-      for (const warning of intakeReport.warnings) {
-        process.stdout.write(`  - ${warning}\n`);
-      }
+      process.stdout.write(`${actionBlock("Intake warnings", intakeReport.warnings, "warning")}\n`);
     }
 
     const proceed = await rl.question(`\nProceed with source-driven onboarding? [Y/n] `);
     if (proceed.trim().toLowerCase() === "n") {
-      process.stdout.write("Aborted.\n");
+      process.stdout.write(`${kv("Status", "aborted", "warning")}\n`);
       return;
     }
 
@@ -319,23 +364,22 @@ async function main() {
     intakeReport.companyName = profile.name;
 
     if (hasAcmeSampleCompanyMemory(REPO_ROOT)) {
-      process.stdout.write(`\nSample company memory detected: ${ACME_SAMPLE_MEMORY_DIR}\n`);
-      process.stdout.write("This sample folder is included as a public reference/template.\n");
+      process.stdout.write(`\n${section("Sample Company Memory")}\n${kv("Detected", ACME_SAMPLE_MEMORY_DIR, "warning")}\n${bullet("This sample folder is included as a public reference/template.")}\n`);
       const deleteSample = await rl.question(
         `Do you want to delete the sample folder to keep your repo clean? [y/N] `,
       );
       if (deleteSample.trim().toLowerCase() === "y") {
-        process.stdout.write(`Deleting ${ACME_SAMPLE_MEMORY_DIR}... `);
+        process.stdout.write(`${bullet(`Deleting ${ACME_SAMPLE_MEMORY_DIR}...`, "warning")} `);
         await fsp.rm(path.join(REPO_ROOT, ACME_SAMPLE_MEMORY_DIR), { recursive: true, force: true });
         process.stdout.write("done\n");
       } else {
-        process.stdout.write("Keeping sample folder.\n");
+        process.stdout.write(`${bullet("Keeping sample folder.", "muted")}\n`);
       }
     }
 
-    process.stdout.write("\nValidating available model providers for bootstrap...\n");
+    process.stdout.write(`\n${section("Model Validation")}\n${bullet("Validating available model providers for bootstrap...", "info")}\n`);
     const provider = await createBootstrapProvider();
-    process.stdout.write(`\nBootstrap model provider: ${provider.name} (${provider.model})\n`);
+    process.stdout.write(`${kv("Bootstrap model provider", `${provider.name} (${provider.model})`, "success")}\n`);
 
     bootstrapStartedAt = new Date().toISOString();
     bootstrapCompanyName = profile.name;
@@ -392,7 +436,7 @@ async function main() {
     for (let i = 0; i < templateFiles.length; i++) {
       const file = templateFiles[i];
       const pct = Math.round(((i + 1) / templateFiles.length) * 100);
-      process.stdout.write(`[${i + 1}/${templateFiles.length}] (${pct}%) ${file.relativePath}... `);
+      process.stdout.write(`${dim(`[${i + 1}/${templateFiles.length}] ${pct}%`)} ${tone(file.relativePath, "info")} ... `);
 
       try {
         const evidenceBlock = buildBootstrapEvidenceBlock(intakeReport, file.relativePath);
@@ -402,31 +446,26 @@ async function main() {
         // Accumulate for subsequent docs
         generated.push({ relativePath: file.relativePath, content: filled });
 
-        process.stdout.write(`done\n`);
+        process.stdout.write(`${tone("done", "success")}\n`);
         succeeded++;
       } catch (err) {
-        process.stdout.write(`FAILED\n  → ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stdout.write(`${tone("FAILED", "danger")}\n${bullet(err instanceof Error ? err.message : String(err), "danger")}\n`);
         // Still add original to context so later docs have something to reference
         generated.push({ relativePath: file.relativePath, content: file.content });
         failed++;
       }
     }
 
-    process.stdout.write("\n" + "─".repeat(60) + "\n");
-    process.stdout.write(`Bootstrap complete.\n`);
-    process.stdout.write(`  Filled:  ${succeeded} files\n`);
-    if (failed > 0) process.stdout.write(`  Failed:  ${failed} files (originals preserved)\n`);
+    process.stdout.write(`\n${section("Bootstrap Complete")}\n`);
+    process.stdout.write(`${kv("Filled", `${succeeded} files`, "success")}\n`);
+    if (failed > 0) process.stdout.write(`${kv("Failed", `${failed} files (originals preserved)`, "danger")}\n`);
 
-    process.stdout.write("\nRefreshing Company Memory graph/index from `000_Company_Memory`...\n");
+    process.stdout.write(`\n${section("Index Refresh")}\n${bullet("Refreshing Company Memory graph/index from `000_Company_Memory`...", "info")}\n`);
     const indexRefresh = await refreshCompanyMemoryIndex(process.env);
-    process.stdout.write(
-      `  Indexed: ${indexRefresh.fileCount} Company Memory docs (${indexRefresh.charCount.toLocaleString()} chars)\n`,
-    );
-    process.stdout.write(
-      `  Embeddings: ${indexRefresh.embeddingModel} [${indexRefresh.embeddingMode}]\n`,
-    );
+    process.stdout.write(`${kv("Indexed", `${indexRefresh.fileCount} Company Memory docs (${indexRefresh.charCount.toLocaleString()} chars)`, "success")}\n`);
+    process.stdout.write(`${kv("Embeddings", `${indexRefresh.embeddingModel} [${indexRefresh.embeddingMode}]`, "info")}\n`);
     if (indexRefresh.refreshedViaDaemon) {
-      process.stdout.write("  Daemon graph cache: refreshed\n");
+      process.stdout.write(`${kv("Daemon graph cache", "refreshed", "success")}\n`);
     }
 
     await writeBootstrapState(
@@ -448,9 +487,11 @@ async function main() {
       },
       process.env,
     );
-    process.stdout.write(
-      `\nNext steps:\n  1. Review a few docs to sanity-check quality\n  2. Run 'npm run chat' to interact with the refreshed Company Memory index\n  3. Run 'npm run graph' to inspect the graph backed by 000_Company_Memory docs\n`,
-    );
+    process.stdout.write(`\n${actionBlock("Best next action", [
+      "Review a few docs to sanity-check quality.",
+      "Run `npm run chat` to interact with the refreshed Company Memory index.",
+      "Run `npm run ui` to inspect the Company Memory workspace in the browser.",
+    ], failed > 0 ? "warning" : "success")}\n`);
   } catch (error) {
     if (bootstrapStateWritten) {
       await writeBootstrapState(
@@ -544,14 +585,14 @@ async function createBootstrapProvider(env: NodeJS.ProcessEnv = process.env): Pr
       "Checked providers in this order: OpenAI, Anthropic, Gemini.",
       "Validation failures:",
       ...failures.map((failure) => `- ${failure}`),
-      "Add a working `OPENAI_API_KEY`, sign in with `codex login`, add `ANTHROPIC_API_KEY`, sign in with `claude auth login`, or configure `GEMINI_API_KEY` / `GOOGLE_API_KEY`, then run `npm run bootstrap` again.",
+      "Run `codex login`, add `OPENAI_API_KEY`, run `claude auth login`, add `ANTHROPIC_API_KEY`, or configure `GEMINI_API_KEY` / `GOOGLE_API_KEY`, then run `npm run bootstrap` again.",
     ].join("\n"),
   );
 }
 
 function buildBootstrapProviders(env: NodeJS.ProcessEnv = process.env): BootstrapProvider[] {
   const providers: BootstrapProvider[] = [];
-  const model = env.PULSEOS_BOOTSTRAP_OPENAI_MODEL?.trim() || "gpt-4o";
+  const model = env.PULSEOS_BOOTSTRAP_OPENAI_MODEL?.trim() || "gpt-5.4";
   providers.push({
     name: "openai",
     model,
@@ -646,5 +687,15 @@ function loadEnvKey(key: string): string | undefined {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  await main();
+  try {
+    await main();
+  } catch (error) {
+    process.stderr.write(
+      `\n${section("Bootstrap Failed")}\n${kv("Error", error instanceof Error ? error.message : String(error), "danger")}\n${actionBlock("Best next action", [
+        "Fix the issue above, then rerun `npm run bootstrap`.",
+        "Use `npm run status` if you want a quick view of intake, auth, and daemon state.",
+      ], "danger")}\n`,
+    );
+    process.exitCode = 1;
+  }
 }

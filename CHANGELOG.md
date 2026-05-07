@@ -40,6 +40,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `npm run status` now reports model auth availability, including Codex-session-backed OpenAI detection
 - OpenAI chat/bootstrap no longer require a manually pasted API key when a local Codex session is available; embeddings still fall back to API key or heuristic mode
 - Claude chat/bootstrap no longer require a manually pasted API key when a local Claude Code session is available
+- OpenAI `auto` auth now prefers a local signed-in Codex session before `OPENAI_API_KEY`
+- `bootstrap` now hands off into the local chat session when source intake is empty instead of dropping the user back to the shell
+- `npm run ui` is now the primary browser workspace command; `npm run graph` remains as a compatibility alias
+- Default OpenAI model for chat and bootstrap is now `gpt-5.4`
+- Main onboarding and runtime docs now explain the current auth defaults, UI command, and default model override paths
 
 ---
 

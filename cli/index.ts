@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectBootstrapIntake } from "./bootstrap-intake.js";
+import { actionBlock, bold, bullet, dim, kv, section, tone } from "./terminal-format.js";
 import {
   REPO_ROOT,
   ensureCliWorkspaceReady,
@@ -22,7 +23,7 @@ import {
   getModelCredentialStatus,
   SUGGESTED_CHAT_MODELS,
   loadRepoEnv,
-  probeGraphBootstrapUrl,
+  probeUiBootstrapUrl,
   probeUiCapabilities,
   probeDaemonHealth,
   readBootstrapState,
@@ -47,6 +48,7 @@ async function main(argv = process.argv.slice(2), env: NodeJS.ProcessEnv = proce
   const shouldPrepareWorkspace =
     command === undefined
     || command === "chat"
+    || command === "ui"
     || command === "graph"
     || command === "status"
     || (command === "daemon" && subcommand === "start");
@@ -72,8 +74,9 @@ async function main(argv = process.argv.slice(2), env: NodeJS.ProcessEnv = proce
       case "status":
         await printWorkflowStatus(env);
         break;
+      case "ui":
       case "graph":
-        await printGraphUrl(env);
+        await printUiUrl(env);
         break;
       case "chat":
       case "":
@@ -81,37 +84,39 @@ async function main(argv = process.argv.slice(2), env: NodeJS.ProcessEnv = proce
         break;
       default:
         process.stderr.write(
-          `I don't recognize that command: ${args.positionals.join(" ") || "none"}.\nUse one of: chat, status, daemon start, daemon stop, or daemon status.\n\n`,
+          `I don't recognize that command: ${args.positionals.join(" ") || "none"}.\nUse one of: chat, ui, status, daemon start, daemon stop, or daemon status.\n\n`,
         );
         printHelp();
         process.exitCode = 1;
     }
   } catch (err) {
-    process.stderr.write(`\nSomething went wrong.\n${err instanceof Error ? err.message : String(err)}\n`);
+    process.stderr.write(
+      `\n${section("Command Failed")}\n${kv("Error", err instanceof Error ? err.message : String(err), "danger")}\n${actionBlock("Best next action", ["Fix the issue above, then rerun the command.", "Use `npm run status` if you want a quick health snapshot first."], "danger")}\n`,
+    );
     process.exitCode = 1;
   }
 }
 
 function printHelp() {
   process.stdout.write(`
-pulseos-lite-cli — Chat with your PulseOS-Lite repo using Claude, OpenAI, or Gemini
+${bold("pulseos-lite-cli")} — Chat with your PulseOS-Lite repo using Claude, OpenAI, or Gemini
 
-Workflow:
+${section("Workflow")}
   npm run bootstrap          — seed the markdown documents
   npm run chat               — start the daemon and refresh the Company Memory index
-  npm run graph              — build and open the PulseOS Company Memory UI
+  npm run ui                 — build and open the PulseOS Company Memory UI
 
-Usage:
+${section("Usage")}
   npm run chat [-- --model <auto|openai|claude|gemini> --model-id <provider-model-id|auto>]
-  npm run graph
+  npm run ui
   npm run status
   npm run daemon:start
   npm run daemon:stop
   npm run daemon:status
 
-Chat commands (type while in REPL; "/" and ":" both work):
+${section("Chat Commands")}
   /model auto                  — auto-pick the first configured provider
-  /model openai gpt-4o         — switch provider and model id
+  /model openai gpt-5.4        — switch provider and model id
   /models                      — list configured provider examples
   /reset                       — clear conversation history
   /reload                      — manually re-index repo files/new docs and re-run vectorization
@@ -120,7 +125,7 @@ Chat commands (type while in REPL; "/" and ":" both work):
   /help                        — show this help
   /exit                        — quit
 
-Environment variables (set in .env at repo root):
+${section("Environment")}
   ANTHROPIC_API_KEY
   OPENAI_API_KEY
   GEMINI_API_KEY
@@ -212,7 +217,7 @@ async function printDaemonStatus(env: NodeJS.ProcessEnv): Promise<void> {
   const state = await readDaemonState(env);
   if (!state) {
     process.stdout.write(
-      `Status: not running\nNo active daemon state file was found at:\n${getDaemonStateFilePath(env)}\n`,
+      `${section("Daemon Status")}\n${kv("Status", "not running", "warning")}\n${bullet(`No active daemon state file was found at ${getDaemonStateFilePath(env)}`)}\n\n${actionBlock("Best next action", ["Run `npm run chat` for the CLI session or `npm run ui` for the browser workspace."], "warning")}\n`,
     );
     return;
   }
@@ -221,8 +226,8 @@ async function printDaemonStatus(env: NodeJS.ProcessEnv): Promise<void> {
     const pidAlive = isProcessAlive(state.pid);
     process.stdout.write(
       pidAlive
-        ? `Status: unverified\nThe recorded daemon process (pid ${state.pid}) still exists, but this CLI could not confirm localhost health from the current environment.\nIf the graph UI is already open and working, you can keep using it. Otherwise run \`npm run daemon:stop\` and then relaunch with \`npm run graph\` or \`npm run chat\`.\n`
-        : `Status: stale\nThe recorded daemon process (pid ${state.pid}) is not responding.\nYou can usually recover by running \`npm run daemon:stop\` and then starting chat again.\n`,
+        ? `${section("Daemon Status")}\n${kv("Status", "unverified", "warning")}\n${bullet(`Recorded process ${state.pid} still exists, but localhost health could not be confirmed.`, "warning")}\n${bullet("If the UI is already open and working, you can keep using it.", "muted")}\n\n${actionBlock("Best next action", ["Run `npm run daemon:stop`", "Then relaunch with `npm run chat` or `npm run ui`"], "warning")}\n`
+        : `${section("Daemon Status")}\n${kv("Status", "stale", "danger")}\n${bullet(`Recorded process ${state.pid} is not responding.`, "danger")}\n\n${actionBlock("Best next action", ["Run `npm run daemon:stop`", "Then start a fresh session with `npm run chat` or `npm run ui`"], "warning")}\n`,
     );
     return;
   }
@@ -287,114 +292,124 @@ async function printWorkflowStatus(env: NodeJS.ProcessEnv): Promise<void> {
     }
   }
 
-  const lines = [
-    "PulseOS-Lite Workflow Status",
-    "=======================================",
-    "",
-    "Workspace:",
-    `- Home root: ${getCliHomeRoot(env)}`,
-    `- Workspace root: ${getCliHome(env)}`,
-    "",
-    "Bootstrap:",
-  ];
+  const lines = [section("PulseOS-Lite Workflow Status"), "", section("Workspace"), kv("Home root", getCliHomeRoot(env)), kv("Workspace root", getCliHome(env))];
 
   if (!bootstrapState) {
-    lines.push(`- Status: not run yet`);
-    lines.push(`- State file: ${getBootstrapStateFilePath(env)}`);
+    lines.push("", section("Bootstrap"));
+    lines.push(kv("Status", "not run yet", "warning"));
+    lines.push(kv("State file", getBootstrapStateFilePath(env)));
   } else {
-    lines.push(`- Status: ${bootstrapState.status}`);
-    if (bootstrapState.companyName) lines.push(`- Company: ${bootstrapState.companyName}`);
-    lines.push(`- Templates processed: ${bootstrapState.templateFiles}`);
-    lines.push(`- Seeded successfully: ${bootstrapState.succeeded}`);
-    lines.push(`- Failed: ${bootstrapState.failed}`);
-    lines.push(`- Local intake files used: ${bootstrapState.localSourceCount}`);
-    lines.push(`- External reference files used: ${bootstrapState.externalSourceCount}`);
-    lines.push(`- Company Memory files checked: ${bootstrapState.companyMemorySourceCount ?? 0}`);
+    lines.push("", section("Bootstrap"));
+    lines.push(kv("Status", bootstrapState.status, bootstrapState.status === "completed" ? "success" : bootstrapState.status === "running" ? "info" : "warning"));
+    if (bootstrapState.companyName) lines.push(kv("Company", bootstrapState.companyName, "info"));
+    lines.push(kv("Templates processed", String(bootstrapState.templateFiles)));
+    lines.push(kv("Seeded successfully", String(bootstrapState.succeeded), "success"));
+    lines.push(kv("Failed", String(bootstrapState.failed), bootstrapState.failed > 0 ? "danger" : "muted"));
+    lines.push(kv("Local intake files used", String(bootstrapState.localSourceCount)));
+    lines.push(kv("External reference files used", String(bootstrapState.externalSourceCount)));
+    lines.push(kv("Company Memory files checked", String(bootstrapState.companyMemorySourceCount ?? 0)));
     if (bootstrapState.indexedDocumentCount !== undefined) {
-      lines.push(`- Company Memory docs indexed after bootstrap: ${bootstrapState.indexedDocumentCount}`);
+      lines.push(kv("Company Memory docs indexed after bootstrap", String(bootstrapState.indexedDocumentCount)));
     }
-    if (bootstrapState.indexedAt) lines.push(`- Latest bootstrap index refresh: ${bootstrapState.indexedAt}`);
-    lines.push(`- Warnings: ${bootstrapState.warningsCount}`);
-    if (bootstrapState.completedAt) lines.push(`- Completed at: ${bootstrapState.completedAt}`);
-    if (bootstrapState.error) lines.push(`- Error: ${bootstrapState.error}`);
+    if (bootstrapState.indexedAt) lines.push(kv("Latest bootstrap index refresh", bootstrapState.indexedAt));
+    lines.push(kv("Warnings", String(bootstrapState.warningsCount), bootstrapState.warningsCount > 0 ? "warning" : "muted"));
+    if (bootstrapState.completedAt) lines.push(kv("Completed at", bootstrapState.completedAt));
+    if (bootstrapState.error) lines.push(kv("Error", bootstrapState.error, "danger"));
   }
 
-  lines.push("", "Current intake:");
-  lines.push(`- Local source files available now: ${intake.localSources.length}`);
-  lines.push(`- External source files available now: ${intake.externalSources.length}`);
-  lines.push(`- Curated Company Memory files available now: ${intake.companyMemorySources.length}`);
-  lines.push(`- Intake warnings now: ${intake.warnings.length}`);
+  lines.push("", section("Current Intake"));
+  lines.push(kv("Local source files available now", String(intake.localSources.length), intake.localSources.length > 0 ? "success" : "warning"));
+  lines.push(kv("External source files available now", String(intake.externalSources.length), intake.externalSources.length > 0 ? "success" : "muted"));
+  lines.push(kv("Curated Company Memory files available now", String(intake.companyMemorySources.length), intake.companyMemorySources.length > 0 ? "success" : "warning"));
+  lines.push(kv("Intake warnings now", String(intake.warnings.length), intake.warnings.length > 0 ? "warning" : "muted"));
 
-  lines.push("", "Daemon:");
+  lines.push("", section("Daemon"));
   if (!daemonState) {
-    lines.push(`- Status: not running`);
+    lines.push(kv("Status", "not running", "warning"));
   } else {
-    lines.push(`- Status: ${daemonAlive ? "running" : daemonPidAlive ? "unverified" : "stale"}`);
-    lines.push(`- PID: ${daemonState.pid}`);
-    lines.push(`- Started at: ${daemonState.startedAt}`);
+    lines.push(kv("Status", daemonAlive ? "running" : daemonPidAlive ? "unverified" : "stale", daemonAlive ? "success" : daemonPidAlive ? "warning" : "danger"));
+    lines.push(kv("PID", String(daemonState.pid)));
+    lines.push(kv("Started at", daemonState.startedAt));
     if (!daemonAlive && daemonPidAlive) {
-      lines.push(`- Note: The daemon process exists, but this CLI could not confirm localhost health from the current environment.`);
+      lines.push(bullet("The daemon process exists, but localhost health could not be confirmed from the current environment.", "warning"));
     }
   }
 
-  lines.push("", "Model auth:");
-  lines.push(`- OpenAI: ${openAiStatus.ok ? `available via ${openAiStatus.method}` : `unavailable — ${openAiStatus.message}`}`);
-  lines.push(`- Claude: ${claudeStatus.ok ? `available via ${claudeStatus.method}` : `unavailable — ${claudeStatus.message}`}`);
-  lines.push(`- Gemini: ${geminiStatus.ok ? `available via ${geminiStatus.method}` : `unavailable — ${geminiStatus.message}`}`);
+  lines.push("", section("Model Auth"));
+  lines.push(kv("OpenAI", openAiStatus.ok ? `available via ${openAiStatus.method}` : `unavailable — ${openAiStatus.message}`, openAiStatus.ok ? "success" : "danger"));
+  lines.push(kv("Claude", claudeStatus.ok ? `available via ${claudeStatus.method}` : `unavailable — ${claudeStatus.message}`, claudeStatus.ok ? "success" : "danger"));
+  lines.push(kv("Gemini", geminiStatus.ok ? `available via ${geminiStatus.method}` : `unavailable — ${geminiStatus.message}`, geminiStatus.ok ? "success" : "danger"));
 
-  lines.push("", "SQL + vectorization:");
-  lines.push(`- Database path: ${dbPath}`);
-  lines.push(`- Database exists: ${dbExists ? "yes" : "no"}`);
-  lines.push(`- Documents table rows: ${documentCount}`);
-  lines.push(`- Vector rows: ${vectorCount}`);
-  lines.push(`- Document relationship rows: ${referenceCount}`);
+  lines.push("", section("SQL + Vectorization"));
+  lines.push(kv("Database path", dbPath));
+  lines.push(kv("Database exists", dbExists ? "yes" : "no", dbExists ? "success" : "warning"));
+  lines.push(kv("Documents table rows", String(documentCount), documentCount > 0 ? "success" : "warning"));
+  lines.push(kv("Vector rows", String(vectorCount), vectorCount > 0 ? "success" : "warning"));
+  lines.push(kv("Document relationship rows", String(referenceCount), referenceCount > 0 ? "success" : "warning"));
   if (latestIndexRun) {
-    lines.push(`- Latest index run status: ${latestIndexRun.status}`);
-    lines.push(`- Latest files indexed: ${latestIndexRun.files_indexed}`);
-    if (latestIndexRun.completed_at) lines.push(`- Latest index completed: ${latestIndexRun.completed_at}`);
-    if (latestIndexRun.error) lines.push(`- Latest index error: ${latestIndexRun.error}`);
+    lines.push(kv("Latest index run status", latestIndexRun.status, latestIndexRun.status === "completed" ? "success" : "warning"));
+    lines.push(kv("Latest files indexed", String(latestIndexRun.files_indexed)));
+    if (latestIndexRun.completed_at) lines.push(kv("Latest index completed", latestIndexRun.completed_at));
+    if (latestIndexRun.error) lines.push(kv("Latest index error", latestIndexRun.error, "danger"));
   } else {
-    lines.push(`- Latest index run status: not available`);
+    lines.push(kv("Latest index run status", "not available", "warning"));
   }
 
-  lines.push("", "Overall checks:");
-  lines.push(`- Source intake ready: ${intake.localSources.length + intake.externalSources.length > 0 ? "yes" : "no"}`);
-  lines.push(`- Curated Company Memory ready: ${intake.companyMemorySources.length > 0 ? "yes" : "no"}`);
-  lines.push(`- Bootstrap completed successfully: ${bootstrapState?.status === "completed" ? "yes" : "no"}`);
-  lines.push(`- SQL tables populated: ${documentCount > 0 ? "yes" : "no"}`);
-  lines.push(`- Vectorization completed: ${vectorCount > 0 ? "yes" : "no"}`);
-  lines.push(`- Document relationships populated: ${referenceCount > 0 ? "yes" : "no"}`);
+  const intakeReady = intake.localSources.length + intake.externalSources.length > 0;
+  const bootstrapDone = bootstrapState?.status === "completed";
+  lines.push("", section("Overall Checks"));
+  lines.push(kv("Source intake ready", intakeReady ? "yes" : "no", intakeReady ? "success" : "warning"));
+  lines.push(kv("Curated Company Memory ready", intake.companyMemorySources.length > 0 ? "yes" : "no", intake.companyMemorySources.length > 0 ? "success" : "warning"));
+  lines.push(kv("Bootstrap completed successfully", bootstrapDone ? "yes" : "no", bootstrapDone ? "success" : "warning"));
+  lines.push(kv("SQL tables populated", documentCount > 0 ? "yes" : "no", documentCount > 0 ? "success" : "warning"));
+  lines.push(kv("Vectorization completed", vectorCount > 0 ? "yes" : "no", vectorCount > 0 ? "success" : "warning"));
+  lines.push(kv("Document relationships populated", referenceCount > 0 ? "yes" : "no", referenceCount > 0 ? "success" : "warning"));
+
+  const nextActions: string[] = [];
+  if (!intakeReady) nextActions.push("Add real source material in `001_Data_Souces`, then rerun `npm run bootstrap`.");
+  else if (!bootstrapDone) nextActions.push("Run `npm run bootstrap` to seed the Company Memory docs.");
+  if (!daemonAlive) nextActions.push("Run `npm run chat` for the CLI or `npm run ui` for the browser workspace.");
+  if (daemonState && !daemonAlive) nextActions.push("If the daemon looks stale, run `npm run daemon:stop` first.");
+  if (!nextActions.length) nextActions.push("Continue in `npm run chat`, or open `npm run ui` if you want the visual workspace.");
+  lines.push("", actionBlock("Best Next Action", nextActions, intakeReady && bootstrapDone ? "info" : "warning"));
 
   process.stdout.write(lines.join("\n") + "\n");
 }
 
-async function printGraphUrl(env: NodeJS.ProcessEnv): Promise<void> {
-  process.stdout.write("Building and starting the PulseOS Company Memory UI...\n");
+async function printUiUrl(env: NodeJS.ProcessEnv): Promise<void> {
+  process.stdout.write(`${section("UI Startup")}\n${bullet("Building and starting the PulseOS Company Memory UI...", "info")}\n`);
   const state = await ensureRuntime(env);
-  const graphReady = await probeGraphBootstrapUrl(state.port, state.token);
+  const graphReady = await probeUiBootstrapUrl(state.port, state.token);
   const capabilitiesReady = await probeUiCapabilities(state.port, state.token);
   if (!graphReady || !capabilitiesReady) {
     throw new Error(
-      "The graph daemon started, but the UI compatibility handshake did not become ready.\nTry `npm run daemon:stop` and then `npm run graph` again.",
+      "The daemon started, but the UI compatibility handshake did not become ready.\nTry `npm run daemon:stop` and then `npm run ui` again.",
     );
   }
-  const url = `http://127.0.0.1:${state.port}/graph?token=${encodeURIComponent(state.token)}`;
+  const url = `http://127.0.0.1:${state.port}/ui?token=${encodeURIComponent(state.token)}`;
   process.stdout.write(
     [
-      "PulseOS Company Memory UI is ready.",
       "",
-      "Open this local URL in your browser:",
-      url,
+      section("UI Ready"),
+      kv("Status", "ready", "success"),
       "",
-      "What it shows:",
-      "- Left explorer: folders and Markdown documents inside 000_Company_Memory only.",
-      "- Center graph: Company Ontology and Document Relationships views backed by SQLite.",
-      "- Right panel: read and save Markdown documents inside 000_Company_Memory.",
-      "- Interaction: pan, zoom, fit, reset, and drag graph nodes without changing layout data.",
+      bold("Open this local URL in your browser:"),
+      tone(url, "info"),
       "",
-      "Saving a document refreshes the SQLite documents table and summary vectors so chat and graph retrieval stay current.",
-      "After adding, creating, moving, renaming, or deleting Markdown files outside the graph editor, click Rebuild index/Rebuild graph/index in the UI or run `npm run index` so new files appear.",
-      "Open the printed link once to create the local browser session. After that, the UI redirects to a clean localhost URL and normal refresh works.",
+      section("What You Get"),
+      bullet("Left explorer: folders and Markdown documents inside 000_Company_Memory only."),
+      bullet("Center canvas: Company Ontology and Document Relationships views backed by SQLite."),
+      bullet("Right panel: read and save Markdown documents inside 000_Company_Memory."),
+      bullet("Interaction: pan, zoom, fit, reset, and drag relationship nodes without changing layout data."),
+      "",
+      actionBlock("Best Next Action", [
+        "Open the link once to establish the local browser session.",
+        "Use the explorer or map to open a document.",
+        "If files were added outside the UI editor, run `Rebuild index` in the UI or `npm run index` in the terminal.",
+      ], "info"),
+      "",
+      dim("Saving a document refreshes the SQLite documents table and summary vectors so chat and UI retrieval stay current."),
+      dim("After the first open, the UI redirects to a clean localhost URL so normal refresh works."),
     ].join("\n") + "\n",
   );
 }
@@ -419,9 +434,9 @@ async function runInteractiveChat(
   );
   await assertModelCredentials(selection.provider, env);
 
-  process.stdout.write("Starting pulseos-lite-cli daemon...\n");
+  process.stdout.write(`${section("Chat Startup")}\n${bullet("Starting pulseos-lite-cli daemon...", "info")}\n`);
   const state = await ensureRuntime(env);
-  process.stdout.write("Connected. The daemon checks 000_Company_Memory on startup and waits for any graph/index refresh before answering.\n\n");
+  process.stdout.write(`${kv("Status", "connected", "success")}\n${bullet("The daemon checks 000_Company_Memory on startup and waits for any graph/index refresh before answering.")}\n${bullet("Run `npm run ui` in another terminal if you want the full browser workspace.", "info")}\n\n`);
 
   const sessionId = "main";
 
@@ -497,7 +512,7 @@ async function handleReplCommand(
     case "model": {
       if (!args[0]) {
         process.stdout.write(
-          `Current model: ${currentSelection.provider}:${currentSelection.modelId}\nUse \`/model auto\`, \`/model openai gpt-4o\`, \`/model claude auto\`, or \`/models\`.\n`,
+          `Current model: ${currentSelection.provider}:${currentSelection.modelId}\nUse \`/model auto\`, \`/model openai gpt-5.4\`, \`/model claude auto\`, or \`/models\`.\n`,
         );
         return null;
       }
@@ -592,7 +607,7 @@ async function selectAutoProvider(env: NodeJS.ProcessEnv): Promise<ModelName> {
     if ((await getModelCredentialStatus(provider, env)).ok) return provider;
   }
   throw new Error(
-    "No configured chat provider was found for `auto`.\nAdd `OPENAI_API_KEY`, run `codex login`, add `ANTHROPIC_API_KEY`, run `claude auth login`, or configure `GEMINI_API_KEY` / `GOOGLE_API_KEY` in `.env` or `.env.local`.",
+    "No configured chat provider was found for `auto`.\nRun `codex login`, add `OPENAI_API_KEY`, run `claude auth login`, add `ANTHROPIC_API_KEY`, or configure `GEMINI_API_KEY` / `GOOGLE_API_KEY` in `.env` or `.env.local`.",
   );
 }
 
