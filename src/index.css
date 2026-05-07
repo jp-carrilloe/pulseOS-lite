@@ -32,11 +32,17 @@ All colors MUST be HSL.
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 220 18% 14%;
+    --input: 220 18% 14%;
+    --ring: 165 95% 55%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
+
+    --gradient-hero: radial-gradient(ellipse 80% 60% at 50% 0%, hsl(165 95% 55% / 0.18), transparent 70%), radial-gradient(ellipse 60% 50% at 80% 30%, hsl(280 90% 65% / 0.12), transparent 70%);
+    --gradient-text: linear-gradient(135deg, hsl(165 95% 65%), hsl(180 90% 70%) 50%, hsl(280 90% 75%));
+    --gradient-border: linear-gradient(135deg, hsl(165 95% 55% / 0.5), hsl(280 90% 65% / 0.3));
+    --shadow-glow: 0 0 60px hsl(165 95% 55% / 0.25);
+    --shadow-card: 0 8px 40px -12px hsl(220 50% 2% / 0.6);
 
     --sidebar-background: 0 0% 98%;
 
