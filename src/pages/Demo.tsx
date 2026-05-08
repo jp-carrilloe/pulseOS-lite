@@ -553,6 +553,7 @@ function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
   }
   function reset() {
     setView({ x: 0, y: 0, k: 1 });
+    setOverrides({});
   }
   function zoomBy(factor: number) {
     setView((prev) => {
