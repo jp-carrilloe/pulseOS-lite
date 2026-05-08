@@ -408,13 +408,24 @@ interface GraphProps {
   onSelect: (path: string) => void;
 }
 
+type NodePos = { x: number; y: number };
 function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 480 });
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
   const [hoverDoc, setHoverDoc] = useState<string | null>(null);
   const [hoverFolder, setHoverFolder] = useState<string | null>(null);
+  const [overrides, setOverrides] = useState<Record<string, NodePos>>({});
   const panState = useRef<{ startX: number; startY: number; vx: number; vy: number } | null>(null);
+  const dragState = useRef<{
+    id: string;
+    startClientX: number;
+    startClientY: number;
+    startNodeX: number;
+    startNodeY: number;
+    moved: boolean;
+    onClick?: () => void;
+  } | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
