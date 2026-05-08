@@ -31,7 +31,7 @@ const Index = () => {
         </nav>
         <div className="flex items-center gap-2">
           <Button asChild size="sm" variant="outline" className="rounded-full border-border/60 bg-secondary/40 hover:bg-secondary">
-            <a href="#" target="_blank" rel="noreferrer">
+            <a href="/demo">
               Check demo
             </a>
           </Button>
