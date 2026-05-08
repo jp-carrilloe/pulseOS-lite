@@ -500,14 +500,56 @@ function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
     panState.current = { startX: e.clientX, startY: e.clientY, vx: view.x, vy: view.y };
   }
   function handlePointerMove(e: React.PointerEvent<SVGSVGElement>) {
+    if (dragState.current) {
+      const ds = dragState.current;
+      const dx = (e.clientX - ds.startClientX) / view.k;
+      const dy = (e.clientY - ds.startClientY) / view.k;
+      if (!ds.moved && Math.hypot(e.clientX - ds.startClientX, e.clientY - ds.startClientY) > 4) {
+        ds.moved = true;
+      }
+      if (ds.moved) {
+        setOverrides((prev) => ({
+          ...prev,
+          [ds.id]: { x: ds.startNodeX + dx, y: ds.startNodeY + dy },
+        }));
+      }
+      return;
+    }
     if (!panState.current) return;
     const dx = e.clientX - panState.current.startX;
     const dy = e.clientY - panState.current.startY;
     setView((prev) => ({ ...prev, x: panState.current!.vx + dx, y: panState.current!.vy + dy }));
   }
   function handlePointerUp(e: React.PointerEvent<SVGSVGElement>) {
+    if (dragState.current) {
+      const ds = dragState.current;
+      if (!ds.moved && ds.onClick) ds.onClick();
+      dragState.current = null;
+      try { (e.currentTarget as Element).releasePointerCapture(e.pointerId); } catch { /* noop */ }
+      return;
+    }
     panState.current = null;
     try { (e.currentTarget as Element).releasePointerCapture(e.pointerId); } catch { /* noop */ }
+  }
+  function startNodeDrag(
+    e: React.PointerEvent,
+    id: string,
+    nodeX: number,
+    nodeY: number,
+    onClick?: () => void,
+  ) {
+    e.stopPropagation();
+    const svg = (e.currentTarget as Element).closest("svg");
+    try { svg?.setPointerCapture(e.pointerId); } catch { /* noop */ }
+    dragState.current = {
+      id,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      startNodeX: nodeX,
+      startNodeY: nodeY,
+      moved: false,
+      onClick,
+    };
   }
   function reset() {
     setView({ x: 0, y: 0, k: 1 });
