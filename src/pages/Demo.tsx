@@ -625,9 +625,10 @@ function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
               <g
                 key={f.name}
                 data-node
-                className="cursor-pointer"
+                className="cursor-grab active:cursor-grabbing"
                 onPointerEnter={() => setHoverFolder(f.name)}
                 onPointerLeave={() => setHoverFolder((cur) => (cur === f.name ? null : cur))}
+                onPointerDown={(e) => startNodeDrag(e, `f:${f.name}`, f.x, f.y)}
               >
                 {/* invisible hit target */}
                 <circle cx={f.x} cy={f.y} r={28} fill="transparent" />
@@ -661,10 +662,10 @@ function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
               <g
                 key={d.doc.path}
                 data-node
-                className="cursor-pointer"
+                className="cursor-grab active:cursor-grabbing"
                 onPointerEnter={() => setHoverDoc(d.doc.path)}
                 onPointerLeave={() => setHoverDoc((cur) => (cur === d.doc.path ? null : cur))}
-                onClick={(ev) => { ev.stopPropagation(); onSelect(d.doc.path); }}
+                onPointerDown={(e) => startNodeDrag(e, `d:${d.doc.path}`, d.x, d.y, () => onSelect(d.doc.path))}
               >
                 {/* generous invisible hit target */}
                 <circle cx={d.x} cy={d.y} r={16} fill="transparent" />
