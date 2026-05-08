@@ -139,6 +139,28 @@ All colors MUST be HSL.
     border: 1px solid hsl(190 50% 40% / 0.25);
     background: hsl(215 45% 8% / 0.6);
   }
+  .prose-pulse {
+    color: hsl(var(--foreground));
+    font-size: 14px;
+    line-height: 1.65;
+  }
+  .prose-pulse h1 { font-size: 1.5rem; font-weight: 600; margin: 1.4rem 0 0.8rem; color: hsl(var(--foreground)); }
+  .prose-pulse h2 { font-size: 1.15rem; font-weight: 600; margin: 1.4rem 0 0.6rem; color: hsl(var(--foreground)); border-bottom: 1px solid hsl(var(--border) / 0.6); padding-bottom: 0.3rem; }
+  .prose-pulse h3 { font-size: 1rem; font-weight: 600; margin: 1.1rem 0 0.4rem; color: hsl(var(--foreground)); }
+  .prose-pulse p { margin: 0.6rem 0; color: hsl(var(--foreground) / 0.85); }
+  .prose-pulse ul, .prose-pulse ol { margin: 0.6rem 0; padding-left: 1.4rem; color: hsl(var(--foreground) / 0.85); }
+  .prose-pulse li { margin: 0.25rem 0; }
+  .prose-pulse code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em; background: hsl(var(--muted) / 0.6); padding: 0.1rem 0.35rem; border-radius: 4px; color: hsl(var(--primary)); }
+  .prose-pulse pre { background: hsl(var(--card)); border: 1px solid hsl(var(--border) / 0.6); border-radius: 8px; padding: 0.75rem 1rem; overflow-x: auto; font-size: 0.8rem; }
+  .prose-pulse pre code { background: transparent; padding: 0; color: hsl(var(--foreground)); }
+  .prose-pulse a { color: hsl(var(--primary)); text-decoration: underline; text-underline-offset: 2px; }
+  .prose-pulse blockquote { border-left: 2px solid hsl(var(--primary) / 0.6); padding-left: 0.9rem; color: hsl(var(--muted-foreground)); margin: 0.8rem 0; }
+  .prose-pulse table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.85rem; }
+  .prose-pulse th, .prose-pulse td { border: 1px solid hsl(var(--border) / 0.6); padding: 0.4rem 0.6rem; text-align: left; }
+  .prose-pulse th { background: hsl(var(--muted) / 0.4); font-weight: 600; }
+  .prose-pulse hr { border: 0; border-top: 1px solid hsl(var(--border) / 0.6); margin: 1.4rem 0; }
+  .prose-pulse-sm { font-size: 13px; }
+  .prose-pulse-sm h1, .prose-pulse-sm h2, .prose-pulse-sm h3 { margin-top: 0.6rem; }
 }
 
 @keyframes pulse-dot {
