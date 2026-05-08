@@ -716,7 +716,7 @@ function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
         >⟳</button>
       </div>
       <div className="pointer-events-none absolute bottom-2 left-3 text-[10px] text-muted-foreground/70">
-        drag to pan · scroll to zoom · click a node to open
+        drag nodes to rearrange · drag canvas to pan · scroll to zoom · click a doc to open · ⟳ resets layout
       </div>
     </div>
   );
