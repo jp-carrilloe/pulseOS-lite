@@ -408,13 +408,24 @@ interface GraphProps {
   onSelect: (path: string) => void;
 }
 
+type NodePos = { x: number; y: number };
 function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 480 });
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
   const [hoverDoc, setHoverDoc] = useState<string | null>(null);
   const [hoverFolder, setHoverFolder] = useState<string | null>(null);
+  const [overrides, setOverrides] = useState<Record<string, NodePos>>({});
   const panState = useRef<{ startX: number; startY: number; vx: number; vy: number } | null>(null);
+  const dragState = useRef<{
+    id: string;
+    startClientX: number;
+    startClientY: number;
+    startNodeX: number;
+    startNodeY: number;
+    moved: boolean;
+    onClick?: () => void;
+  } | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -435,10 +446,13 @@ function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
     const docRadius = folderRadius * 2.05;
     const folders = tree.map((f, i) => {
       const angle = (i / tree.length) * Math.PI * 2 - Math.PI / 2;
+      const baseX = cx + Math.cos(angle) * folderRadius;
+      const baseY = cy + Math.sin(angle) * folderRadius;
+      const ov = overrides[`f:${f.name}`];
       return {
         ...f,
-        x: cx + Math.cos(angle) * folderRadius,
-        y: cy + Math.sin(angle) * folderRadius,
+        x: ov ? ov.x : baseX,
+        y: ov ? ov.y : baseY,
         angle,
       };
     });
@@ -448,17 +462,20 @@ function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
         const localAngle =
           folder.angle +
           (arr.length === 1 ? 0 : ((j / (arr.length - 1)) - 0.5) * spread);
+        const baseX = cx + Math.cos(localAngle) * docRadius;
+        const baseY = cy + Math.sin(localAngle) * docRadius;
+        const ov = overrides[`d:${doc.path}`];
         return {
           doc,
           folder: folder.name,
-          x: cx + Math.cos(localAngle) * docRadius,
-          y: cy + Math.sin(localAngle) * docRadius,
+          x: ov ? ov.x : baseX,
+          y: ov ? ov.y : baseY,
           parent: { x: folder.x, y: folder.y },
         };
       }),
     );
     return { folders, docs, cx, cy };
-  }, [tree, size]);
+  }, [tree, size, overrides]);
 
   function handleWheel(e: React.WheelEvent<SVGSVGElement>) {
     e.preventDefault();
@@ -483,17 +500,60 @@ function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
     panState.current = { startX: e.clientX, startY: e.clientY, vx: view.x, vy: view.y };
   }
   function handlePointerMove(e: React.PointerEvent<SVGSVGElement>) {
+    if (dragState.current) {
+      const ds = dragState.current;
+      const dx = (e.clientX - ds.startClientX) / view.k;
+      const dy = (e.clientY - ds.startClientY) / view.k;
+      if (!ds.moved && Math.hypot(e.clientX - ds.startClientX, e.clientY - ds.startClientY) > 4) {
+        ds.moved = true;
+      }
+      if (ds.moved) {
+        setOverrides((prev) => ({
+          ...prev,
+          [ds.id]: { x: ds.startNodeX + dx, y: ds.startNodeY + dy },
+        }));
+      }
+      return;
+    }
     if (!panState.current) return;
     const dx = e.clientX - panState.current.startX;
     const dy = e.clientY - panState.current.startY;
     setView((prev) => ({ ...prev, x: panState.current!.vx + dx, y: panState.current!.vy + dy }));
   }
   function handlePointerUp(e: React.PointerEvent<SVGSVGElement>) {
+    if (dragState.current) {
+      const ds = dragState.current;
+      if (!ds.moved && ds.onClick) ds.onClick();
+      dragState.current = null;
+      try { (e.currentTarget as Element).releasePointerCapture(e.pointerId); } catch { /* noop */ }
+      return;
+    }
     panState.current = null;
     try { (e.currentTarget as Element).releasePointerCapture(e.pointerId); } catch { /* noop */ }
   }
+  function startNodeDrag(
+    e: React.PointerEvent,
+    id: string,
+    nodeX: number,
+    nodeY: number,
+    onClick?: () => void,
+  ) {
+    e.stopPropagation();
+    const svg = (e.currentTarget as Element).closest("svg");
+    try { svg?.setPointerCapture(e.pointerId); } catch { /* noop */ }
+    dragState.current = {
+      id,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      startNodeX: nodeX,
+      startNodeY: nodeY,
+      moved: false,
+      onClick,
+    };
+  }
   function reset() {
     setView({ x: 0, y: 0, k: 1 });
+    setOverrides({});
   }
   function zoomBy(factor: number) {
     setView((prev) => {
@@ -566,9 +626,10 @@ function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
               <g
                 key={f.name}
                 data-node
-                className="cursor-pointer"
+                className="cursor-grab active:cursor-grabbing"
                 onPointerEnter={() => setHoverFolder(f.name)}
                 onPointerLeave={() => setHoverFolder((cur) => (cur === f.name ? null : cur))}
+                onPointerDown={(e) => startNodeDrag(e, `f:${f.name}`, f.x, f.y)}
               >
                 {/* invisible hit target */}
                 <circle cx={f.x} cy={f.y} r={28} fill="transparent" />
@@ -602,10 +663,10 @@ function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
               <g
                 key={d.doc.path}
                 data-node
-                className="cursor-pointer"
+                className="cursor-grab active:cursor-grabbing"
                 onPointerEnter={() => setHoverDoc(d.doc.path)}
                 onPointerLeave={() => setHoverDoc((cur) => (cur === d.doc.path ? null : cur))}
-                onClick={(ev) => { ev.stopPropagation(); onSelect(d.doc.path); }}
+                onPointerDown={(e) => startNodeDrag(e, `d:${d.doc.path}`, d.x, d.y, () => onSelect(d.doc.path))}
               >
                 {/* generous invisible hit target */}
                 <circle cx={d.x} cy={d.y} r={16} fill="transparent" />
@@ -655,7 +716,7 @@ function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
         >⟳</button>
       </div>
       <div className="pointer-events-none absolute bottom-2 left-3 text-[10px] text-muted-foreground/70">
-        drag to pan · scroll to zoom · click a node to open
+        drag nodes to rearrange · drag canvas to pan · scroll to zoom · click a doc to open · ⟳ resets layout
       </div>
     </div>
   );
