@@ -446,10 +446,13 @@ function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
     const docRadius = folderRadius * 2.05;
     const folders = tree.map((f, i) => {
       const angle = (i / tree.length) * Math.PI * 2 - Math.PI / 2;
+      const baseX = cx + Math.cos(angle) * folderRadius;
+      const baseY = cy + Math.sin(angle) * folderRadius;
+      const ov = overrides[`f:${f.name}`];
       return {
         ...f,
-        x: cx + Math.cos(angle) * folderRadius,
-        y: cy + Math.sin(angle) * folderRadius,
+        x: ov ? ov.x : baseX,
+        y: ov ? ov.y : baseY,
         angle,
       };
     });
@@ -459,17 +462,20 @@ function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
         const localAngle =
           folder.angle +
           (arr.length === 1 ? 0 : ((j / (arr.length - 1)) - 0.5) * spread);
+        const baseX = cx + Math.cos(localAngle) * docRadius;
+        const baseY = cy + Math.sin(localAngle) * docRadius;
+        const ov = overrides[`d:${doc.path}`];
         return {
           doc,
           folder: folder.name,
-          x: cx + Math.cos(localAngle) * docRadius,
-          y: cy + Math.sin(localAngle) * docRadius,
+          x: ov ? ov.x : baseX,
+          y: ov ? ov.y : baseY,
           parent: { x: folder.x, y: folder.y },
         };
       }),
     );
     return { folders, docs, cx, cy };
-  }, [tree, size]);
+  }, [tree, size, overrides]);
 
   function handleWheel(e: React.WheelEvent<SVGSVGElement>) {
     e.preventDefault();
