@@ -411,6 +411,10 @@ interface GraphProps {
 function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 480 });
+  const [view, setView] = useState({ x: 0, y: 0, k: 1 });
+  const [hoverDoc, setHoverDoc] = useState<string | null>(null);
+  const [hoverFolder, setHoverFolder] = useState<string | null>(null);
+  const panState = useRef<{ startX: number; startY: number; vx: number; vy: number } | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -427,8 +431,8 @@ function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
   const layout = useMemo(() => {
     const cx = size.w / 2;
     const cy = size.h / 2;
-    const folderRadius = Math.min(size.w, size.h) * 0.32;
-    const docRadius = folderRadius * 1.85;
+    const folderRadius = Math.min(size.w, size.h) * 0.28;
+    const docRadius = folderRadius * 2.05;
     const folders = tree.map((f, i) => {
       const angle = (i / tree.length) * Math.PI * 2 - Math.PI / 2;
       return {
@@ -440,7 +444,7 @@ function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
     });
     const docs = folders.flatMap((folder) =>
       folder.docs.map((doc, j, arr) => {
-        const spread = 0.42;
+        const spread = 0.5;
         const localAngle =
           folder.angle +
           (arr.length === 1 ? 0 : ((j / (arr.length - 1)) - 0.5) * spread);
@@ -456,89 +460,203 @@ function OntologyGraph({ tree, activePath, onSelect }: GraphProps) {
     return { folders, docs, cx, cy };
   }, [tree, size]);
 
+  function handleWheel(e: React.WheelEvent<SVGSVGElement>) {
+    e.preventDefault();
+    const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    setView((prev) => {
+      const factor = Math.exp(-e.deltaY * 0.0015);
+      const nextK = Math.min(3, Math.max(0.4, prev.k * factor));
+      // zoom toward cursor: keep (mx,my) fixed in world coords
+      const wx = (mx - prev.x) / prev.k;
+      const wy = (my - prev.y) / prev.k;
+      return { k: nextK, x: mx - wx * nextK, y: my - wy * nextK };
+    });
+  }
+
+  function handlePointerDown(e: React.PointerEvent<SVGSVGElement>) {
+    // ignore drags that start on a node (let click happen)
+    const target = e.target as Element;
+    if (target.closest("[data-node]")) return;
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    panState.current = { startX: e.clientX, startY: e.clientY, vx: view.x, vy: view.y };
+  }
+  function handlePointerMove(e: React.PointerEvent<SVGSVGElement>) {
+    if (!panState.current) return;
+    const dx = e.clientX - panState.current.startX;
+    const dy = e.clientY - panState.current.startY;
+    setView((prev) => ({ ...prev, x: panState.current!.vx + dx, y: panState.current!.vy + dy }));
+  }
+  function handlePointerUp(e: React.PointerEvent<SVGSVGElement>) {
+    panState.current = null;
+    try { (e.currentTarget as Element).releasePointerCapture(e.pointerId); } catch { /* noop */ }
+  }
+  function reset() {
+    setView({ x: 0, y: 0, k: 1 });
+  }
+  function zoomBy(factor: number) {
+    setView((prev) => {
+      const cx = size.w / 2;
+      const cy = size.h / 2;
+      const nextK = Math.min(3, Math.max(0.4, prev.k * factor));
+      const wx = (cx - prev.x) / prev.k;
+      const wy = (cy - prev.y) / prev.k;
+      return { k: nextK, x: cx - wx * nextK, y: cy - wy * nextK };
+    });
+  }
+
   return (
     <div ref={containerRef} className="absolute inset-0">
-      <svg width={size.w} height={size.h} className="block">
-        {/* center -> folder edges */}
-        {layout.folders.map((f) => (
-          <line
-            key={`c-${f.name}`}
-            x1={layout.cx}
-            y1={layout.cy}
-            x2={f.x}
-            y2={f.y}
-            stroke="hsl(var(--border))"
-            strokeOpacity={0.5}
-          />
-        ))}
-        {/* folder -> doc edges */}
-        {layout.docs.map((d) => (
-          <line
-            key={`e-${d.doc.path}`}
-            x1={d.parent.x}
-            y1={d.parent.y}
-            x2={d.x}
-            y2={d.y}
-            stroke={FOLDER_COLOR[d.folder]}
-            strokeOpacity={d.doc.path === activePath ? 0.9 : 0.35}
-            strokeWidth={d.doc.path === activePath ? 1.5 : 1}
-          />
-        ))}
+      <svg
+        width={size.w}
+        height={size.h}
+        className="block touch-none select-none"
+        style={{ cursor: panState.current ? "grabbing" : "grab" }}
+        onWheel={handleWheel}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      >
+        <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
+          {/* center -> folder edges */}
+          {layout.folders.map((f) => (
+            <line
+              key={`c-${f.name}`}
+              x1={layout.cx}
+              y1={layout.cy}
+              x2={f.x}
+              y2={f.y}
+              stroke="hsl(var(--border))"
+              strokeOpacity={hoverFolder === f.name ? 0.9 : 0.5}
+              strokeWidth={hoverFolder === f.name ? 1.5 : 1}
+            />
+          ))}
+          {/* folder -> doc edges */}
+          {layout.docs.map((d) => {
+            const isActive = d.doc.path === activePath;
+            const isHover = hoverDoc === d.doc.path || hoverFolder === d.folder;
+            return (
+              <line
+                key={`e-${d.doc.path}`}
+                x1={d.parent.x}
+                y1={d.parent.y}
+                x2={d.x}
+                y2={d.y}
+                stroke={FOLDER_COLOR[d.folder]}
+                strokeOpacity={isActive || isHover ? 0.9 : 0.35}
+                strokeWidth={isActive ? 1.8 : isHover ? 1.4 : 1}
+              />
+            );
+          })}
 
-        {/* center node */}
-        <g>
-          <circle cx={layout.cx} cy={layout.cy} r={28} fill="hsl(var(--primary) / 0.18)" stroke="hsl(var(--primary))" />
-          <text x={layout.cx} y={layout.cy + 4} textAnchor="middle" className="fill-primary text-[10px] font-semibold uppercase tracking-[0.18em]">
-            Acme
-          </text>
-        </g>
-
-        {/* folder nodes */}
-        {layout.folders.map((f) => (
-          <g key={f.name}>
-            <circle cx={f.x} cy={f.y} r={18} fill="hsl(var(--card))" stroke={FOLDER_COLOR[f.name]} strokeWidth={1.5} />
-            <text
-              x={f.x}
-              y={f.y + 32}
-              textAnchor="middle"
-              className="fill-foreground text-[11px] font-medium"
-            >
-              {FOLDER_LABELS[f.name] ?? f.name}
+          {/* center node */}
+          <g data-node>
+            <circle cx={layout.cx} cy={layout.cy} r={30} fill="hsl(var(--primary) / 0.18)" stroke="hsl(var(--primary))" />
+            <text x={layout.cx} y={layout.cy + 4} textAnchor="middle" className="pointer-events-none fill-primary text-[10px] font-semibold uppercase tracking-[0.18em]">
+              Acme
             </text>
           </g>
-        ))}
 
-        {/* doc nodes */}
-        {layout.docs.map((d) => {
-          const active = d.doc.path === activePath;
-          return (
-            <g
-              key={d.doc.path}
-              className="cursor-pointer"
-              onClick={() => onSelect(d.doc.path)}
-            >
-              <circle
-                cx={d.x}
-                cy={d.y}
-                r={active ? 9 : 6}
-                fill={active ? FOLDER_COLOR[d.folder] : "hsl(var(--card))"}
-                stroke={FOLDER_COLOR[d.folder]}
-                strokeWidth={active ? 2 : 1.2}
-              />
-              {active && (
+          {/* folder nodes */}
+          {layout.folders.map((f) => {
+            const hover = hoverFolder === f.name;
+            return (
+              <g
+                key={f.name}
+                data-node
+                className="cursor-pointer"
+                onPointerEnter={() => setHoverFolder(f.name)}
+                onPointerLeave={() => setHoverFolder((cur) => (cur === f.name ? null : cur))}
+              >
+                {/* invisible hit target */}
+                <circle cx={f.x} cy={f.y} r={28} fill="transparent" />
+                <circle
+                  cx={f.x}
+                  cy={f.y}
+                  r={hover ? 20 : 18}
+                  fill="hsl(var(--card))"
+                  stroke={FOLDER_COLOR[f.name]}
+                  strokeWidth={hover ? 2 : 1.5}
+                />
                 <text
-                  x={d.x}
-                  y={d.y - 14}
+                  x={f.x}
+                  y={f.y + 34}
                   textAnchor="middle"
-                  className="fill-foreground text-[10px]"
+                  className="pointer-events-none fill-foreground text-[11px] font-medium"
+                  style={{ paintOrder: "stroke", stroke: "hsl(var(--background))", strokeWidth: 3 }}
                 >
-                  {d.doc.name.replace(/\.md$/, "")}
+                  {FOLDER_LABELS[f.name] ?? f.name}
                 </text>
-              )}
-            </g>
-          );
-        })}
+              </g>
+            );
+          })}
+
+          {/* doc nodes */}
+          {layout.docs.map((d) => {
+            const active = d.doc.path === activePath;
+            const hover = hoverDoc === d.doc.path;
+            const showLabel = active || hover;
+            return (
+              <g
+                key={d.doc.path}
+                data-node
+                className="cursor-pointer"
+                onPointerEnter={() => setHoverDoc(d.doc.path)}
+                onPointerLeave={() => setHoverDoc((cur) => (cur === d.doc.path ? null : cur))}
+                onClick={(ev) => { ev.stopPropagation(); onSelect(d.doc.path); }}
+              >
+                {/* generous invisible hit target */}
+                <circle cx={d.x} cy={d.y} r={16} fill="transparent" />
+                <circle
+                  cx={d.x}
+                  cy={d.y}
+                  r={active ? 9 : hover ? 8 : 6}
+                  fill={active ? FOLDER_COLOR[d.folder] : hover ? `${FOLDER_COLOR[d.folder]}` : "hsl(var(--card))"}
+                  fillOpacity={active ? 1 : hover ? 0.45 : 1}
+                  stroke={FOLDER_COLOR[d.folder]}
+                  strokeWidth={active ? 2 : hover ? 1.6 : 1.2}
+                />
+                {showLabel && (
+                  <text
+                    x={d.x}
+                    y={d.y - 14}
+                    textAnchor="middle"
+                    className="pointer-events-none fill-foreground text-[10px]"
+                    style={{ paintOrder: "stroke", stroke: "hsl(var(--background))", strokeWidth: 3 }}
+                  >
+                    {d.doc.name.replace(/\.md$/, "")}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </g>
       </svg>
+
+      {/* controls */}
+      <div className="absolute right-3 top-3 flex flex-col gap-1">
+        <button
+          onClick={() => zoomBy(1.25)}
+          className="pill flex h-7 w-7 items-center justify-center rounded-md text-sm text-foreground/80 hover:text-primary"
+          aria-label="Zoom in"
+        >+</button>
+        <button
+          onClick={() => zoomBy(0.8)}
+          className="pill flex h-7 w-7 items-center justify-center rounded-md text-sm text-foreground/80 hover:text-primary"
+          aria-label="Zoom out"
+        >−</button>
+        <button
+          onClick={reset}
+          className="pill flex h-7 w-7 items-center justify-center rounded-md text-[10px] text-foreground/80 hover:text-primary"
+          aria-label="Reset view"
+          title="Reset view"
+        >⟳</button>
+      </div>
+      <div className="pointer-events-none absolute bottom-2 left-3 text-[10px] text-muted-foreground/70">
+        drag to pan · scroll to zoom · click a node to open
+      </div>
     </div>
   );
 }
