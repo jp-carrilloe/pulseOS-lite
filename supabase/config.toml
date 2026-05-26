@@ -1,0 +1,4 @@
+project_id = "pulseos-lite-demo"
+
+[functions.pulse-query]
+verify_jwt = false

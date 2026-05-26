@@ -1,0 +1,73 @@
+const ANSI = {
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  dim: "\x1b[2m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  magenta: "\x1b[35m",
+  cyan: "\x1b[36m",
+  white: "\x1b[37m",
+} as const;
+
+export type Tone = "info" | "success" | "warning" | "danger" | "muted";
+
+function useColor() {
+  return Boolean(process.stdout?.isTTY);
+}
+
+function paint(text: string, ...codes: string[]) {
+  if (!useColor()) return text;
+  return `${codes.join("")}${text}${ANSI.reset}`;
+}
+
+export function bold(text: string) {
+  return paint(text, ANSI.bold);
+}
+
+export function dim(text: string) {
+  return paint(text, ANSI.dim);
+}
+
+export function tone(text: string, variant: Tone) {
+  switch (variant) {
+    case "success":
+      return paint(text, ANSI.green);
+    case "warning":
+      return paint(text, ANSI.yellow);
+    case "danger":
+      return paint(text, ANSI.red);
+    case "muted":
+      return paint(text, ANSI.dim);
+    case "info":
+    default:
+      return paint(text, ANSI.cyan);
+  }
+}
+
+export function section(title: string) {
+  return `${bold(tone(title, "info"))}\n${dim("─".repeat(Math.max(12, title.length)))}`;
+}
+
+export function bullet(text: string, variant: Tone = "muted") {
+  const marker =
+    variant === "success"
+      ? tone("+", "success")
+      : variant === "warning"
+        ? tone("!", "warning")
+        : variant === "danger"
+          ? tone("x", "danger")
+          : tone(">", "info");
+  return `${marker} ${text}`;
+}
+
+export function kv(label: string, value: string, variant: Tone = "muted") {
+  return `${bold(`${label}:`)} ${tone(value, variant)}`;
+}
+
+export function actionBlock(title: string, lines: string[], variant: Tone = "warning") {
+  const heading = bold(tone(title, variant));
+  const body = lines.map((line) => `${tone("→", variant)} ${line}`).join("\n");
+  return `${heading}\n${body}`;
+}

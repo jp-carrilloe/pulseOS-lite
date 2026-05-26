@@ -1,0 +1,178 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 215 50% 4%;
+    --foreground: 190 30% 92%;
+
+    --card: 215 45% 6%;
+    --card-foreground: 190 30% 92%;
+
+    --popover: 215 45% 6%;
+    --popover-foreground: 190 30% 92%;
+
+    --primary: 185 100% 60%;
+    --primary-foreground: 215 60% 6%;
+
+    --secondary: 215 40% 10%;
+    --secondary-foreground: 190 30% 92%;
+
+    --muted: 215 35% 12%;
+    --muted-foreground: 200 15% 60%;
+
+    --accent: 185 100% 60%;
+    --accent-foreground: 215 60% 6%;
+
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 190 30% 92%;
+
+    --border: 200 30% 18%;
+    --input: 200 30% 18%;
+    --ring: 185 100% 60%;
+
+    --radius: 0.75rem;
+
+    --gradient-hero: radial-gradient(ellipse 80% 60% at 50% 0%, hsl(185 100% 50% / 0.12), transparent 70%);
+    --gradient-text: linear-gradient(135deg, hsl(185 100% 75%), hsl(190 100% 85%));
+    --shadow-glow: 0 0 50px hsl(185 100% 55% / 0.35);
+    --shadow-card: 0 8px 40px -12px hsl(215 60% 2% / 0.6);
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background-image:
+      radial-gradient(ellipse 60% 50% at 30% 20%, hsl(200 80% 20% / 0.5), transparent 60%),
+      radial-gradient(ellipse 50% 40% at 80% 10%, hsl(190 70% 15% / 0.4), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 50% 90%, hsl(200 60% 12% / 0.5), transparent 70%);
+    background-attachment: fixed;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    background: var(--gradient-text);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .grid-bg {
+    background-image:
+      linear-gradient(hsl(190 50% 50% / 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(190 50% 50% / 0.04) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, black, transparent 85%);
+  }
+  .glow { box-shadow: var(--shadow-glow); }
+  .card-surface {
+    background: linear-gradient(180deg, hsl(215 45% 7% / 0.85), hsl(215 50% 5% / 0.7));
+    backdrop-filter: blur(10px);
+    border: 1px solid hsl(190 50% 40% / 0.12);
+    box-shadow: var(--shadow-card);
+  }
+  .pill {
+    border: 1px solid hsl(190 50% 40% / 0.25);
+    background: hsl(215 45% 8% / 0.6);
+  }
+  .prose-pulse {
+    color: hsl(var(--foreground));
+    font-size: 14px;
+    line-height: 1.65;
+  }
+  .prose-pulse h1 { font-size: 1.5rem; font-weight: 600; margin: 1.4rem 0 0.8rem; color: hsl(var(--foreground)); }
+  .prose-pulse h2 { font-size: 1.15rem; font-weight: 600; margin: 1.4rem 0 0.6rem; color: hsl(var(--foreground)); border-bottom: 1px solid hsl(var(--border) / 0.6); padding-bottom: 0.3rem; }
+  .prose-pulse h3 { font-size: 1rem; font-weight: 600; margin: 1.1rem 0 0.4rem; color: hsl(var(--foreground)); }
+  .prose-pulse p { margin: 0.6rem 0; color: hsl(var(--foreground) / 0.85); }
+  .prose-pulse ul, .prose-pulse ol { margin: 0.6rem 0; padding-left: 1.4rem; color: hsl(var(--foreground) / 0.85); }
+  .prose-pulse li { margin: 0.25rem 0; }
+  .prose-pulse code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em; background: hsl(var(--muted) / 0.6); padding: 0.1rem 0.35rem; border-radius: 4px; color: hsl(var(--primary)); }
+  .prose-pulse pre { background: hsl(var(--card)); border: 1px solid hsl(var(--border) / 0.6); border-radius: 8px; padding: 0.75rem 1rem; overflow-x: auto; font-size: 0.8rem; }
+  .prose-pulse pre code { background: transparent; padding: 0; color: hsl(var(--foreground)); }
+  .prose-pulse a { color: hsl(var(--primary)); text-decoration: underline; text-underline-offset: 2px; }
+  .prose-pulse blockquote { border-left: 2px solid hsl(var(--primary) / 0.6); padding-left: 0.9rem; color: hsl(var(--muted-foreground)); margin: 0.8rem 0; }
+  .prose-pulse table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.85rem; }
+  .prose-pulse th, .prose-pulse td { border: 1px solid hsl(var(--border) / 0.6); padding: 0.4rem 0.6rem; text-align: left; }
+  .prose-pulse th { background: hsl(var(--muted) / 0.4); font-weight: 600; }
+  .prose-pulse hr { border: 0; border-top: 1px solid hsl(var(--border) / 0.6); margin: 1.4rem 0; }
+  .prose-pulse-sm { font-size: 13px; }
+  .prose-pulse-sm h1, .prose-pulse-sm h2, .prose-pulse-sm h3 { margin-top: 0.6rem; }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
