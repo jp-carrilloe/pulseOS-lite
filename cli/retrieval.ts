@@ -14,7 +14,7 @@ const MAX_FULL_DOCUMENTS = 4;
 const MAX_RETRIEVAL_RESULTS = 8;
 const MAX_PROMPT_CHARS = 120_000;
 const MAX_CHUNK_CHARS = 1800;
-const MAX_RETRIEVAL_CANDIDATES = 64;
+const MAX_RETRIEVAL_CANDIDATES = 200;
 const COMPANY_MEMORY_ROOT = "000_Company_Memory";
 
 export interface IndexedDocumentRecord {
@@ -653,9 +653,9 @@ export class KnowledgeBaseIndex {
     const storedModel = this.getStoredEmbeddingModel();
     const provider = createEmbeddingProvider(this.options.env ?? process.env, storedModel);
     const queryVector = await provider.embed(trimmed);
+    const keywords = extractRetrievalKeywords(trimmed);
     const prefilteredRows = this.selectRetrievalCandidates(trimmed, MAX_RETRIEVAL_CANDIDATES);
-    const shouldUsePrefilter = prefilteredRows.length >= Math.min(Math.max(topK * 2, 4), MAX_RETRIEVAL_CANDIDATES);
-    const rows = (shouldUsePrefilter ? prefilteredRows : this.db.prepare(
+    const fallbackRows = () => this.db.prepare(
       `SELECT
          d.id,
          d.relative_path,
@@ -668,13 +668,14 @@ export class KnowledgeBaseIndex {
          d.content_length,
          d.updated_at,
          d.indexed_at,
+         0 as keyword_score,
          kv.vector_json
        FROM documents d
        JOIN knowledge_vectors kv
          ON kv.owner_type = ?
         AND kv.owner_id = d.id
        ORDER BY d.relative_path`,
-    ).all(SUMMARY_VECTOR_OWNER_TYPE)) as Array<{
+    ).all(SUMMARY_VECTOR_OWNER_TYPE) as Array<{
       id: string;
       relative_path: string;
       title: string;
@@ -686,8 +687,14 @@ export class KnowledgeBaseIndex {
       content_length: number;
       updated_at: string;
       indexed_at: string;
+      keyword_score?: number;
       vector_json: string;
     }>;
+    const rows = prefilteredRows.length === 0
+      ? fallbackRows()
+      : prefilteredRows.length >= topK
+        ? prefilteredRows
+        : mergeRetrievalRows(prefilteredRows, fallbackRows());
 
     return rows
       .map((row) => ({
@@ -704,7 +711,10 @@ export class KnowledgeBaseIndex {
           updatedAt: row.updated_at,
           indexedAt: row.indexed_at,
         },
-        score: cosineSimilarity(queryVector, parseVector(row.vector_json)),
+        score:
+          cosineSimilarity(queryVector, parseVector(row.vector_json)) +
+          scoreDocumentKeywordMatch(row, keywords) +
+          (Number(row.keyword_score) || 0) / 4,
       }))
       .sort((left, right) => right.score - left.score)
       .slice(0, topK);
@@ -942,37 +952,54 @@ export class KnowledgeBaseIndex {
     content_length: number;
     updated_at: string;
     indexed_at: string;
+    keyword_score: number;
     vector_json: string;
   }> {
     const keywords = extractRetrievalKeywords(query).slice(0, 6);
     if (keywords.length === 0) return [];
 
     const clauses: string[] = [];
-    const params: Array<string | number> = [SUMMARY_VECTOR_OWNER_TYPE];
+    const whereParams: string[] = [];
+    const scoreParams: string[] = [];
     let scoreExpr = "0";
+    const exactPhrase = keywords.length > 1 ? `%${keywords.join(" ")}%` : null;
+
+    if (exactPhrase) {
+      clauses.push(
+        `(LOWER(d.title) LIKE ? OR LOWER(d.summary) LIKE ? OR EXISTS (SELECT 1 FROM document_chunks c WHERE c.document_id = d.id AND LOWER(c.content) LIKE ?))`,
+      );
+      whereParams.push(exactPhrase, exactPhrase, exactPhrase);
+
+      scoreExpr += ` + CASE WHEN LOWER(d.title) LIKE ? THEN 48 ELSE 0 END`;
+      scoreParams.push(exactPhrase);
+      scoreExpr += ` + CASE WHEN LOWER(d.summary) LIKE ? THEN 36 ELSE 0 END`;
+      scoreParams.push(exactPhrase);
+      scoreExpr += ` + CASE WHEN EXISTS (SELECT 1 FROM document_chunks c WHERE c.document_id = d.id AND LOWER(c.content) LIKE ?) THEN 48 ELSE 0 END`;
+      scoreParams.push(exactPhrase);
+    }
 
     for (const keyword of keywords) {
       const like = `%${keyword}%`;
       clauses.push(
-        `(LOWER(d.title) LIKE ? OR LOWER(d.summary) LIKE ? OR LOWER(d.ontology_domain) LIKE ? OR LOWER(d.relative_path) LIKE ? OR LOWER(COALESCE(d.status, '')) LIKE ? OR LOWER(COALESCE(d.owner_agent, '')) LIKE ?)`,
+        `(LOWER(d.title) LIKE ? OR LOWER(d.summary) LIKE ? OR LOWER(d.ontology_domain) LIKE ? OR LOWER(d.relative_path) LIKE ? OR LOWER(COALESCE(d.status, '')) LIKE ? OR LOWER(COALESCE(d.owner_agent, '')) LIKE ? OR EXISTS (SELECT 1 FROM document_chunks c WHERE c.document_id = d.id AND LOWER(c.content) LIKE ?))`,
       );
-      for (let i = 0; i < 6; i++) params.push(like);
+      for (let i = 0; i < 7; i++) whereParams.push(like);
 
       scoreExpr += ` + CASE WHEN LOWER(d.title) LIKE ? THEN 6 ELSE 0 END`;
-      params.push(like);
+      scoreParams.push(like);
       scoreExpr += ` + CASE WHEN LOWER(d.ontology_domain) LIKE ? THEN 4 ELSE 0 END`;
-      params.push(like);
+      scoreParams.push(like);
       scoreExpr += ` + CASE WHEN LOWER(COALESCE(d.status, '')) LIKE ? THEN 3 ELSE 0 END`;
-      params.push(like);
+      scoreParams.push(like);
       scoreExpr += ` + CASE WHEN LOWER(d.summary) LIKE ? THEN 2 ELSE 0 END`;
-      params.push(like);
+      scoreParams.push(like);
       scoreExpr += ` + CASE WHEN LOWER(d.relative_path) LIKE ? THEN 2 ELSE 0 END`;
-      params.push(like);
+      scoreParams.push(like);
       scoreExpr += ` + CASE WHEN LOWER(COALESCE(d.owner_agent, '')) LIKE ? THEN 1 ELSE 0 END`;
-      params.push(like);
+      scoreParams.push(like);
+      scoreExpr += ` + CASE WHEN EXISTS (SELECT 1 FROM document_chunks c WHERE c.document_id = d.id AND LOWER(c.content) LIKE ?) THEN 2 ELSE 0 END`;
+      scoreParams.push(like);
     }
-
-    params.push(limit);
 
     return this.db.prepare(
       `SELECT
@@ -987,6 +1014,7 @@ export class KnowledgeBaseIndex {
          d.content_length,
          d.updated_at,
          d.indexed_at,
+         (${scoreExpr}) as keyword_score,
          kv.vector_json
        FROM documents d
        JOIN knowledge_vectors kv
@@ -995,7 +1023,7 @@ export class KnowledgeBaseIndex {
        WHERE ${clauses.join(" OR ")}
        ORDER BY (${scoreExpr}) DESC, d.relative_path
        LIMIT ?`,
-    ).all(...params) as Array<{
+    ).all(...scoreParams, SUMMARY_VECTOR_OWNER_TYPE, ...whereParams, ...scoreParams, limit) as Array<{
       id: string;
       relative_path: string;
       title: string;
@@ -1007,6 +1035,7 @@ export class KnowledgeBaseIndex {
       content_length: number;
       updated_at: string;
       indexed_at: string;
+      keyword_score: number;
       vector_json: string;
     }>;
   }
@@ -1474,6 +1503,92 @@ function extractRetrievalKeywords(query: string): string[] {
     keywords.push(token);
   }
   return keywords;
+}
+
+function mergeRetrievalRows<Row extends { id: string; keyword_score?: number }>(primary: Row[], fallback: Row[]): Row[] {
+  const byId = new Map<string, Row>();
+  for (const row of primary) byId.set(row.id, row);
+  for (const row of fallback) {
+    if (byId.has(row.id)) continue;
+    byId.set(row.id, row);
+  }
+  return Array.from(byId.values());
+}
+
+function scoreDocumentKeywordMatch(
+  document: {
+    relative_path: string;
+    title: string;
+    summary: string;
+    ontology_domain: string;
+    status: string | null;
+    owner_agent: string | null;
+  },
+  keywords: string[],
+): number {
+  if (keywords.length === 0) return 0;
+
+  const forms = Array.from(new Set(keywords.flatMap(expandRetrievalKeywordForms)));
+  const title = document.title.toLowerCase();
+  const relativePath = document.relative_path.toLowerCase();
+  const ontologyDomain = document.ontology_domain.toLowerCase();
+  const status = document.status?.toLowerCase() ?? "";
+  const summary = document.summary.toLowerCase();
+  const ownerAgent = document.owner_agent?.toLowerCase() ?? "";
+
+  let score = 0;
+  for (const keyword of forms) {
+    if (title.includes(keyword)) score += 0.9;
+    if (relativePath.includes(keyword)) score += 0.75;
+    if (ownerAgent.includes(keyword)) score += 0.6;
+    if (ontologyDomain.includes(keyword)) score += 0.5;
+    if (summary.includes(keyword)) score += 0.3;
+    if (status.includes(keyword)) score += 0.15;
+  }
+
+  if (isOverviewDocumentPath(relativePath)) score += 0.8;
+  if (isGeneratedRuntimeArtifactPath(relativePath) && !queryTargetsRuntimeArtifacts(forms)) score -= 3.5;
+
+  return score;
+}
+
+function expandRetrievalKeywordForms(keyword: string): string[] {
+  const forms = new Set([keyword]);
+  if (keyword.endsWith("ies") && keyword.length > 4) {
+    forms.add(`${keyword.slice(0, -3)}y`);
+  } else if (keyword.endsWith("s") && !keyword.endsWith("ss") && keyword.length > 3) {
+    forms.add(keyword.slice(0, -1));
+  }
+  return Array.from(forms);
+}
+
+function isOverviewDocumentPath(relativePath: string): boolean {
+  const basename = path.posix.basename(relativePath, ".md").toLowerCase();
+  return (
+    basename === "readme" ||
+    basename.startsWith("readme_") ||
+    basename.includes("_prd") ||
+    basename.includes("prd_") ||
+    basename.includes("usage_guide") ||
+    basename.includes("runbook")
+  );
+}
+
+function isGeneratedRuntimeArtifactPath(relativePath: string): boolean {
+  return (
+    relativePath.endsWith(".prompt.md") ||
+    relativePath.includes("/runtime/data/") ||
+    relativePath.includes("/runtime/outputs/") ||
+    relativePath.includes("/runtime/runs/")
+  );
+}
+
+function queryTargetsRuntimeArtifacts(keywords: string[]): boolean {
+  const runtimeTerms = new Set([
+    "artifact", "artifacts", "csv", "input", "inputs", "log", "logs", "output", "outputs",
+    "prompt", "prompts", "report", "reports", "run", "runs", "runtime",
+  ]);
+  return keywords.some((keyword) => runtimeTerms.has(keyword));
 }
 
 function resolveMarkdownLink(

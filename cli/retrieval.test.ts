@@ -290,6 +290,170 @@ test("retrieval prefilter preserves ontology and title hint matches", async () =
   index.close();
 });
 
+test("broad agent and project queries prefer canonical overview docs over generated runtime artifacts", async () => {
+  const repoRoot = await createTempRepo();
+  await fsp.mkdir(path.join(repoRoot, "000_Company_Memory", "501_Agents_and_Workflows", "Sub_Agents"), {
+    recursive: true,
+  });
+  await fsp.mkdir(path.join(repoRoot, "000_Company_Memory", "502_Execution_Engine", "agents"), {
+    recursive: true,
+  });
+  await fsp.mkdir(
+    path.join(repoRoot, "000_Company_Memory", "600_Projects", "602_GTM_Research_Agent", "02_PRDs"),
+    { recursive: true },
+  );
+  await fsp.mkdir(
+    path.join(repoRoot, "000_Company_Memory", "600_Projects", "602_GTM_Research_Agent", "05_Operations"),
+    { recursive: true },
+  );
+  await fsp.mkdir(path.join(repoRoot, "000_Company_Memory", "502_Execution_Engine", "runtime", "data", "input"), {
+    recursive: true,
+  });
+
+  await fsp.writeFile(
+    path.join(repoRoot, "000_Company_Memory", "502_Execution_Engine", "agents", "502.3_Insight_Research_Agent.md"),
+    `# Insight Research Agent
+
+**Status:** Active
+- **Owner Agent:** @Infrastructure
+
+Canonical agent profile for the research agent, its responsibilities, and how it supports project execution.
+`,
+  );
+  await fsp.writeFile(
+    path.join(repoRoot, "000_Company_Memory", "502_Execution_Engine", "README_Execution_Engine.md"),
+    `# Execution Engine README
+
+**Status:** Active
+- **Owner Agent:** @Infrastructure
+
+Overview of the execution engine, agents, workflows, and project runtime governance.
+`,
+  );
+  await fsp.writeFile(
+    path.join(repoRoot, "000_Company_Memory", "501_Agents_and_Workflows", "Sub_Agents", "README_Agents.md"),
+    `# Agents README
+
+**Status:** Active
+- **Owner Agent:** @ARK
+
+Overview of sub agents, workflow ownership, project routing, and agent registry conventions.
+`,
+  );
+  await fsp.writeFile(
+    path.join(
+      repoRoot,
+      "000_Company_Memory",
+      "600_Projects",
+      "602_GTM_Research_Agent",
+      "02_PRDs",
+      "602.1_GTM_Research_Agent_PRD.md",
+    ),
+    `# GTM Research Agent PRD
+
+**Status:** Active
+- **Owner Agent:** @ARK
+
+Product requirements for the GTM research agent project, including expected capabilities and operating scope.
+`,
+  );
+  await fsp.writeFile(
+    path.join(
+      repoRoot,
+      "000_Company_Memory",
+      "600_Projects",
+      "602_GTM_Research_Agent",
+      "05_Operations",
+      "602.5_Runtime_Usage_Guide.md",
+    ),
+    `# Runtime Usage Guide
+
+**Status:** Active
+- **Owner Agent:** @Infrastructure
+
+Usage guide for running the GTM research agent project and interpreting runtime behavior.
+`,
+  );
+
+  for (let index = 0; index < 30; index++) {
+    await fsp.writeFile(
+      path.join(
+        repoRoot,
+        "000_Company_Memory",
+        "502_Execution_Engine",
+        "runtime",
+        "data",
+        "input",
+        `research-agent-${String(index).padStart(2, "0")}.prompt.md`,
+      ),
+      `# Research Agent Prompt ${index}
+
+Generated prompt artifact for one research agent project run. This file contains operational input, not the canonical agent or project overview.
+`,
+    );
+  }
+
+  const dbPath = path.join(repoRoot, ".kb.sqlite");
+  const index = new KnowledgeBaseIndex({ repoRoot, dbPath, env: {} });
+
+  await index.sync();
+  const matches = await index.retrieve("projects and agents");
+  const topPaths = matches.slice(0, 5).map((match) => match.document.relativePath);
+
+  assert.ok(topPaths.some((file) => file.endsWith("502.3_Insight_Research_Agent.md")));
+  assert.ok(topPaths.some((file) => file.endsWith("README_Execution_Engine.md")));
+  assert.ok(topPaths.some((file) => file.endsWith("README_Agents.md")));
+  assert.ok(topPaths.every((file) => !file.endsWith(".prompt.md")));
+
+  index.close();
+});
+
+test("retrieval prefilter searches document chunks for body-only agent roster matches", async () => {
+  const repoRoot = await createTempRepo();
+  await fsp.mkdir(path.join(repoRoot, "000_Company_Memory", "502_Execution_Engine"), { recursive: true });
+  await fsp.mkdir(path.join(repoRoot, "000_Company_Memory", "000_Agent_Shortcuts"), { recursive: true });
+
+  await fsp.writeFile(
+    path.join(repoRoot, "000_Company_Memory", "502_Execution_Engine", "README_Execution_Engine.md"),
+    `# Execution Engine README
+
+**Status:** Active
+- **Owner Agent:** @Infrastructure
+
+This overview explains the execution engine, workflow runtime, connector layer, and operating model.
+
+## Agent Roster
+
+| Agent | File | Role |
+| :--- | :--- | :--- |
+| Insight Research Agent | agents/502.3_Insight_Research_Agent.md | Market and account intelligence briefs |
+`,
+  );
+
+  for (const agent of ["Strategy", "Operations", "Finance", "Infrastructure", "Legal", "GTM", "Sales", "Delivery"]) {
+    await fsp.writeFile(
+      path.join(repoRoot, "000_Company_Memory", "000_Agent_Shortcuts", `${agent}_Agent.md`),
+      `# ${agent} Agent
+
+**Status:** Active
+- **Owner Agent:** @ARK
+
+Canonical shortcut profile for the ${agent.toLowerCase()} agent.
+`,
+    );
+  }
+
+  const dbPath = path.join(repoRoot, ".kb.sqlite");
+  const index = new KnowledgeBaseIndex({ repoRoot, dbPath, env: {} });
+
+  await index.sync();
+  const matches = await index.retrieve("What is the Insight Research Agent?");
+
+  assert.equal(matches[0]?.document.relativePath, "000_Company_Memory/502_Execution_Engine/README_Execution_Engine.md");
+
+  index.close();
+});
+
 test("buildGraphSnapshot returns folder, document, and markdown reference edges", async () => {
   const repoRoot = await createTempRepo();
   const dbPath = path.join(repoRoot, ".kb.sqlite");
