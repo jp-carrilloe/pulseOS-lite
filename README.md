@@ -1,7 +1,7 @@
 # PulseOS-Lite — The OS for AI Native Companies
 
 <div align="center">
-  <img src="./docs/assets/pulseos-lite-graph-workspace-preview.gif" alt="PulseOS Lite graph workspace preview" width="100%" />
+  <img src="./docs/assets/PulseLite 3.gif" alt="PulseOS Lite graph workspace preview" width="100%" />
 </div>
 
 > "Complexity is the enemy of execution. Strategy is the art of focusing on the right things."
