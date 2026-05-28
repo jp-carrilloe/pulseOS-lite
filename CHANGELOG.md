@@ -25,6 +25,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Claude auth abstraction with support for `PULSEOS_CLAUDE_AUTH_MODE=auto|api_key|claude_cli_session`
 - Local Claude-session-backed Anthropic path for CLI chat and bootstrap
 - Auth tests covering API-key and Codex-session resolution
+- Chat model picker opened by `/model` or `/switch`, with arrow-key selection across available providers and suggested model IDs
 
 ### Changed
 - Complete rename and rebranding across the repository from "PulseOS Lite Open Source" to "PulseOS-Lite"
@@ -45,6 +46,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `npm run ui` is now the primary browser workspace command; `npm run graph` remains as a compatibility alias
 - Default OpenAI model for chat and bootstrap is now `gpt-5.4`
 - Main onboarding and runtime docs now explain the current auth defaults, UI command, and default model override paths
+- Chat startup now shows the active provider auth method and provider availability via API-key or local CLI-session auth
 
 ---
 

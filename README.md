@@ -265,6 +265,8 @@ How to change them:
 - set `PULSEOS_BOOTSTRAP_OPENAI_MODEL` to change the default OpenAI bootstrap model
 - set `PULSEOS_CHAT_ANTHROPIC_MODEL` to change the default Claude chat model
 - set `PULSEOS_CHAT_GEMINI_MODEL` to change the default Gemini chat model
+- run `/model` or `/switch` inside chat to choose an available provider/model with the arrow keys
+- run `/models` inside chat to list supported shortcuts and example model IDs
 
 Examples:
 
@@ -272,6 +274,8 @@ Examples:
 PULSEOS_CHAT_OPENAI_MODEL=gpt-5.4-mini npm run chat
 PULSEOS_BOOTSTRAP_OPENAI_MODEL=gpt-5.4-mini npm run bootstrap
 ```
+
+The chat intro also shows whether each provider is available through API-key auth or a local signed-in CLI session.
 
 ### Persistent Workspace Storage
 

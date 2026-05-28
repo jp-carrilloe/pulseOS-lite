@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import * as readline from "node:readline";
 import { createInterface } from "node:readline/promises";
+import type { Interface as ReadlineInterface } from "node:readline/promises";
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -116,8 +118,10 @@ ${section("Usage")}
 
 ${section("Chat Commands")}
   /model auto                  — auto-pick the first configured provider
+  /model                       — choose provider/model with arrow keys
   /model openai gpt-5.4        — switch provider and model id
   /auth                        — show auth method per provider + how to change it
+  /switch                      — choose provider/model with arrow keys
   /ui                          — build the browser UI and print the local URL
   /models                      — list configured provider examples
   /reset                       — clear conversation history
@@ -466,7 +470,7 @@ async function runInteractiveChat(
     terminal: process.stdin.isTTY ?? true,
   });
 
-  printWelcome(selection);
+  await printWelcome(selection, env);
 
   // Check bootstrap status and show warnings if incomplete/failed
   try {
@@ -532,7 +536,7 @@ async function runInteractiveChat(
 
       // handle REPL commands
       if (line.startsWith(":") || line.startsWith("/")) {
-        const handled = await handleReplCommand(line, state, selection, sessionId, env);
+        const handled = await handleReplCommand(line, state, selection, sessionId, env, rl);
         if (handled === "exit") break;
         if (handled !== null) {
           selection = handled;
@@ -575,6 +579,7 @@ async function handleReplCommand(
   currentSelection: ChatModelSelection,
   sessionId: string,
   env: NodeJS.ProcessEnv,
+  rl: ReadlineInterface,
 ): Promise<ChatModelSelection | "exit" | null> {
   const commandPrefix = line[0];
   const [cmd, ...args] = line.slice(1).trim().split(/\s+/);
@@ -588,12 +593,14 @@ async function handleReplCommand(
       printHelp();
       return null;
 
-    case "model": {
+    case "model":
+    case "switch": {
       if (!args[0]) {
-        process.stdout.write(
-          `Current model: ${currentSelection.provider}:${currentSelection.modelId}\nUse \`/model auto\`, \`/model openai gpt-5.4\`, \`/model claude auto\`, or \`/models\`.\n`,
-        );
-        return null;
+        const picked = await pickChatModel(currentSelection, env, rl);
+        if (!picked) return null;
+        await assertModelCredentials(picked.provider, env);
+        process.stdout.write(`Switched to ${picked.provider}:${picked.modelId}.\n`);
+        return picked;
       }
 
       const nextSelection = await resolveChatModelSelection(args[0], args[1] ?? "auto", env);
@@ -693,17 +700,20 @@ async function handleReplCommand(
   }
 }
 
-function printWelcome(selection: ChatModelSelection) {
+async function printWelcome(selection: ChatModelSelection, env: NodeJS.ProcessEnv) {
   const directory = formatDisplayPath(REPO_ROOT);
+  const authSummary = await formatProviderAuthSummary(env);
+  const activeAuth = await formatActiveAuth(selection.provider, env);
   const lines = [
     "☕️ PulseOS Lite by tintto",
     "Operating System for AI Native Teams",
     "",
-    `model;     ${selection.provider}:${selection.modelId}   (/model to change)`,
+    `model;     ${selection.provider}:${selection.modelId}   ${activeAuth}`,
+    `auth;      ${authSummary}`,
     `directory; ${directory}`,
     "vibe;      caffeinated company memory",
     "workflow;  chat refreshes 000_Company_Memory into the SQL graph/index",
-    `commands;  /help /auth /model /models /retrieve /files /status /reload /reset /exit`,
+    "commands;  /help /auth /switch /model /models /retrieve /files /status /reload /reset /exit",
     "",
     "☕ made with much coffee by jp-carrilloe",
     "   https://github.com/jp-carrilloe",
@@ -727,6 +737,33 @@ function printRetrievalDebug(debug: RetrievalDebugSummary) {
         `   matched: ${result.matchedFields.length ? result.matchedFields.join(", ") : "none"}`,
       ].join("\n") + "\n",
     );
+  }
+}
+
+async function formatProviderAuthSummary(env: NodeJS.ProcessEnv): Promise<string> {
+  const parts: string[] = [];
+  for (const provider of MODEL_PROVIDERS) {
+    const status = await getModelCredentialStatus(provider, env);
+    parts.push(`${provider}=${status.ok ? formatAuthMethod(status.method) : "unavailable"}`);
+  }
+  return parts.join(" · ");
+}
+
+async function formatActiveAuth(provider: ModelName, env: NodeJS.ProcessEnv): Promise<string> {
+  const status = await getModelCredentialStatus(provider, env);
+  return status.ok ? `[${formatAuthMethod(status.method)}]` : "[unavailable]";
+}
+
+function formatAuthMethod(method: string): string {
+  switch (method) {
+    case "api_key":
+      return "api";
+    case "codex_cli_session":
+      return "codex-auth";
+    case "claude_cli_session":
+      return "claude-auth";
+    default:
+      return method;
   }
 }
 
@@ -758,6 +795,8 @@ async function selectAutoProvider(env: NodeJS.ProcessEnv): Promise<ModelName> {
 
 async function printModelOptions(env: NodeJS.ProcessEnv) {
   process.stdout.write("Available chat model selectors:\n");
+  process.stdout.write("  /model                            choose provider/model with arrow keys\n");
+  process.stdout.write("  /switch                           choose provider/model with arrow keys\n");
   process.stdout.write("  /model auto                       auto-pick the first configured provider\n");
   for (const provider of MODEL_PROVIDERS) {
     const credential = await getModelCredentialStatus(provider, env);
@@ -768,6 +807,119 @@ async function printModelOptions(env: NodeJS.ProcessEnv) {
     );
     process.stdout.write(`  /model ${provider} <model-id>           examples: ${examples}\n`);
   }
+}
+
+interface ChatModelOption {
+  provider: ModelName;
+  modelId: string;
+  label: string;
+  available: boolean;
+  authMethod: string;
+}
+
+async function buildChatModelOptions(env: NodeJS.ProcessEnv): Promise<ChatModelOption[]> {
+  const options: ChatModelOption[] = [];
+  for (const provider of MODEL_PROVIDERS) {
+    const credential = await getModelCredentialStatus(provider, env);
+    const modelIds = [...new Set([getDefaultChatModel(provider, env), ...SUGGESTED_CHAT_MODELS[provider]])];
+    for (const modelId of modelIds) {
+      options.push({
+        provider,
+        modelId,
+        label: `${provider}:${modelId}`,
+        available: credential.ok,
+        authMethod: credential.ok ? formatAuthMethod(credential.method) : "unavailable",
+      });
+    }
+  }
+  return options;
+}
+
+async function pickChatModel(
+  currentSelection: ChatModelSelection,
+  env: NodeJS.ProcessEnv,
+  rl: ReadlineInterface,
+): Promise<ChatModelSelection | null> {
+  const options = await buildChatModelOptions(env);
+  const firstAvailable = options.findIndex((option) => option.available);
+  const currentIndex = options.findIndex(
+    (option) => option.provider === currentSelection.provider && option.modelId === currentSelection.modelId,
+  );
+  let selectedIndex = currentIndex >= 0 ? currentIndex : firstAvailable >= 0 ? firstAvailable : 0;
+
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    process.stdout.write("Interactive model selection needs a TTY.\n");
+    await printModelOptions(env);
+    return null;
+  }
+
+  readline.emitKeypressEvents(process.stdin);
+  const wasRaw = process.stdin.isRaw;
+  rl.pause();
+  process.stdin.setRawMode(true);
+
+  return await new Promise<ChatModelSelection | null>((resolve) => {
+    const cleanup = (result: ChatModelSelection | null) => {
+      process.stdin.off("keypress", onKeypress);
+      process.stdin.setRawMode(wasRaw);
+      rl.resume();
+      process.stdout.write("\n");
+      resolve(result);
+    };
+
+    const render = () => {
+      const visible = options
+        .map((option, index) => {
+          const pointer = index === selectedIndex ? ">" : " ";
+          const current =
+            option.provider === currentSelection.provider && option.modelId === currentSelection.modelId ? " current" : "";
+          const state = option.available ? option.authMethod : "unavailable";
+          return `${pointer} ${option.label.padEnd(32)} [${state}]${current}`;
+        })
+        .join("\n");
+      process.stdout.write(
+        `\r\x1b[2K${section("Select Chat Model")}\n${dim("Use ↑/↓, Enter to switch, Esc/q to cancel.")}\n${visible}\n`,
+      );
+      process.stdout.write(`\x1b[${options.length + 3}A`);
+    };
+
+    const onKeypress = (_str: string, key: readline.Key) => {
+      if (key.name === "up") {
+        selectedIndex = (selectedIndex - 1 + options.length) % options.length;
+        while (!options[selectedIndex]?.available && options.some((option) => option.available)) {
+          selectedIndex = (selectedIndex - 1 + options.length) % options.length;
+        }
+        render();
+        return;
+      }
+      if (key.name === "down") {
+        selectedIndex = (selectedIndex + 1) % options.length;
+        while (!options[selectedIndex]?.available && options.some((option) => option.available)) {
+          selectedIndex = (selectedIndex + 1) % options.length;
+        }
+        render();
+        return;
+      }
+      if (key.name === "return") {
+        const option = options[selectedIndex];
+        if (!option?.available) {
+          process.stdout.write("\x1b[B\r\x1b[2KThat provider is unavailable. Choose an available model or press Esc.\n");
+          render();
+          return;
+        }
+        process.stdout.write(`\x1b[${options.length + 3}B\r`);
+        cleanup({ provider: option.provider, modelId: option.modelId });
+        return;
+      }
+      if (key.name === "escape" || key.name === "q" || (key.ctrl && key.name === "c")) {
+        process.stdout.write(`\x1b[${options.length + 3}B\r`);
+        cleanup(null);
+      }
+    };
+
+    process.stdin.on("keypress", onKeypress);
+    render();
+  });
 }
 
 function formatDisplayPath(value: string) {

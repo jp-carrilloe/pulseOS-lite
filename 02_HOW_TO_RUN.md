@@ -177,9 +177,14 @@ If you are containerizing the CLI or daemon:
 
 ### Model Switching
 You can switch models mid-conversation, enabling you to run whatever foundation model you prefer:
-- `:model openai` (Default)
-- `:model claude`
-- `:model gemini`
+- `/model` — open an arrow-key selector for provider and model ID
+- `/switch` — same arrow-key selector, shorter command
+- `/model auto` — auto-pick the first configured provider
+- `/model openai auto` — use OpenAI's configured default model
+- `/model claude auto` — use Claude's configured default model
+- `/model gemini auto` — use Gemini's configured default model
+
+The chat intro shows the active provider, concrete model ID, and whether each provider is available through local auth or an API key.
 
 ---
 
@@ -242,5 +247,6 @@ If a prompt breaks this chain, ask: "Does this change in @Finance require an upd
 - UI `Rebuild index` / `Rebuild graph/index` — Same rebuild path from the browser UI.
 - `:files` — Audit what the AI can see.
 - `:status` — Check which model is currently active and session lifetime.
+- `/model` or `/switch` — Switch provider/model with arrow keys.
 
 *Some reference concepts from where adapted from [gstack](https://github.com/garrytan/gstack).*
