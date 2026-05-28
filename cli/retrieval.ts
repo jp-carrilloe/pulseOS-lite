@@ -15,14 +15,7 @@ const MAX_RETRIEVAL_RESULTS = 8;
 const MAX_PROMPT_CHARS = 120_000;
 const MAX_CHUNK_CHARS = 1800;
 const MAX_RETRIEVAL_CANDIDATES = 200;
-const GRAPH_EXPANSION_SEED_COUNT = 4;
-const MAX_GRAPH_EXPANDED_DOCUMENTS = 4;
-const OUTGOING_REFERENCE_BOOST = 0.45;
-const INCOMING_REFERENCE_BOOST = 0.3;
-const MAX_RELATIONSHIP_BOOST = 1.25;
 const COMPANY_MEMORY_ROOT = "000_Company_Memory";
-
-export type RetrievalSourceReason = "semantic_seed" | "lexical_seed" | "body_match" | "graph_linked";
 
 export interface IndexedDocumentRecord {
   id: string;
@@ -50,28 +43,6 @@ export interface VectorRecord {
 export interface RetrievalResult {
   document: IndexedDocumentRecord;
   score: number;
-  sourceReason: RetrievalSourceReason;
-  graphDistance: 0 | 1;
-  linkedFrom: string[];
-  relationshipBoost: number;
-}
-
-export interface RetrievalDebugResult extends RetrievalResult {
-  scores: {
-    vector: number;
-    lexical: number;
-    keywordSql: number;
-    relationshipBoost: number;
-    total: number;
-  };
-  matchedFields: string[];
-}
-
-export interface RetrievalDebugSummary {
-  query: string;
-  topK: number;
-  generatedAt: string;
-  results: RetrievalDebugResult[];
 }
 
 export interface IndexStatusSummary {
@@ -208,39 +179,6 @@ interface EmbeddingProvider {
   mode: "provider" | "heuristic";
   model: string;
   embed(text: string): Promise<number[]>;
-}
-
-interface RetrievalCandidateRow {
-  id: string;
-  relative_path: string;
-  title: string;
-  summary: string;
-  ontology_domain: string;
-  status: string | null;
-  owner_agent: string | null;
-  content_hash: string;
-  content_length: number;
-  updated_at: string;
-  indexed_at: string;
-  keyword_score?: number;
-  vector_json: string;
-}
-
-interface ScoredRetrievalRow {
-  row: RetrievalCandidateRow;
-  document: IndexedDocumentRecord;
-  score: number;
-  scores: RetrievalDebugResult["scores"];
-  sourceReason: RetrievalSourceReason;
-  graphDistance: 0 | 1;
-  linkedFrom: string[];
-  relationshipBoost: number;
-}
-
-interface GraphExpansionCandidate {
-  documentId: string;
-  linkedFrom: Set<string>;
-  boost: number;
 }
 
 export class KnowledgeBaseIndex {
@@ -709,35 +647,74 @@ export class KnowledgeBaseIndex {
   }
 
   async retrieve(query: string, topK = MAX_RETRIEVAL_RESULTS): Promise<RetrievalResult[]> {
-    return (await this.scoreRetrievalRows(query, normalizeRetrievalLimit(topK))).map((match) => ({
-      document: match.document,
-      score: match.score,
-      sourceReason: match.sourceReason,
-      graphDistance: match.graphDistance,
-      linkedFrom: match.linkedFrom,
-      relationshipBoost: match.relationshipBoost,
-    }));
-  }
+    const trimmed = query.trim();
+    if (!trimmed) return [];
 
-  async inspectRetrieval(query: string, topK = MAX_RETRIEVAL_RESULTS): Promise<RetrievalDebugSummary> {
-    const normalizedTopK = normalizeRetrievalLimit(topK);
-    const keywords = extractRetrievalKeywords(query);
-    const matches = await this.scoreRetrievalRows(query, normalizedTopK);
-    return {
-      query: query.trim(),
-      topK: normalizedTopK,
-      generatedAt: new Date().toISOString(),
-      results: matches.map((match) => ({
-        document: match.document,
-        score: match.score,
-        sourceReason: match.sourceReason,
-        graphDistance: match.graphDistance,
-        linkedFrom: match.linkedFrom,
-        relationshipBoost: match.relationshipBoost,
-        scores: match.scores,
-        matchedFields: this.findMatchedFields(match.row, keywords),
-      })),
-    };
+    const storedModel = this.getStoredEmbeddingModel();
+    const provider = createEmbeddingProvider(this.options.env ?? process.env, storedModel);
+    const queryVector = await provider.embed(trimmed);
+    const prefilteredRows = this.selectRetrievalCandidates(trimmed, MAX_RETRIEVAL_CANDIDATES);
+    const shouldUsePrefilter = prefilteredRows.length >= Math.min(Math.max(topK * 2, 4), MAX_RETRIEVAL_CANDIDATES);
+    const rows = (shouldUsePrefilter ? prefilteredRows : this.db.prepare(
+      `SELECT
+         d.id,
+         d.relative_path,
+         d.title,
+         d.summary,
+         d.ontology_domain,
+         d.status,
+         d.owner_agent,
+         d.content_hash,
+         d.content_length,
+         d.updated_at,
+         d.indexed_at,
+         kv.vector_json
+       FROM documents d
+       JOIN knowledge_vectors kv
+         ON kv.owner_type = ?
+        AND kv.owner_id = d.id
+       ORDER BY d.relative_path`,
+    ).all(SUMMARY_VECTOR_OWNER_TYPE)) as Array<{
+      id: string;
+      relative_path: string;
+      title: string;
+      summary: string;
+      ontology_domain: string;
+      status: string | null;
+      owner_agent: string | null;
+      content_hash: string;
+      content_length: number;
+      updated_at: string;
+      indexed_at: string;
+      vector_json: string;
+    }>;
+
+    const keywords = extractRetrievalKeywords(trimmed);
+
+    return rows
+      .map((row) => {
+        const document = {
+          id: row.id,
+          relativePath: row.relative_path,
+          title: row.title,
+          summary: row.summary,
+          ontologyDomain: row.ontology_domain,
+          status: row.status,
+          ownerAgent: row.owner_agent,
+          contentHash: row.content_hash,
+          contentLength: row.content_length,
+          updatedAt: row.updated_at,
+          indexedAt: row.indexed_at,
+        };
+        const vectorScore = cosineSimilarity(queryVector, parseVector(row.vector_json));
+        const lexicalScore = scoreDocumentKeywordMatch(document, keywords, trimmed);
+        return {
+          document,
+          score: vectorScore + lexicalScore,
+        };
+      })
+      .sort((left, right) => right.score - left.score)
+      .slice(0, topK);
   }
 
   async buildPromptContext(query: string): Promise<string> {
@@ -750,22 +727,17 @@ export class KnowledgeBaseIndex {
       ].join("\n");
     }
 
-    const directMatches = matches.filter((match) => match.graphDistance === 0);
-    const graphMatches = matches.filter((match) => match.graphDistance === 1);
-    const summaries = [...directMatches, ...graphMatches].map((match, index) => {
+    const summaries = matches.map((match, index) => {
       const bits = [
         `${index + 1}. ${match.document.title} (${match.document.relativePath})`,
         `   Summary: ${match.document.summary}`,
         `   Ontology: ${match.document.ontologyDomain}`,
-        `   Source: ${match.sourceReason}${match.graphDistance > 0 ? ` via ${match.linkedFrom.join(", ")}` : ""}`,
       ];
       if (match.document.ownerAgent) bits.push(`   Owner: ${match.document.ownerAgent}`);
       if (match.document.status) bits.push(`   Status: ${match.document.status}`);
       bits.push(`   Similarity: ${match.score.toFixed(3)}`);
       return bits.join("\n");
     });
-    const graphSummaries = graphMatches
-      .map((match) => `- ${match.document.title} (${match.document.relativePath}) linked from ${match.linkedFrom.join(", ")}; relationship boost ${match.relationshipBoost.toFixed(2)}`);
 
     let context = [
       "# PulseOS-Lite Knowledge Base",
@@ -775,19 +747,10 @@ export class KnowledgeBaseIndex {
       "## Retrieved Document Summaries",
       ...summaries,
       "",
-      "## Graph-Expanded Context",
-      graphSummaries.length > 0
-        ? graphSummaries.join("\n")
-        : "No linked documents were added through the Markdown relationship graph.",
-      "",
       "## Retrieved Full Documents",
     ].join("\n");
 
-    const fullDocumentMatches = [
-      ...directMatches.slice(0, MAX_FULL_DOCUMENTS - 1),
-      ...graphMatches.slice(0, 1),
-    ].slice(0, MAX_FULL_DOCUMENTS);
-    for (const match of fullDocumentMatches) {
+    for (const match of matches.slice(0, MAX_FULL_DOCUMENTS)) {
       const content = this.readIndexedDocumentBody(match.document.id);
       if (!content) continue;
       const block = `\n### ${match.document.relativePath}\n\n${content}\n`;
@@ -974,200 +937,20 @@ export class KnowledgeBaseIndex {
     return rows.map((row) => row.content).join("\n\n");
   }
 
-  private async scoreRetrievalRows(query: string, topK: number): Promise<ScoredRetrievalRow[]> {
-    const trimmed = query.trim();
-    if (!trimmed) return [];
-
-    const storedModel = this.getStoredEmbeddingModel();
-    const provider = createEmbeddingProvider(this.options.env ?? process.env, storedModel);
-    const queryVector = await provider.embed(trimmed);
-    const keywords = extractRetrievalKeywords(trimmed);
-    const prefilteredRows = this.selectRetrievalCandidates(trimmed, MAX_RETRIEVAL_CANDIDATES);
-    const fallbackRows = () => this.selectAllRetrievalRows();
-    const rows = prefilteredRows.length === 0
-      ? fallbackRows()
-      : prefilteredRows.length >= topK
-        ? prefilteredRows
-        : mergeRetrievalRows(prefilteredRows, fallbackRows());
-
-    const directScored = rows
-      .map((row) => {
-        const vector = cosineSimilarity(queryVector, parseVector(row.vector_json));
-        const lexical = scoreDocumentKeywordMatch(row, keywords);
-        const keywordSql = (Number(row.keyword_score) || 0) / 4;
-        const relationshipBoost = 0;
-        const total = vector + lexical + keywordSql + relationshipBoost;
-        return {
-          row,
-          document: mapRetrievalRowToDocument(row),
-          score: total,
-          scores: { vector, lexical, keywordSql, relationshipBoost, total },
-          sourceReason: classifySeedSourceReason({ vector, lexical, keywordSql }, this.findMatchedFields(row, keywords)),
-          graphDistance: 0 as const,
-          linkedFrom: [],
-          relationshipBoost,
-        };
-      })
-      .sort((left, right) => right.score - left.score)
-      .slice(0, Math.max(topK, GRAPH_EXPANSION_SEED_COUNT));
-
-    const expandedRows = this.selectGraphExpandedRows(directScored.slice(0, GRAPH_EXPANSION_SEED_COUNT));
-    const graphScored = expandedRows
-      .map(({ row, expansion }) => {
-        const vector = cosineSimilarity(queryVector, parseVector(row.vector_json));
-        const lexical = scoreDocumentKeywordMatch(row, keywords);
-        const keywordSql = (Number(row.keyword_score) || 0) / 4;
-        const relationshipBoost = expansion.boost;
-        const total = vector + lexical + keywordSql + relationshipBoost;
-        return {
-          row,
-          document: mapRetrievalRowToDocument(row),
-          score: total,
-          scores: { vector, lexical, keywordSql, relationshipBoost, total },
-          sourceReason: "graph_linked" as const,
-          graphDistance: 1 as const,
-          linkedFrom: Array.from(expansion.linkedFrom).sort(),
-          relationshipBoost,
-        };
-      })
-      .sort((left, right) => right.relationshipBoost - left.relationshipBoost || right.score - left.score)
-      .slice(0, MAX_GRAPH_EXPANDED_DOCUMENTS);
-
-    const merged = new Map<string, ScoredRetrievalRow>();
-    for (const match of directScored) merged.set(match.row.id, match);
-    for (const match of graphScored) merged.set(match.row.id, match);
-
-    return Array.from(merged.values())
-      .sort((left, right) => right.score - left.score)
-      .slice(0, topK);
-  }
-
-  private selectAllRetrievalRows(): RetrievalCandidateRow[] {
-    return this.db.prepare(
-      `SELECT
-         d.id,
-         d.relative_path,
-         d.title,
-         d.summary,
-         d.ontology_domain,
-         d.status,
-         d.owner_agent,
-         d.content_hash,
-         d.content_length,
-         d.updated_at,
-         d.indexed_at,
-         0 as keyword_score,
-         kv.vector_json
-       FROM documents d
-       JOIN knowledge_vectors kv
-         ON kv.owner_type = ?
-        AND kv.owner_id = d.id
-       ORDER BY d.relative_path`,
-    ).all(SUMMARY_VECTOR_OWNER_TYPE) as RetrievalCandidateRow[];
-  }
-
-  private selectGraphExpandedRows(
-    seedMatches: ScoredRetrievalRow[],
-  ): Array<{ row: RetrievalCandidateRow; expansion: GraphExpansionCandidate }> {
-    if (seedMatches.length === 0) return [];
-
-    const seedIds = seedMatches.map((match) => match.row.id);
-    const seedPathById = new Map(seedMatches.map((match) => [match.row.id, match.document.relativePath]));
-    const expansions = new Map<string, GraphExpansionCandidate>();
-
-    const addExpansion = (documentId: string | null, linkedFromId: string, boost: number) => {
-      if (!documentId || !seedPathById.has(linkedFromId) || seedPathById.has(documentId)) return;
-      const current = expansions.get(documentId) ?? {
-        documentId,
-        linkedFrom: new Set<string>(),
-        boost: 0,
-      };
-      current.linkedFrom.add(seedPathById.get(linkedFromId)!);
-      current.boost = Math.min(MAX_RELATIONSHIP_BOOST, current.boost + boost);
-      expansions.set(documentId, current);
-    };
-
-    const outgoingRows = this.db.prepare(
-      `SELECT source_document_id, target_document_id
-       FROM document_references
-       WHERE source_document_id IN (${seedIds.map(() => "?").join(",")})
-         AND target_document_id IS NOT NULL`,
-    ).all(...seedIds) as Array<{ source_document_id: string; target_document_id: string | null }>;
-    for (const row of outgoingRows) {
-      addExpansion(row.target_document_id, row.source_document_id, OUTGOING_REFERENCE_BOOST);
-    }
-
-    const incomingRows = this.db.prepare(
-      `SELECT source_document_id, target_document_id
-       FROM document_references
-       WHERE target_document_id IN (${seedIds.map(() => "?").join(",")})`,
-    ).all(...seedIds) as Array<{ source_document_id: string; target_document_id: string | null }>;
-    for (const row of incomingRows) {
-      if (!row.target_document_id) continue;
-      addExpansion(row.source_document_id, row.target_document_id, INCOMING_REFERENCE_BOOST);
-    }
-
-    const topExpansions = Array.from(expansions.values())
-      .sort((left, right) => right.boost - left.boost || left.documentId.localeCompare(right.documentId))
-      .slice(0, MAX_GRAPH_EXPANDED_DOCUMENTS);
-    if (topExpansions.length === 0) return [];
-
-    const expansionById = new Map(topExpansions.map((expansion) => [expansion.documentId, expansion]));
-    const rows = this.selectRetrievalRowsByIds(topExpansions.map((expansion) => expansion.documentId));
-    return rows
-      .map((row) => ({ row, expansion: expansionById.get(row.id)! }))
-      .filter((entry) => Boolean(entry.expansion));
-  }
-
-  private selectRetrievalRowsByIds(documentIds: string[]): RetrievalCandidateRow[] {
-    const uniqueIds = [...new Set(documentIds)].filter(Boolean);
-    if (uniqueIds.length === 0) return [];
-
-    return this.db.prepare(
-      `SELECT
-         d.id,
-         d.relative_path,
-         d.title,
-         d.summary,
-         d.ontology_domain,
-         d.status,
-         d.owner_agent,
-         d.content_hash,
-         d.content_length,
-         d.updated_at,
-         d.indexed_at,
-         0 as keyword_score,
-         kv.vector_json
-       FROM documents d
-       JOIN knowledge_vectors kv
-         ON kv.owner_type = ?
-        AND kv.owner_id = d.id
-       WHERE d.id IN (${uniqueIds.map(() => "?").join(",")})
-       ORDER BY d.relative_path`,
-    ).all(SUMMARY_VECTOR_OWNER_TYPE, ...uniqueIds) as RetrievalCandidateRow[];
-  }
-
-  private findMatchedFields(row: RetrievalCandidateRow, keywords: string[]): string[] {
-    if (keywords.length === 0) return [];
-    const forms = Array.from(new Set(keywords.flatMap(expandRetrievalKeywordForms)));
-    const fields: Array<[string, string]> = [
-      ["title", row.title],
-      ["path", row.relative_path],
-      ["summary", row.summary],
-      ["ontology", row.ontology_domain],
-      ["status", row.status ?? ""],
-      ["owner", row.owner_agent ?? ""],
-      ["body", this.readIndexedDocumentBody(row.id)],
-    ];
-    return fields
-      .filter(([, value]) => {
-        const lower = value.toLowerCase();
-        return forms.some((keyword) => lower.includes(keyword));
-      })
-      .map(([field]) => field);
-  }
-
-  private selectRetrievalCandidates(query: string, limit: number): RetrievalCandidateRow[] {
+  private selectRetrievalCandidates(query: string, limit: number): Array<{
+    id: string;
+    relative_path: string;
+    title: string;
+    summary: string;
+    ontology_domain: string;
+    status: string | null;
+    owner_agent: string | null;
+    content_hash: string;
+    content_length: number;
+    updated_at: string;
+    indexed_at: string;
+    vector_json: string;
+  }> {
     const keywords = extractRetrievalKeywords(query).slice(0, 6);
     if (keywords.length === 0) return [];
 
@@ -1175,28 +958,13 @@ export class KnowledgeBaseIndex {
     const whereParams: string[] = [];
     const scoreParams: string[] = [];
     let scoreExpr = "0";
-    const exactPhrase = keywords.length > 1 ? `%${keywords.join(" ")}%` : null;
-
-    if (exactPhrase) {
-      clauses.push(
-        `(LOWER(d.title) LIKE ? OR LOWER(d.summary) LIKE ? OR EXISTS (SELECT 1 FROM document_chunks c WHERE c.document_id = d.id AND LOWER(c.content) LIKE ?))`,
-      );
-      whereParams.push(exactPhrase, exactPhrase, exactPhrase);
-
-      scoreExpr += ` + CASE WHEN LOWER(d.title) LIKE ? THEN 48 ELSE 0 END`;
-      scoreParams.push(exactPhrase);
-      scoreExpr += ` + CASE WHEN LOWER(d.summary) LIKE ? THEN 36 ELSE 0 END`;
-      scoreParams.push(exactPhrase);
-      scoreExpr += ` + CASE WHEN EXISTS (SELECT 1 FROM document_chunks c WHERE c.document_id = d.id AND LOWER(c.content) LIKE ?) THEN 48 ELSE 0 END`;
-      scoreParams.push(exactPhrase);
-    }
 
     for (const keyword of keywords) {
       const like = `%${keyword}%`;
       clauses.push(
-        `(LOWER(d.title) LIKE ? OR LOWER(d.summary) LIKE ? OR LOWER(d.ontology_domain) LIKE ? OR LOWER(d.relative_path) LIKE ? OR LOWER(COALESCE(d.status, '')) LIKE ? OR LOWER(COALESCE(d.owner_agent, '')) LIKE ? OR EXISTS (SELECT 1 FROM document_chunks c WHERE c.document_id = d.id AND LOWER(c.content) LIKE ?))`,
+        `(LOWER(d.title) LIKE ? OR LOWER(d.summary) LIKE ? OR LOWER(d.ontology_domain) LIKE ? OR LOWER(d.relative_path) LIKE ? OR LOWER(COALESCE(d.status, '')) LIKE ? OR LOWER(COALESCE(d.owner_agent, '')) LIKE ?)`,
       );
-      for (let i = 0; i < 7; i++) whereParams.push(like);
+      for (let i = 0; i < 6; i++) whereParams.push(like);
 
       scoreExpr += ` + CASE WHEN LOWER(d.title) LIKE ? THEN 6 ELSE 0 END`;
       scoreParams.push(like);
@@ -1210,9 +978,10 @@ export class KnowledgeBaseIndex {
       scoreParams.push(like);
       scoreExpr += ` + CASE WHEN LOWER(COALESCE(d.owner_agent, '')) LIKE ? THEN 1 ELSE 0 END`;
       scoreParams.push(like);
-      scoreExpr += ` + CASE WHEN EXISTS (SELECT 1 FROM document_chunks c WHERE c.document_id = d.id AND LOWER(c.content) LIKE ?) THEN 2 ELSE 0 END`;
-      scoreParams.push(like);
     }
+
+    const params: Array<string | number> = [SUMMARY_VECTOR_OWNER_TYPE, ...whereParams, ...scoreParams];
+    params.push(limit);
 
     return this.db.prepare(
       `SELECT
@@ -1227,7 +996,6 @@ export class KnowledgeBaseIndex {
          d.content_length,
          d.updated_at,
          d.indexed_at,
-         (${scoreExpr}) as keyword_score,
          kv.vector_json
        FROM documents d
        JOIN knowledge_vectors kv
@@ -1236,7 +1004,7 @@ export class KnowledgeBaseIndex {
        WHERE ${clauses.join(" OR ")}
        ORDER BY (${scoreExpr}) DESC, d.relative_path
        LIMIT ?`,
-    ).all(...scoreParams, SUMMARY_VECTOR_OWNER_TYPE, ...whereParams, ...scoreParams, limit) as Array<{
+    ).all(...params) as Array<{
       id: string;
       relative_path: string;
       title: string;
@@ -1248,7 +1016,6 @@ export class KnowledgeBaseIndex {
       content_length: number;
       updated_at: string;
       indexed_at: string;
-      keyword_score: number;
       vector_json: string;
     }>;
   }
@@ -1718,119 +1485,60 @@ function extractRetrievalKeywords(query: string): string[] {
   return keywords;
 }
 
-function mergeRetrievalRows<Row extends { id: string; keyword_score?: number }>(primary: Row[], fallback: Row[]): Row[] {
-  const byId = new Map<string, Row>();
-  for (const row of primary) byId.set(row.id, row);
-  for (const row of fallback) {
-    if (byId.has(row.id)) continue;
-    byId.set(row.id, row);
-  }
-  return Array.from(byId.values());
-}
-
-function normalizeRetrievalLimit(topK: number): number {
-  return Number.isFinite(topK) ? Math.max(1, Math.min(Math.floor(topK), 25)) : MAX_RETRIEVAL_RESULTS;
-}
-
-function mapRetrievalRowToDocument(row: RetrievalCandidateRow): IndexedDocumentRecord {
-  return {
-    id: row.id,
-    relativePath: row.relative_path,
-    title: row.title,
-    summary: row.summary,
-    ontologyDomain: row.ontology_domain,
-    status: row.status,
-    ownerAgent: row.owner_agent,
-    contentHash: row.content_hash,
-    contentLength: row.content_length,
-    updatedAt: row.updated_at,
-    indexedAt: row.indexed_at,
-  };
-}
-
-function classifySeedSourceReason(
-  scores: { vector: number; lexical: number; keywordSql: number },
-  matchedFields: string[],
-): RetrievalSourceReason {
-  if (matchedFields.includes("body") && scores.keywordSql > 0) return "body_match";
-  if (scores.lexical + scores.keywordSql >= scores.vector) return "lexical_seed";
-  return "semantic_seed";
-}
-
 function scoreDocumentKeywordMatch(
-  document: {
-    relative_path: string;
-    title: string;
-    summary: string;
-    ontology_domain: string;
-    status: string | null;
-    owner_agent: string | null;
-  },
+  document: Pick<IndexedDocumentRecord, "relativePath" | "title" | "summary" | "ontologyDomain" | "status" | "ownerAgent">,
   keywords: string[],
+  query: string,
 ): number {
   if (keywords.length === 0) return 0;
 
-  const forms = Array.from(new Set(keywords.flatMap(expandRetrievalKeywordForms)));
   const title = document.title.toLowerCase();
-  const relativePath = document.relative_path.toLowerCase();
-  const ontologyDomain = document.ontology_domain.toLowerCase();
-  const status = document.status?.toLowerCase() ?? "";
   const summary = document.summary.toLowerCase();
-  const ownerAgent = document.owner_agent?.toLowerCase() ?? "";
-
+  const ontology = document.ontologyDomain.toLowerCase();
+  const relativePath = document.relativePath.toLowerCase();
+  const status = (document.status ?? "").toLowerCase();
+  const ownerAgent = (document.ownerAgent ?? "").toLowerCase();
   let score = 0;
-  for (const keyword of forms) {
-    if (title.includes(keyword)) score += 0.9;
-    if (relativePath.includes(keyword)) score += 0.75;
-    if (ownerAgent.includes(keyword)) score += 0.6;
-    if (ontologyDomain.includes(keyword)) score += 0.5;
-    if (summary.includes(keyword)) score += 0.3;
-    if (status.includes(keyword)) score += 0.15;
+
+  for (const keyword of keywords.slice(0, 10)) {
+    const variants = keywordVariants(keyword);
+    if (variants.some((variant) => title.includes(variant))) score += 0.36;
+    if (variants.some((variant) => ontology.includes(variant))) score += 0.24;
+    if (variants.some((variant) => ownerAgent.includes(variant))) score += 0.18;
+    if (variants.some((variant) => status.includes(variant))) score += 0.12;
+    if (variants.some((variant) => summary.includes(variant))) score += 0.12;
+    if (variants.some((variant) => relativePath.includes(variant))) score += 0.10;
   }
 
-  if (isOverviewDocumentPath(relativePath)) score += 0.8;
-  if (isGeneratedRuntimeArtifactPath(relativePath) && !queryTargetsRuntimeArtifacts(forms)) score -= 3.5;
+  if (isOverviewDocumentPath(relativePath)) score += 0.32;
+  if (isGeneratedRuntimeArtifactPath(relativePath) && !queryAsksForRuntimeArtifact(query)) score -= 1.2;
 
   return score;
 }
 
-function expandRetrievalKeywordForms(keyword: string): string[] {
-  const forms = new Set([keyword]);
-  if (keyword.endsWith("ies") && keyword.length > 4) {
-    forms.add(`${keyword.slice(0, -3)}y`);
-  } else if (keyword.endsWith("s") && !keyword.endsWith("ss") && keyword.length > 3) {
-    forms.add(keyword.slice(0, -1));
-  }
-  return Array.from(forms);
+function keywordVariants(keyword: string): string[] {
+  const variants = new Set([keyword]);
+  if (keyword.endsWith("ies") && keyword.length > 4) variants.add(`${keyword.slice(0, -3)}y`);
+  if (keyword.endsWith("s") && keyword.length > 3) variants.add(keyword.slice(0, -1));
+  if (!keyword.endsWith("s") && keyword.length > 2) variants.add(`${keyword}s`);
+  return Array.from(variants);
 }
 
 function isOverviewDocumentPath(relativePath: string): boolean {
-  const basename = path.posix.basename(relativePath, ".md").toLowerCase();
+  const basename = path.posix.basename(relativePath);
   return (
-    basename === "readme" ||
-    basename.startsWith("readme_") ||
-    basename.includes("_prd") ||
-    basename.includes("prd_") ||
-    basename.includes("usage_guide") ||
-    basename.includes("runbook")
+    basename === "README.md" ||
+    basename.startsWith("README_") ||
+    /(^|[/_])(prd|usage_guide|runbook|protocol|overview)([/_.-]|$)/i.test(relativePath)
   );
 }
 
 function isGeneratedRuntimeArtifactPath(relativePath: string): boolean {
-  return (
-    relativePath.endsWith(".prompt.md") ||
-    relativePath.includes("/runtime/data/") ||
-    relativePath.includes("/runtime/outputs/") ||
-    relativePath.includes("/runtime/runs/")
-  );
+  return /\/runtime\/data\/(compiled|input|reports)\//.test(relativePath);
 }
 
-function queryTargetsRuntimeArtifacts(keywords: string[]): boolean {
-  const runtimeTerms = new Set([
-    "artifact", "artifacts", "csv", "input", "inputs", "log", "logs", "output", "outputs",
-    "prompt", "prompts", "report", "reports", "run", "runs", "runtime",
-  ]);
-  return keywords.some((keyword) => runtimeTerms.has(keyword));
+function queryAsksForRuntimeArtifact(query: string): boolean {
+  return /\b(output|outputs|report|reports|prompt|prompts|audit|audits|run|runs|compiled|discovered|export|exports|csv|result|results)\b/i.test(query);
 }
 
 function resolveMarkdownLink(
