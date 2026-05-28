@@ -315,29 +315,22 @@ async function main() {
     await findTemplateFiles(REPO_ROOT, REPO_ROOT, raw);
     const templateFiles = sortByDependencyOrder(raw);
 
-    if (templateFiles.length === 0) {
-      process.stdout.write(`${kv("Status", "no unfilled template files found", "warning")}\n${actionBlock("Best next action", ["Add or restore template files, then run `npm run bootstrap` again."], "warning")}\n`);
-      return;
-    }
-
-    process.stdout.write(`\n${section("Templates Found")}\n${kv("Count", String(templateFiles.length), "success")}\n`);
-    for (const f of templateFiles) {
-      process.stdout.write(`${bullet(tone(f.relativePath, "info"))}\n`);
-    }
-
     process.stdout.write(
       `\n${section("Intake Review")}\n${bullet("Reviewing source material in `001_Data_Souces/Data_Souces_Folder`, `001_Data_Sources_References`, and existing curated docs in `000_Company_Memory` before bootstrap starts...", "info")}\n`,
     );
     const intakeReport = await collectBootstrapIntake(REPO_ROOT, "");
     const totalRawIntakeFiles = intakeReport.localSources.length + intakeReport.externalSources.length;
-    if (totalRawIntakeFiles === 0) {
+    const totalCompanyMemoryFiles = intakeReport.companyMemorySources.length;
+
+    // Block if absolutely no content exists anywhere
+    if (totalRawIntakeFiles === 0 && totalCompanyMemoryFiles === 0) {
       process.stderr.write(
-        `\n${section("Bootstrap Blocked")}\n${kv("Reason", "no usable intake material found", "danger")}\n${bullet("Add source files to `001_Data_Souces/Data_Souces_Folder` or add valid reference notes in `001_Data_Sources_References`.", "warning")}\n`,
+        `\n${section("Bootstrap Blocked")}\n${kv("Reason", "no usable intake material or company memory files found", "danger")}\n${bullet("Add source files to `001_Data_Souces/Data_Souces_Folder`, add valid reference notes in `001_Data_Sources_References`, or add custom files directly to `000_Company_Memory`.", "warning")}\n`,
       );
       process.stdout.write(
         `\n${actionBlock("Best next action", [
           "PulseOS will open chat so you can keep working with the daemon and auth already wired up.",
-          "Add source material, then leave chat with `/exit`.",
+          "Add source material or direct company memory files, then leave chat with `/exit`.",
           "Run `npm run bootstrap` again when you are ready to seed the docs.",
         ], "warning")}\n\n`,
       );
@@ -348,6 +341,45 @@ async function main() {
       return;
     }
 
+    // If no templates to fill, but we have memory files or raw sources, perform index sync directly
+    if (templateFiles.length === 0) {
+      process.stdout.write(`${kv("Status", "no unfilled template files found", "warning")}\n`);
+      process.stdout.write(`${bullet("All templates are already filled or none were found. Proceeding to index and build the knowledge graph and embeddings from your active company memory...", "info")}\n`);
+      
+      process.stdout.write(`\n${section("Index Refresh")}\n${bullet("Refreshing Company Memory graph/index from `000_Company_Memory`...", "info")}\n`);
+      const indexRefresh = await refreshCompanyMemoryIndex(process.env);
+      process.stdout.write(`${kv("Indexed", `${indexRefresh.fileCount} Company Memory docs (${indexRefresh.charCount.toLocaleString()} chars)`, "success")}\n`);
+      process.stdout.write(`${kv("Embeddings", `${indexRefresh.embeddingModel} [${indexRefresh.embeddingMode}]`, "info")}\n`);
+      if (indexRefresh.refreshedViaDaemon) {
+        process.stdout.write(`${kv("Daemon graph cache", "refreshed", "success")}\n`);
+      }
+
+      let uiUrl: string | null = null;
+      process.stdout.write(`\n${section("UI Build")}\n${bullet("Building the browser UI for this bootstrap run...", "info")}\n`);
+      try {
+        await buildUiBundle(process.env);
+        const daemonState = await readDaemonState(process.env);
+        if (daemonState && (await probeDaemonHealth(daemonState.port, daemonState.token))) {
+          uiUrl = await ensureUiReady(daemonState);
+          process.stdout.write(`${kv("UI", "ready", "success")}\n${bullet(uiUrl, "info")}\n`);
+        } else {
+          process.stdout.write(`${kv("UI", "not ready", "warning")}\n${bullet("The index refresh completed, but no healthy daemon was available to serve the UI yet.", "warning")}\n`);
+        }
+      } catch (error) {
+        process.stdout.write(`${kv("UI", "not ready", "warning")}\n${bullet(error instanceof Error ? error.message : String(error), "warning")}\n`);
+      }
+      process.stdout.write(`\n${actionBlock("Best next action", [
+        "Run `npm run chat` to interact with the refreshed Company Memory index.",
+        uiUrl ? `Open the ready UI: ${uiUrl}` : "Run `npm run ui` to inspect the Company Memory workspace in the browser.",
+      ], "success")}\n`);
+      return;
+    }
+
+    process.stdout.write(`\n${section("Templates Found")}\n${kv("Count", String(templateFiles.length), "success")}\n`);
+    for (const f of templateFiles) {
+      process.stdout.write(`${bullet(tone(f.relativePath, "info"))}\n`);
+    }
+
     process.stdout.write(`${kv("Local intake files", String(intakeReport.localSources.length), "success")}\n`);
     process.stdout.write(`${kv("External reference files", String(intakeReport.externalSources.length), intakeReport.externalSources.length > 0 ? "success" : "muted")}\n`);
     process.stdout.write(`${kv("Existing Company Memory docs", String(intakeReport.companyMemorySources.length), intakeReport.companyMemorySources.length > 0 ? "success" : "muted")}\n`);
@@ -355,7 +387,7 @@ async function main() {
       process.stdout.write(`${actionBlock("Intake warnings", intakeReport.warnings, "warning")}\n`);
     }
 
-    const proceed = await rl.question(`\nProceed with source-driven onboarding? [Y/n] `);
+    const proceed = await rl.question(`\nProceed with source-driven onboarding? [y/n] `);
     if (proceed.trim().toLowerCase() === "n") {
       process.stdout.write(`${kv("Status", "aborted", "warning")}\n`);
       return;
@@ -367,7 +399,7 @@ async function main() {
     if (hasAcmeSampleCompanyMemory(REPO_ROOT)) {
       process.stdout.write(`\n${section("Sample Company Memory")}\n${kv("Detected", ACME_SAMPLE_MEMORY_DIR, "warning")}\n${bullet("This sample folder is included as a public reference/template.")}\n`);
       const deleteSample = await rl.question(
-        `Do you want to delete the sample folder to keep your repo clean? [y/N] `,
+        `Do you want to delete the sample folder to keep your repo clean? [y/n] `,
       );
       if (deleteSample.trim().toLowerCase() === "y") {
         process.stdout.write(`${bullet(`Deleting ${ACME_SAMPLE_MEMORY_DIR}...`, "warning")} `);
@@ -419,7 +451,7 @@ async function main() {
     process.stdout.write(
       "Each doc will be grounded in curated Company Memory, raw intake evidence, and previously generated docs.\n",
     );
-    const confirm = await rl.question("Start generation? [Y/n] ");
+    const confirm = await rl.question("Start generation? [y/n] ");
     if (confirm.trim().toLowerCase() === "n") {
       process.stdout.write("Aborted.\n");
       return;

@@ -451,6 +451,56 @@ async function runInteractiveChat(
 
   printWelcome(selection);
 
+  // Check bootstrap status and show warnings if incomplete/failed
+  try {
+    const bootstrapState = await readBootstrapState(env);
+    const intake = await collectBootstrapIntake(REPO_ROOT, "");
+    const intakeReady = intake.localSources.length + intake.externalSources.length > 0;
+    const companyMemoryReady = intake.companyMemorySources.length > 0;
+    const bootstrapDone = bootstrapState?.status === "completed";
+
+    if (!bootstrapDone) {
+      process.stdout.write(`\n${section("Bootstrap Status Warning")}\n`);
+      if (!bootstrapState) {
+        process.stdout.write(`${bullet("Bootstrap has not been run yet in this workspace.", "warning")}\n`);
+      } else if (bootstrapState.status === "failed") {
+        process.stdout.write(`${bullet(`Previous bootstrap run failed. Error: ${bootstrapState.error ?? "Unknown error"}`, "danger")}\n`);
+      } else if (bootstrapState.status === "running") {
+        process.stdout.write(`${bullet("A bootstrap run is currently marked as running or was interrupted.", "warning")}\n`);
+      }
+
+      const missingPieces: string[] = [];
+      
+      // Check credentials
+      const openAiStatus = await getModelCredentialStatus("openai", env);
+      const claudeStatus = await getModelCredentialStatus("claude", env);
+      const geminiStatus = await getModelCredentialStatus("gemini", env);
+      const noCredentials = !openAiStatus.ok && !claudeStatus.ok && !geminiStatus.ok;
+
+      if (!intakeReady && !companyMemoryReady) {
+        missingPieces.push("Missing company data sources: Add your raw company materials (founder notes, PRDs, etc.) to `001_Data_Souces/Data_Souces_Folder/`.");
+      }
+
+      if (noCredentials) {
+        missingPieces.push("Missing AI model provider credentials: Configure at least one key (OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY) in `.env` / `.env.local`.");
+      }
+
+      if (!intakeReady && !companyMemoryReady) {
+        missingPieces.push("Run `npm run bootstrap` once source files are added to auto-fill templates and build the graph/embeddings.");
+      } else {
+        missingPieces.push("Run `npm run bootstrap` to complete onboarding, fill out templates, and build your knowledge graph.");
+      }
+
+      if (companyMemoryReady && !intakeReady) {
+        missingPieces.push("Since you have added files directly to `000_Company_Memory`, you can also run `npm run index` to index them and generate the graph & embeddings without raw data sources.");
+      }
+
+      process.stdout.write(`${actionBlock("Missing Pieces for Strategic Graph", missingPieces, "warning")}\n\n`);
+    }
+  } catch (err) {
+    // Fail silently on bootstrap check errors so chat remains accessible
+  }
+
   try {
     while (true) {
       let rawLine: string;

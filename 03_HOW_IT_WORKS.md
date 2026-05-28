@@ -267,7 +267,7 @@ Bootstrap works best when the source material contains actual business detail.
 
 ## 8. What Bootstrap Validates Before It Starts
 
-Before bootstrap begins generation, it now checks that usable source material actually exists.
+Before bootstrap begins generation, it checks that usable company documents exist in either your data sources (`001_Data_Souces`) OR directly in your corporate memory (`000_Company_Memory`).
 
 That means:
 - helper README files do not count
@@ -275,11 +275,9 @@ That means:
 - invalid reference notes do not count
 - missing external folders do not count
 
-If bootstrap does not find real source documents, it stops early and tells you to add valid material first.
+If bootstrap does not find real source documents or company memory files, it stops early and guides you to add valid material first. If it blocks, it will hand off to the interactive chat session, which is bootstrap-aware and will display a detailed breakdown of exactly what pieces are missing.
 
-This is intentional.
-
-It prevents the system from generating a fake company brain from almost no information.
+This is intentional. It prevents the system from generating a fake company brain from almost no information, while fully supporting users who prefer to write or copy documents directly to `000_Company_Memory`.
 
 ---
 
@@ -346,12 +344,17 @@ npm run bootstrap
 ```
 
 What happens next:
-1. bootstrap scans the source intake folders
-2. it verifies that real usable documents exist
-3. it asks if you want to continue
-4. it asks for the company name
-5. it validates available model providers
-6. it generates the repo documents in dependency order
+1. bootstrap scans the source intake folder (`001_Data_Souces`) and corporate memory (`000_Company_Memory`).
+2. it verifies that real usable documents exist in at least one of these paths.
+3. it discovers template files to fill.
+4. **If templates exist**:
+   - it asks if you want to continue.
+   - it asks for the company name.
+   - it validates available model providers.
+   - it generates the repo documents in dependency order.
+5. **If no templates remain** (e.g. they are already filled or you added custom files directly to memory):
+   - it bypasses LLM generation, dynamically transitioning to an indexing-only run.
+6. it refreshes the SQL index, generates vector embeddings, and builds the visual graph snapshot.
 
 ### Step 6: Review the Output
 
@@ -658,11 +661,9 @@ This works, but `npm run bootstrap` is still the most structured and reliable wa
 
 ---
 
-## 16. Common Mistakes to Avoid
-
-- Do not run bootstrap with only the company name and no documents.
+- Do not run bootstrap with absolutely no documents in either `001_Data_Souces` or `000_Company_Memory`.
 - Do not assume helper README files count as source material.
-- Do not put final canonical company docs back into `001_Data_Souces`.
+- Do not put final canonical company docs back into `001_Data_Souces` if using raw intake.
 - Do not use meeting transcripts as the default intake area.
 - Do not assume that direct Codex/cloud seeding automatically means the local CLI is ready to run.
 - Do not forget that the local CLI still needs a valid model API key.

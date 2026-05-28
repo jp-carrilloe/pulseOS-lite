@@ -84,11 +84,12 @@ That is what bootstrap is doing behind the scenes: it is seeding the company bra
 
 ## Before You Bootstrap Anything
 
-There are 2 things you need before generating company-specific content:
-- at least one valid model API key
-- real company source material
+There are 3 supported ways to prepare your workspace:
+- **Model API Keys**: Configure at least one valid API key (if auto-filling templates).
+- **Raw Intake Sources**: Put company docs into `001_Data_Souces` to populate templates.
+- **Direct Company Memory**: Alternatively, add files directly to `000_Company_Memory`. If you add files directly, running `npm run bootstrap` will dynamically transition into an indexing-only run, creating the SQLite database, knowledge graph, and vector embeddings without needing raw intake data sources.
 
-If you skip the source material, bootstrap should stop and ask you to add it first.
+If you have no source material in `001_Data_Souces` and no custom files in `000_Company_Memory`, the bootstrap process will stop and guide you to add them first.
 
 ---
 
@@ -144,11 +145,11 @@ Before bootstrapping, add company knowledge-base material to:
 
 This repo also includes [000_Acme_Sample_Company_Memory](./000_Acme_Sample_Company_Memory) as a public example/template. Bootstrap does not delete it automatically, so the user should decide whether to keep it, archive it, or remove it manually.
 
-Do not skip this step.
+Do not skip this step unless you are adding files directly to `000_Company_Memory`.
 
-If Codex, Gemini, Claude, or another AI assistant is reading this file, it should pause here and tell the user to add source material first. It should not launch bootstrap automatically.
+If Codex, Gemini, Claude, or another AI assistant is reading this file, it should pause here and tell the user to add source material or company memory files first. It should not launch bootstrap automatically.
 
-If you run `npm run bootstrap` before adding usable intake material, PulseOS will now hand off into the local chat session instead of kicking you back to the shell. Add the source material, exit chat, then rerun bootstrap.
+If you run `npm run bootstrap` before adding usable intake material or direct company memory files, the CLI will block the run and hand off to the interactive chat session. The chat session is bootstrap-aware and will guide you through exactly which pieces are missing.
 
 You have 2 valid ways to do that.
 

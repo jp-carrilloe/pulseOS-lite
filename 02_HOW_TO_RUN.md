@@ -37,30 +37,21 @@ In practice:
 
 Bootstrap does not work from a manual questionnaire anymore. It works from source evidence.
 
-Before running bootstrap, place company knowledge-base material in [`001_Source_Intake`](./001_Source_Intake/).
+Before running bootstrap, you have two options to prepare company knowledge:
+1. Place company knowledge-base material in [`001_Data_Souces`](./001_Data_Souces/).
+2. **Alternatively**, add custom Markdown files directly to [`000_Company_Memory`](./000_Company_Memory/). If files are added directly to memory, the bootstrap command will skip model generation and immediately perform indexing, database sync, and vectorization.
 
-Use this folder for:
-- strategy docs
-- founder notes
-- pricing notes
-- product docs
-- project documentation
-- GTM, sales, and ICP docs
-- implementation plans
-- research notes
-- customer feedback
-- exports or working documents that reflect the actual company brain
-
-You can provide source material in two ways:
-1. Put local files into `001_Source_Intake/Data_Souces_Folder`
-2. Add Markdown reference notes in `001_Source_Intake/Data_Sources_References` that point to external folders
+If you choose Option 1, you can provide source material in two ways:
+- Put local files into `001_Data_Souces/Data_Souces_Folder`
+- Add Markdown reference notes in `001_Data_Souces/Data_Sources_References` that point to external folders
 
 Important rules:
-- `001_Source_Intake` is for source evidence, not final canonical outputs
-- bootstrap validates that usable source documents exist before generation starts
-- helper README files inside the intake structure do not count as valid source material
-- original source files stay in place
-- final canonical outputs are written into the owned domain folders across the repo
+- `001_Data_Souces` is for source evidence, not final canonical outputs.
+- `000_Company_Memory` is for active operational files.
+- Bootstrap validates that usable documents exist in either data sources or company memory before starting.
+- Helper README files inside the structures do not count as valid source material.
+- Original source files stay in place.
+- Final canonical outputs are written into the owned domain folders across the repo.
 
 Meeting transcripts are not part of source intake by default. Store those in Operations under the meeting-transcripts area when you want them preserved as operational records.
 
@@ -71,17 +62,20 @@ Meeting transcripts are not part of source intake by default. Store those in Ope
 When you run bootstrap:
 
 1. The CLI loads your local API keys from `.env.local` or `.env`
-2. It validates available providers and chooses one
-   OpenAI first, then Anthropic, then Gemini
-3. It scans `001_Source_Intake`
-4. It verifies there are real usable source documents
-5. It asks only for the company name
-6. It builds an intake evidence block from local files and valid external references
-7. It fills template documents in dependency order
-8. Earlier generated docs become grounding context for later docs
-9. The final outputs are written into the owned domain folders
+2. It discovers template files to fill.
+3. It scans `001_Data_Souces` and `000_Company_Memory` for existing content.
+4. It blocks early if absolutely no usable source files or memory files exist.
+5. **If templates remain to be filled:**
+   - It validates available model providers (OpenAI first, then Anthropic, then Gemini)
+   - It asks only for the company name
+   - It builds an intake evidence block from local files, external references, and memory files
+   - It fills template documents in dependency order, accumulating grounding context
+   - The final outputs are written into the owned domain folders
+6. **If no unfilled templates remain:**
+   - It dynamically transitions into an index-and-build run, skipping template generation
+7. It runs a full index refresh, creating the SQLite database, vectorizing documents, and building the visual Company Memory graph snapshot.
 
-This is why `@ARK` and the folder agents matter: bootstrap is effectively seeding the strategic and operational spine of the repo into the domains those agents own.
+This is why `@ARK` and the folder agents matter: bootstrap is effectively seeding or indexing the strategic and operational spine of the repo into the domains those agents own.
 
 ---
 
@@ -217,7 +211,7 @@ Regardless of the model you use, here are some helpful prompting patterns:
 You can also skip the CLI and open your preferred LLM directly in this repo.
 
 In that flow:
-- point the model at `001_Source_Intake`
+- point the model at `001_Data_Souces`
 - ask it to ingest the source folder contents and any reference-note paths
 - tell it to route outputs through `@ARK` and write canonical information into the correct owned folders
 
