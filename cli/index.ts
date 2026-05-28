@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectBootstrapIntake } from "./bootstrap-intake.js";
+import type { RetrievalDebugSummary } from "./retrieval.js";
 import { actionBlock, bold, bullet, dim, kv, section, tone } from "./terminal-format.js";
 import { buildUiBundle, ensureUiReady } from "./ui-runtime.js";
 import {
@@ -120,6 +121,7 @@ ${section("Chat Commands")}
   /models                      — list configured provider examples
   /reset                       — clear conversation history
   /reload                      — manually re-index repo files/new docs and re-run vectorization
+  /retrieve <query>             — show retrieval ranking diagnostics for a query
   /files                       — list indexed files
   /status                      — daemon status
   /help                        — show this help
@@ -609,6 +611,17 @@ async function handleReplCommand(
       return null;
     }
 
+    case "retrieve": {
+      const query = args.join(" ").trim();
+      if (!query) {
+        process.stdout.write("Usage: /retrieve <query>\n");
+        return null;
+      }
+      const debug = await daemonCommand<RetrievalDebugSummary>(state, "retrieve_debug", { query, top_k: 8 });
+      printRetrievalDebug(debug);
+      return null;
+    }
+
     case "files": {
       const files = await daemonCommand<string[]>(state, "list_files", {});
       process.stdout.write(`${files.length} indexed files:\n`);
@@ -644,6 +657,24 @@ function printWelcome(selection: ChatModelSelection) {
     "   https://github.com/jp-carrilloe",
   ];
   process.stdout.write(renderWelcomeBox(lines));
+}
+
+function printRetrievalDebug(debug: RetrievalDebugSummary) {
+  process.stdout.write(`\n${section("Retrieval Debug")}\n`);
+  process.stdout.write(`${kv("Query", debug.query)}\n`);
+  process.stdout.write(`${kv("Results", String(debug.results.length))}\n\n`);
+
+  for (const [index, result] of debug.results.entries()) {
+    const scores = result.scores;
+    process.stdout.write(
+      [
+        `${index + 1}. ${bold(result.document.title)}`,
+        `   ${result.document.relativePath}`,
+        `   score ${scores.total.toFixed(3)} = vector ${scores.vector.toFixed(3)} + lexical ${scores.lexical.toFixed(3)} + keyword ${scores.keywordSql.toFixed(3)}`,
+        `   matched: ${result.matchedFields.length ? result.matchedFields.join(", ") : "none"}`,
+      ].join("\n") + "\n",
+    );
+  }
 }
 
 async function resolveChatModelSelection(

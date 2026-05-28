@@ -21,7 +21,7 @@ import {
   removeDaemonState,
   writeDaemonState,
 } from "./shared.js";
-import type { KnowledgeGraphSnapshot, RebuildAdvisorStatus } from "./retrieval.js";
+import type { KnowledgeGraphSnapshot, RebuildAdvisorStatus, RetrievalDebugSummary } from "./retrieval.js";
 import { openWorkspaceStore } from "./workspace-store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -704,6 +704,7 @@ export function createDaemonApp(options: {
         awaitReady,
         sessions,
         buildPromptContext: (message) => kbIndex.buildPromptContext(message),
+        inspectRetrieval: (message, topK) => kbIndex.inspectRetrieval(message, topK),
         reloadRepo: () => kbIndex.sync(),
         rebuildAdvisor: () => kbIndex.inspectRebuildStatus(),
         repoFiles: () => kbIndex.listFiles(),
@@ -741,6 +742,7 @@ async function handleCommand(
     awaitReady: () => Promise<void>;
     sessions: Map<string, Session>;
     buildPromptContext: (message: string) => Promise<string>;
+    inspectRetrieval: (message: string, topK?: number) => Promise<RetrievalDebugSummary>;
     reloadRepo: () => Promise<{ fileCount: number; charCount: number; indexedAt: string; embeddingModel: string; embeddingMode: string }>;
     rebuildAdvisor: () => Promise<RebuildAdvisorStatus>;
     repoFiles: () => string[];
@@ -831,6 +833,14 @@ async function handleCommand(
     case "rebuild_advisor": {
       await ctx.awaitReady();
       return ctx.rebuildAdvisor();
+    }
+
+    case "retrieve_debug": {
+      await ctx.awaitReady();
+      const query = String(args.query ?? "").trim();
+      if (!query) throw new Error("The `query` argument is required.");
+      const topK = Number(args.top_k ?? args.topK ?? 8);
+      return ctx.inspectRetrieval(query, Number.isFinite(topK) ? topK : 8);
     }
 
     case "list_files": {

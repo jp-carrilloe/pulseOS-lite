@@ -76,6 +76,26 @@ const TOOLS: ToolDefinition[] = [
       required: ["query"],
     },
   },
+  {
+    name: "retrieve_debug",
+    description: "Return ranked retrieval results with score breakdowns and matched fields for debugging.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        query: { type: "string", description: "User question or retrieval query." },
+        top_k: {
+          type: "number",
+          description: "Maximum number of ranked documents to return. Defaults to 8 and caps at 25.",
+        },
+        refresh_if_stale: {
+          type: "boolean",
+          description: "When true, allow this tool to rebuild the local index first if drift is detected.",
+        },
+      },
+      required: ["query"],
+    },
+  },
 ];
 
 silenceNodeSqliteExperimentalWarning();
@@ -193,25 +213,42 @@ async function callTool(params: Record<string, unknown>) {
       if (!query) {
         throw new Error("The `query` argument is required.");
       }
-      const refreshIfStale = args.refresh_if_stale === true;
-      const advisor = await kbIndex.inspectRebuildStatus();
-      if (advisor.indexedDocuments === 0 && !refreshIfStale) {
-        throw new Error(
-          "No indexed documents are available yet. Call `rebuild_now` first, or retry `retrieve_context` with `refresh_if_stale: true`.",
-        );
-      }
-      if (refreshIfStale && advisor.needsRebuild) {
-        await kbIndex.sync();
-      }
+      const advisor = await prepareRetrievalTool(args, "retrieve_context");
       const context = await kbIndex.buildPromptContext(query);
+      const debug = await kbIndex.inspectRetrieval(query);
       return {
         content: [{ type: "text", text: context }],
-        structuredContent: { query, context, advisor },
+        structuredContent: { query, context, advisor, retrieval: debug },
       };
+    }
+    case "retrieve_debug": {
+      const query = String(args.query ?? "").trim();
+      if (!query) {
+        throw new Error("The `query` argument is required.");
+      }
+      const advisor = await prepareRetrievalTool(args, "retrieve_debug");
+      const topK = Number(args.top_k ?? 8);
+      const retrieval = await kbIndex.inspectRetrieval(query, Number.isFinite(topK) ? topK : 8);
+      return toolResult({ query, advisor, retrieval });
     }
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
+}
+
+async function prepareRetrievalTool(args: Record<string, unknown>, toolName: string) {
+  const refreshIfStale = args.refresh_if_stale === true;
+  const advisor = await kbIndex.inspectRebuildStatus();
+  if (advisor.indexedDocuments === 0 && !refreshIfStale) {
+    throw new Error(
+      `No indexed documents are available yet. Call \`rebuild_now\` first, or retry \`${toolName}\` with \`refresh_if_stale: true\`.`,
+    );
+  }
+  if (refreshIfStale && advisor.needsRebuild) {
+    await kbIndex.sync();
+    return kbIndex.inspectRebuildStatus();
+  }
+  return advisor;
 }
 
 function toolResult(payload: unknown) {

@@ -454,6 +454,23 @@ Canonical shortcut profile for the ${agent.toLowerCase()} agent.
   index.close();
 });
 
+test("inspectRetrieval exposes score breakdowns and matched fields", async () => {
+  const repoRoot = await createTempRepo();
+  const dbPath = path.join(repoRoot, ".kb.sqlite");
+  const index = new KnowledgeBaseIndex({ repoRoot, dbPath, env: {} });
+
+  await index.sync();
+  const debug = await index.inspectRetrieval("pricing packaging", 3);
+
+  assert.equal(debug.query, "pricing packaging");
+  assert.equal(debug.topK, 3);
+  assert.equal(debug.results[0]?.document.relativePath, "000_Company_Memory/102_Corporate_Strategy_and_Foundation/102.5_Pricing_Analysis.md");
+  assert.ok(debug.results[0]?.scores.total >= debug.results[0]?.scores.vector);
+  assert.ok(debug.results[0]?.matchedFields.includes("title"));
+
+  index.close();
+});
+
 test("buildGraphSnapshot returns folder, document, and markdown reference edges", async () => {
   const repoRoot = await createTempRepo();
   const dbPath = path.join(repoRoot, ".kb.sqlite");

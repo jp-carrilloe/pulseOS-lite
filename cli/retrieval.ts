@@ -45,6 +45,23 @@ export interface RetrievalResult {
   score: number;
 }
 
+export interface RetrievalDebugResult extends RetrievalResult {
+  scores: {
+    vector: number;
+    lexical: number;
+    keywordSql: number;
+    total: number;
+  };
+  matchedFields: string[];
+}
+
+export interface RetrievalDebugSummary {
+  query: string;
+  topK: number;
+  generatedAt: string;
+  results: RetrievalDebugResult[];
+}
+
 export interface IndexStatusSummary {
   dbPath: string;
   root: string;
@@ -179,6 +196,29 @@ interface EmbeddingProvider {
   mode: "provider" | "heuristic";
   model: string;
   embed(text: string): Promise<number[]>;
+}
+
+interface RetrievalCandidateRow {
+  id: string;
+  relative_path: string;
+  title: string;
+  summary: string;
+  ontology_domain: string;
+  status: string | null;
+  owner_agent: string | null;
+  content_hash: string;
+  content_length: number;
+  updated_at: string;
+  indexed_at: string;
+  keyword_score?: number;
+  vector_json: string;
+}
+
+interface ScoredRetrievalRow {
+  row: RetrievalCandidateRow;
+  document: IndexedDocumentRecord;
+  score: number;
+  scores: RetrievalDebugResult["scores"];
 }
 
 export class KnowledgeBaseIndex {
@@ -647,77 +687,27 @@ export class KnowledgeBaseIndex {
   }
 
   async retrieve(query: string, topK = MAX_RETRIEVAL_RESULTS): Promise<RetrievalResult[]> {
-    const trimmed = query.trim();
-    if (!trimmed) return [];
+    return (await this.scoreRetrievalRows(query, normalizeRetrievalLimit(topK))).map((match) => ({
+      document: match.document,
+      score: match.score,
+    }));
+  }
 
-    const storedModel = this.getStoredEmbeddingModel();
-    const provider = createEmbeddingProvider(this.options.env ?? process.env, storedModel);
-    const queryVector = await provider.embed(trimmed);
-    const keywords = extractRetrievalKeywords(trimmed);
-    const prefilteredRows = this.selectRetrievalCandidates(trimmed, MAX_RETRIEVAL_CANDIDATES);
-    const fallbackRows = () => this.db.prepare(
-      `SELECT
-         d.id,
-         d.relative_path,
-         d.title,
-         d.summary,
-         d.ontology_domain,
-         d.status,
-         d.owner_agent,
-         d.content_hash,
-         d.content_length,
-         d.updated_at,
-         d.indexed_at,
-         0 as keyword_score,
-         kv.vector_json
-       FROM documents d
-       JOIN knowledge_vectors kv
-         ON kv.owner_type = ?
-        AND kv.owner_id = d.id
-       ORDER BY d.relative_path`,
-    ).all(SUMMARY_VECTOR_OWNER_TYPE) as Array<{
-      id: string;
-      relative_path: string;
-      title: string;
-      summary: string;
-      ontology_domain: string;
-      status: string | null;
-      owner_agent: string | null;
-      content_hash: string;
-      content_length: number;
-      updated_at: string;
-      indexed_at: string;
-      keyword_score?: number;
-      vector_json: string;
-    }>;
-    const rows = prefilteredRows.length === 0
-      ? fallbackRows()
-      : prefilteredRows.length >= topK
-        ? prefilteredRows
-        : mergeRetrievalRows(prefilteredRows, fallbackRows());
-
-    return rows
-      .map((row) => ({
-        document: {
-          id: row.id,
-          relativePath: row.relative_path,
-          title: row.title,
-          summary: row.summary,
-          ontologyDomain: row.ontology_domain,
-          status: row.status,
-          ownerAgent: row.owner_agent,
-          contentHash: row.content_hash,
-          contentLength: row.content_length,
-          updatedAt: row.updated_at,
-          indexedAt: row.indexed_at,
-        },
-        score:
-          cosineSimilarity(queryVector, parseVector(row.vector_json)) +
-          scoreDocumentKeywordMatch(row, keywords) +
-          (Number(row.keyword_score) || 0) / 4,
-      }))
-      .sort((left, right) => right.score - left.score)
-      .slice(0, topK);
+  async inspectRetrieval(query: string, topK = MAX_RETRIEVAL_RESULTS): Promise<RetrievalDebugSummary> {
+    const normalizedTopK = normalizeRetrievalLimit(topK);
+    const keywords = extractRetrievalKeywords(query);
+    const matches = await this.scoreRetrievalRows(query, normalizedTopK);
+    return {
+      query: query.trim(),
+      topK: normalizedTopK,
+      generatedAt: new Date().toISOString(),
+      results: matches.map((match) => ({
+        document: match.document,
+        score: match.score,
+        scores: match.scores,
+        matchedFields: this.findMatchedFields(match.row, keywords),
+      })),
+    };
   }
 
   async buildPromptContext(query: string): Promise<string> {
@@ -940,21 +930,84 @@ export class KnowledgeBaseIndex {
     return rows.map((row) => row.content).join("\n\n");
   }
 
-  private selectRetrievalCandidates(query: string, limit: number): Array<{
-    id: string;
-    relative_path: string;
-    title: string;
-    summary: string;
-    ontology_domain: string;
-    status: string | null;
-    owner_agent: string | null;
-    content_hash: string;
-    content_length: number;
-    updated_at: string;
-    indexed_at: string;
-    keyword_score: number;
-    vector_json: string;
-  }> {
+  private async scoreRetrievalRows(query: string, topK: number): Promise<ScoredRetrievalRow[]> {
+    const trimmed = query.trim();
+    if (!trimmed) return [];
+
+    const storedModel = this.getStoredEmbeddingModel();
+    const provider = createEmbeddingProvider(this.options.env ?? process.env, storedModel);
+    const queryVector = await provider.embed(trimmed);
+    const keywords = extractRetrievalKeywords(trimmed);
+    const prefilteredRows = this.selectRetrievalCandidates(trimmed, MAX_RETRIEVAL_CANDIDATES);
+    const fallbackRows = () => this.selectAllRetrievalRows();
+    const rows = prefilteredRows.length === 0
+      ? fallbackRows()
+      : prefilteredRows.length >= topK
+        ? prefilteredRows
+        : mergeRetrievalRows(prefilteredRows, fallbackRows());
+
+    return rows
+      .map((row) => {
+        const vector = cosineSimilarity(queryVector, parseVector(row.vector_json));
+        const lexical = scoreDocumentKeywordMatch(row, keywords);
+        const keywordSql = (Number(row.keyword_score) || 0) / 4;
+        const total = vector + lexical + keywordSql;
+        return {
+          row,
+          document: mapRetrievalRowToDocument(row),
+          score: total,
+          scores: { vector, lexical, keywordSql, total },
+        };
+      })
+      .sort((left, right) => right.score - left.score)
+      .slice(0, topK);
+  }
+
+  private selectAllRetrievalRows(): RetrievalCandidateRow[] {
+    return this.db.prepare(
+      `SELECT
+         d.id,
+         d.relative_path,
+         d.title,
+         d.summary,
+         d.ontology_domain,
+         d.status,
+         d.owner_agent,
+         d.content_hash,
+         d.content_length,
+         d.updated_at,
+         d.indexed_at,
+         0 as keyword_score,
+         kv.vector_json
+       FROM documents d
+       JOIN knowledge_vectors kv
+         ON kv.owner_type = ?
+        AND kv.owner_id = d.id
+       ORDER BY d.relative_path`,
+    ).all(SUMMARY_VECTOR_OWNER_TYPE) as RetrievalCandidateRow[];
+  }
+
+  private findMatchedFields(row: RetrievalCandidateRow, keywords: string[]): string[] {
+    if (keywords.length === 0) return [];
+    const forms = Array.from(new Set(keywords.flatMap(expandRetrievalKeywordForms)));
+    const fields: Array<[string, string]> = [
+      ["title", row.title],
+      ["path", row.relative_path],
+      ["summary", row.summary],
+      ["ontology", row.ontology_domain],
+      ["status", row.status ?? ""],
+      ["owner", row.owner_agent ?? ""],
+      ["body", this.readIndexedDocumentBody(row.id)],
+    ];
+    return fields
+      .filter(([, value]) => {
+        const lower = value.toLowerCase();
+        return forms.some((keyword) => lower.includes(keyword));
+      })
+      .map(([field]) => field);
+  }
+
+  private selectRetrievalCandidates(query: string, limit: number): RetrievalCandidateRow[] {
     const keywords = extractRetrievalKeywords(query).slice(0, 6);
     if (keywords.length === 0) return [];
 
@@ -1513,6 +1566,26 @@ function mergeRetrievalRows<Row extends { id: string; keyword_score?: number }>(
     byId.set(row.id, row);
   }
   return Array.from(byId.values());
+}
+
+function normalizeRetrievalLimit(topK: number): number {
+  return Number.isFinite(topK) ? Math.max(1, Math.min(Math.floor(topK), 25)) : MAX_RETRIEVAL_RESULTS;
+}
+
+function mapRetrievalRowToDocument(row: RetrievalCandidateRow): IndexedDocumentRecord {
+  return {
+    id: row.id,
+    relativePath: row.relative_path,
+    title: row.title,
+    summary: row.summary,
+    ontologyDomain: row.ontology_domain,
+    status: row.status,
+    ownerAgent: row.owner_agent,
+    contentHash: row.content_hash,
+    contentLength: row.content_length,
+    updatedAt: row.updated_at,
+    indexedAt: row.indexed_at,
+  };
 }
 
 function scoreDocumentKeywordMatch(

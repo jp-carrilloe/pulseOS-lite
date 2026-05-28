@@ -1,4 +1,4 @@
-import { KnowledgeBaseIndex, type KnowledgeGraphSnapshot, type RebuildAdvisorStatus, type RetrievalResult, type SyncIndexResult } from "./retrieval.js";
+import { KnowledgeBaseIndex, type KnowledgeGraphSnapshot, type RebuildAdvisorStatus, type RetrievalDebugSummary, type RetrievalResult, type SyncIndexResult } from "./retrieval.js";
 
 export interface WorkspaceStoreStatus {
   root: string;
@@ -13,6 +13,7 @@ export interface WorkspaceStore {
   ensureCurrent(): Promise<SyncIndexResult>;
   sync(): Promise<SyncIndexResult>;
   retrieve(query: string, topK?: number): Promise<RetrievalResult[]>;
+  inspectRetrieval(query: string, topK?: number): Promise<RetrievalDebugSummary>;
   buildGraphSnapshot(): Promise<KnowledgeGraphSnapshot>;
   inspectRebuildStatus(options?: { persistLog?: boolean }): Promise<RebuildAdvisorStatus>;
   buildPromptContext(message: string): Promise<string>;
