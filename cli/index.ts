@@ -670,7 +670,8 @@ function printRetrievalDebug(debug: RetrievalDebugSummary) {
       [
         `${index + 1}. ${bold(result.document.title)}`,
         `   ${result.document.relativePath}`,
-        `   score ${scores.total.toFixed(3)} = vector ${scores.vector.toFixed(3)} + lexical ${scores.lexical.toFixed(3)} + keyword ${scores.keywordSql.toFixed(3)}`,
+        `   score ${scores.total.toFixed(3)} = vector ${scores.vector.toFixed(3)} + lexical ${scores.lexical.toFixed(3)} + keyword ${scores.keywordSql.toFixed(3)} + graph ${scores.relationshipBoost.toFixed(3)}`,
+        `   source: ${result.sourceReason} · graph distance ${result.graphDistance}${result.linkedFrom.length ? ` · linked from ${result.linkedFrom.join(", ")}` : ""}`,
         `   matched: ${result.matchedFields.length ? result.matchedFields.join(", ") : "none"}`,
       ].join("\n") + "\n",
     );

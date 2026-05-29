@@ -15,7 +15,14 @@ const MAX_RETRIEVAL_RESULTS = 8;
 const MAX_PROMPT_CHARS = 120_000;
 const MAX_CHUNK_CHARS = 1800;
 const MAX_RETRIEVAL_CANDIDATES = 200;
+const GRAPH_EXPANSION_SEED_COUNT = 4;
+const MAX_GRAPH_EXPANDED_DOCUMENTS = 4;
+const OUTGOING_REFERENCE_BOOST = 0.45;
+const INCOMING_REFERENCE_BOOST = 0.3;
+const MAX_RELATIONSHIP_BOOST = 1.25;
 const COMPANY_MEMORY_ROOT = "000_Company_Memory";
+
+export type RetrievalSourceReason = "semantic_seed" | "lexical_seed" | "body_match" | "graph_linked";
 
 export interface IndexedDocumentRecord {
   id: string;
@@ -43,6 +50,10 @@ export interface VectorRecord {
 export interface RetrievalResult {
   document: IndexedDocumentRecord;
   score: number;
+  sourceReason: RetrievalSourceReason;
+  graphDistance: 0 | 1;
+  linkedFrom: string[];
+  relationshipBoost: number;
 }
 
 export interface RetrievalDebugResult extends RetrievalResult {
@@ -50,6 +61,7 @@ export interface RetrievalDebugResult extends RetrievalResult {
     vector: number;
     lexical: number;
     keywordSql: number;
+    relationshipBoost: number;
     total: number;
   };
   matchedFields: string[];
@@ -219,6 +231,16 @@ interface ScoredRetrievalRow {
   document: IndexedDocumentRecord;
   score: number;
   scores: RetrievalDebugResult["scores"];
+  sourceReason: RetrievalSourceReason;
+  graphDistance: 0 | 1;
+  linkedFrom: string[];
+  relationshipBoost: number;
+}
+
+interface GraphExpansionCandidate {
+  documentId: string;
+  linkedFrom: Set<string>;
+  boost: number;
 }
 
 export class KnowledgeBaseIndex {
@@ -690,6 +712,10 @@ export class KnowledgeBaseIndex {
     return (await this.scoreRetrievalRows(query, normalizeRetrievalLimit(topK))).map((match) => ({
       document: match.document,
       score: match.score,
+      sourceReason: match.sourceReason,
+      graphDistance: match.graphDistance,
+      linkedFrom: match.linkedFrom,
+      relationshipBoost: match.relationshipBoost,
     }));
   }
 
@@ -704,6 +730,10 @@ export class KnowledgeBaseIndex {
       results: matches.map((match) => ({
         document: match.document,
         score: match.score,
+        sourceReason: match.sourceReason,
+        graphDistance: match.graphDistance,
+        linkedFrom: match.linkedFrom,
+        relationshipBoost: match.relationshipBoost,
         scores: match.scores,
         matchedFields: this.findMatchedFields(match.row, keywords),
       })),
@@ -720,17 +750,22 @@ export class KnowledgeBaseIndex {
       ].join("\n");
     }
 
-    const summaries = matches.map((match, index) => {
+    const directMatches = matches.filter((match) => match.graphDistance === 0);
+    const graphMatches = matches.filter((match) => match.graphDistance === 1);
+    const summaries = [...directMatches, ...graphMatches].map((match, index) => {
       const bits = [
         `${index + 1}. ${match.document.title} (${match.document.relativePath})`,
         `   Summary: ${match.document.summary}`,
         `   Ontology: ${match.document.ontologyDomain}`,
+        `   Source: ${match.sourceReason}${match.graphDistance > 0 ? ` via ${match.linkedFrom.join(", ")}` : ""}`,
       ];
       if (match.document.ownerAgent) bits.push(`   Owner: ${match.document.ownerAgent}`);
       if (match.document.status) bits.push(`   Status: ${match.document.status}`);
       bits.push(`   Similarity: ${match.score.toFixed(3)}`);
       return bits.join("\n");
     });
+    const graphSummaries = graphMatches
+      .map((match) => `- ${match.document.title} (${match.document.relativePath}) linked from ${match.linkedFrom.join(", ")}; relationship boost ${match.relationshipBoost.toFixed(2)}`);
 
     let context = [
       "# PulseOS-Lite Knowledge Base",
@@ -740,10 +775,19 @@ export class KnowledgeBaseIndex {
       "## Retrieved Document Summaries",
       ...summaries,
       "",
+      "## Graph-Expanded Context",
+      graphSummaries.length > 0
+        ? graphSummaries.join("\n")
+        : "No linked documents were added through the Markdown relationship graph.",
+      "",
       "## Retrieved Full Documents",
     ].join("\n");
 
-    for (const match of matches.slice(0, MAX_FULL_DOCUMENTS)) {
+    const fullDocumentMatches = [
+      ...directMatches.slice(0, MAX_FULL_DOCUMENTS - 1),
+      ...graphMatches.slice(0, 1),
+    ].slice(0, MAX_FULL_DOCUMENTS);
+    for (const match of fullDocumentMatches) {
       const content = this.readIndexedDocumentBody(match.document.id);
       if (!content) continue;
       const block = `\n### ${match.document.relativePath}\n\n${content}\n`;
@@ -946,19 +990,54 @@ export class KnowledgeBaseIndex {
         ? prefilteredRows
         : mergeRetrievalRows(prefilteredRows, fallbackRows());
 
-    return rows
+    const directScored = rows
       .map((row) => {
         const vector = cosineSimilarity(queryVector, parseVector(row.vector_json));
         const lexical = scoreDocumentKeywordMatch(row, keywords);
         const keywordSql = (Number(row.keyword_score) || 0) / 4;
-        const total = vector + lexical + keywordSql;
+        const relationshipBoost = 0;
+        const total = vector + lexical + keywordSql + relationshipBoost;
         return {
           row,
           document: mapRetrievalRowToDocument(row),
           score: total,
-          scores: { vector, lexical, keywordSql, total },
+          scores: { vector, lexical, keywordSql, relationshipBoost, total },
+          sourceReason: classifySeedSourceReason({ vector, lexical, keywordSql }, this.findMatchedFields(row, keywords)),
+          graphDistance: 0 as const,
+          linkedFrom: [],
+          relationshipBoost,
         };
       })
+      .sort((left, right) => right.score - left.score)
+      .slice(0, Math.max(topK, GRAPH_EXPANSION_SEED_COUNT));
+
+    const expandedRows = this.selectGraphExpandedRows(directScored.slice(0, GRAPH_EXPANSION_SEED_COUNT));
+    const graphScored = expandedRows
+      .map(({ row, expansion }) => {
+        const vector = cosineSimilarity(queryVector, parseVector(row.vector_json));
+        const lexical = scoreDocumentKeywordMatch(row, keywords);
+        const keywordSql = (Number(row.keyword_score) || 0) / 4;
+        const relationshipBoost = expansion.boost;
+        const total = vector + lexical + keywordSql + relationshipBoost;
+        return {
+          row,
+          document: mapRetrievalRowToDocument(row),
+          score: total,
+          scores: { vector, lexical, keywordSql, relationshipBoost, total },
+          sourceReason: "graph_linked" as const,
+          graphDistance: 1 as const,
+          linkedFrom: Array.from(expansion.linkedFrom).sort(),
+          relationshipBoost,
+        };
+      })
+      .sort((left, right) => right.relationshipBoost - left.relationshipBoost || right.score - left.score)
+      .slice(0, MAX_GRAPH_EXPANDED_DOCUMENTS);
+
+    const merged = new Map<string, ScoredRetrievalRow>();
+    for (const match of directScored) merged.set(match.row.id, match);
+    for (const match of graphScored) merged.set(match.row.id, match);
+
+    return Array.from(merged.values())
       .sort((left, right) => right.score - left.score)
       .slice(0, topK);
   }
@@ -985,6 +1064,87 @@ export class KnowledgeBaseIndex {
         AND kv.owner_id = d.id
        ORDER BY d.relative_path`,
     ).all(SUMMARY_VECTOR_OWNER_TYPE) as RetrievalCandidateRow[];
+  }
+
+  private selectGraphExpandedRows(
+    seedMatches: ScoredRetrievalRow[],
+  ): Array<{ row: RetrievalCandidateRow; expansion: GraphExpansionCandidate }> {
+    if (seedMatches.length === 0) return [];
+
+    const seedIds = seedMatches.map((match) => match.row.id);
+    const seedPathById = new Map(seedMatches.map((match) => [match.row.id, match.document.relativePath]));
+    const expansions = new Map<string, GraphExpansionCandidate>();
+
+    const addExpansion = (documentId: string | null, linkedFromId: string, boost: number) => {
+      if (!documentId || !seedPathById.has(linkedFromId) || seedPathById.has(documentId)) return;
+      const current = expansions.get(documentId) ?? {
+        documentId,
+        linkedFrom: new Set<string>(),
+        boost: 0,
+      };
+      current.linkedFrom.add(seedPathById.get(linkedFromId)!);
+      current.boost = Math.min(MAX_RELATIONSHIP_BOOST, current.boost + boost);
+      expansions.set(documentId, current);
+    };
+
+    const outgoingRows = this.db.prepare(
+      `SELECT source_document_id, target_document_id
+       FROM document_references
+       WHERE source_document_id IN (${seedIds.map(() => "?").join(",")})
+         AND target_document_id IS NOT NULL`,
+    ).all(...seedIds) as Array<{ source_document_id: string; target_document_id: string | null }>;
+    for (const row of outgoingRows) {
+      addExpansion(row.target_document_id, row.source_document_id, OUTGOING_REFERENCE_BOOST);
+    }
+
+    const incomingRows = this.db.prepare(
+      `SELECT source_document_id, target_document_id
+       FROM document_references
+       WHERE target_document_id IN (${seedIds.map(() => "?").join(",")})`,
+    ).all(...seedIds) as Array<{ source_document_id: string; target_document_id: string | null }>;
+    for (const row of incomingRows) {
+      if (!row.target_document_id) continue;
+      addExpansion(row.source_document_id, row.target_document_id, INCOMING_REFERENCE_BOOST);
+    }
+
+    const topExpansions = Array.from(expansions.values())
+      .sort((left, right) => right.boost - left.boost || left.documentId.localeCompare(right.documentId))
+      .slice(0, MAX_GRAPH_EXPANDED_DOCUMENTS);
+    if (topExpansions.length === 0) return [];
+
+    const expansionById = new Map(topExpansions.map((expansion) => [expansion.documentId, expansion]));
+    const rows = this.selectRetrievalRowsByIds(topExpansions.map((expansion) => expansion.documentId));
+    return rows
+      .map((row) => ({ row, expansion: expansionById.get(row.id)! }))
+      .filter((entry) => Boolean(entry.expansion));
+  }
+
+  private selectRetrievalRowsByIds(documentIds: string[]): RetrievalCandidateRow[] {
+    const uniqueIds = [...new Set(documentIds)].filter(Boolean);
+    if (uniqueIds.length === 0) return [];
+
+    return this.db.prepare(
+      `SELECT
+         d.id,
+         d.relative_path,
+         d.title,
+         d.summary,
+         d.ontology_domain,
+         d.status,
+         d.owner_agent,
+         d.content_hash,
+         d.content_length,
+         d.updated_at,
+         d.indexed_at,
+         0 as keyword_score,
+         kv.vector_json
+       FROM documents d
+       JOIN knowledge_vectors kv
+         ON kv.owner_type = ?
+        AND kv.owner_id = d.id
+       WHERE d.id IN (${uniqueIds.map(() => "?").join(",")})
+       ORDER BY d.relative_path`,
+    ).all(SUMMARY_VECTOR_OWNER_TYPE, ...uniqueIds) as RetrievalCandidateRow[];
   }
 
   private findMatchedFields(row: RetrievalCandidateRow, keywords: string[]): string[] {
@@ -1586,6 +1746,15 @@ function mapRetrievalRowToDocument(row: RetrievalCandidateRow): IndexedDocumentR
     updatedAt: row.updated_at,
     indexedAt: row.indexed_at,
   };
+}
+
+function classifySeedSourceReason(
+  scores: { vector: number; lexical: number; keywordSql: number },
+  matchedFields: string[],
+): RetrievalSourceReason {
+  if (matchedFields.includes("body") && scores.keywordSql > 0) return "body_match";
+  if (scores.lexical + scores.keywordSql >= scores.vector) return "lexical_seed";
+  return "semantic_seed";
 }
 
 function scoreDocumentKeywordMatch(

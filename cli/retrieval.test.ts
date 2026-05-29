@@ -471,6 +471,182 @@ test("inspectRetrieval exposes score breakdowns and matched fields", async () =>
   index.close();
 });
 
+test("retrieval expands direct matches through markdown document references", async () => {
+  const repoRoot = await createTempRepo();
+  const projectRoot = path.join(repoRoot, "000_Company_Memory", "600_Projects", "608_Graph_Retrieval");
+  await fsp.mkdir(projectRoot, { recursive: true });
+
+  await fsp.writeFile(
+    path.join(projectRoot, "608.1_Seed_Strategy.md"),
+    `# Needle Strategy
+
+**Status:** Active
+- **Owner Agent:** @ARK
+
+This document is the strongest direct match for the needle retrieval workflow.
+
+Related: [Operator Runbook](./608.2_Operator_Runbook.md)
+`,
+  );
+  await fsp.writeFile(
+    path.join(projectRoot, "608.2_Operator_Runbook.md"),
+    `# Operator Runbook
+
+**Status:** Active
+- **Owner Agent:** @Operations
+
+This adjacent runbook explains the operating steps, escalation path, and handoff checklist.
+`,
+  );
+
+  for (let index = 0; index < 10; index++) {
+    await fsp.writeFile(
+      path.join(projectRoot, `608.9_Distractor_${index}.md`),
+      `# Needle Distractor ${index}
+
+**Status:** Active
+- **Owner Agent:** @ARK
+
+This lesser note mentions needle retrieval but has no operational adjacency.
+`,
+    );
+  }
+
+  const dbPath = path.join(repoRoot, ".kb.sqlite");
+  const index = new KnowledgeBaseIndex({ repoRoot, dbPath, env: {} });
+
+  await index.sync();
+  const debug = await index.inspectRetrieval("needle retrieval workflow", 12);
+  const runbook = debug.results.find((result) => result.document.relativePath.endsWith("608.2_Operator_Runbook.md"));
+
+  assert.equal(debug.results[0]?.document.relativePath.endsWith("608.1_Seed_Strategy.md"), true);
+  assert.equal(runbook?.sourceReason, "graph_linked");
+  assert.equal(runbook?.graphDistance, 1);
+  assert.deepEqual(runbook?.linkedFrom, ["000_Company_Memory/600_Projects/608_Graph_Retrieval/608.1_Seed_Strategy.md"]);
+  assert.ok((runbook?.relationshipBoost ?? 0) > 0);
+  assert.equal(runbook?.scores.relationshipBoost, runbook?.relationshipBoost);
+
+  const context = await index.buildPromptContext("needle retrieval workflow");
+  assert.match(context, /## Graph-Expanded Context/);
+  assert.match(context, /608\.2_Operator_Runbook\.md/);
+
+  index.close();
+});
+
+test("graph expansion caps linked documents and tolerates stale references", async () => {
+  const repoRoot = await createTempRepo();
+  const projectRoot = path.join(repoRoot, "000_Company_Memory", "600_Projects", "609_Graph_Cap");
+  await fsp.mkdir(projectRoot, { recursive: true });
+
+  const links = Array.from({ length: 7 }, (_, index) => `- [Linked ${index}](./609.${index + 2}_Linked_${index}.md)`).join("\n");
+  await fsp.writeFile(
+    path.join(projectRoot, "609.1_Cap_Seed.md"),
+    `# Cap Seed
+
+**Status:** Active
+- **Owner Agent:** @ARK
+
+This capseed direct retrieval document points to more adjacent docs than retrieval should include.
+
+${links}
+- [Missing Linked](./609.99_Missing.md)
+`,
+  );
+
+  for (let index = 0; index < 7; index++) {
+    await fsp.writeFile(
+      path.join(projectRoot, `609.${index + 2}_Linked_${index}.md`),
+      `# Linked ${index}
+
+**Status:** Active
+- **Owner Agent:** @ARK
+
+Adjacent document ${index} for graph expansion cap testing.
+`,
+    );
+  }
+  for (let index = 0; index < 10; index++) {
+    await fsp.writeFile(
+      path.join(projectRoot, `609.9_Direct_${index}.md`),
+      `# Capseed Direct ${index}
+
+**Status:** Active
+- **Owner Agent:** @ARK
+
+This capseed direct candidate ensures the prefilter has enough direct matches.
+`,
+    );
+  }
+
+  const dbPath = path.join(repoRoot, ".kb.sqlite");
+  const index = new KnowledgeBaseIndex({ repoRoot, dbPath, env: {} });
+
+  await index.sync();
+  const debug = await index.inspectRetrieval("capseed direct retrieval", 20);
+  const graphLinked = debug.results.filter((result) => result.sourceReason === "graph_linked");
+
+  assert.equal(graphLinked.length, 4);
+  assert.ok(graphLinked.every((result) => result.graphDistance === 1));
+  assert.ok(graphLinked.every((result) => !result.document.relativePath.endsWith("609.99_Missing.md")));
+
+  index.close();
+});
+
+test("graph-linked documents do not outrank much stronger direct matches", async () => {
+  const repoRoot = await createTempRepo();
+  const projectRoot = path.join(repoRoot, "000_Company_Memory", "600_Projects", "610_Graph_Ranking");
+  await fsp.mkdir(projectRoot, { recursive: true });
+
+  await fsp.writeFile(
+    path.join(projectRoot, "610.1_Link_Seed.md"),
+    `# Dominantomega Seed
+
+**Status:** Active
+- **Owner Agent:** @ARK
+
+This seed has one dominantomega mention and points to adjacent context.
+
+Related: [Adjacent Background](./610.2_Adjacent_Background.md)
+`,
+  );
+  await fsp.writeFile(
+    path.join(projectRoot, "610.2_Adjacent_Background.md"),
+    `# Adjacent Background
+
+**Status:** Active
+- **Owner Agent:** @ARK
+
+This linked document is relevant only because the seed references it.
+`,
+  );
+  await fsp.writeFile(
+    path.join(projectRoot, "610.3_Dominantomega_Strategy.md"),
+    `# Dominantomega Strategy
+
+**Status:** Active
+- **Owner Agent:** @Strategy
+
+Dominantomega strategy direct match. Dominantomega strategy direct match.
+Dominantomega strategy direct match. Dominantomega strategy direct match.
+`,
+  );
+
+  const dbPath = path.join(repoRoot, ".kb.sqlite");
+  const index = new KnowledgeBaseIndex({ repoRoot, dbPath, env: {} });
+
+  await index.sync();
+  const debug = await index.inspectRetrieval("dominantomega strategy", 10);
+  const strongDirectIndex = debug.results.findIndex((result) => result.document.relativePath.endsWith("610.3_Dominantomega_Strategy.md"));
+  const linkedIndex = debug.results.findIndex((result) => result.document.relativePath.endsWith("610.2_Adjacent_Background.md"));
+
+  assert.ok(strongDirectIndex >= 0);
+  assert.ok(linkedIndex >= 0);
+  assert.equal(debug.results[linkedIndex]?.sourceReason, "graph_linked");
+  assert.ok(strongDirectIndex < linkedIndex);
+
+  index.close();
+});
+
 test("buildGraphSnapshot returns folder, document, and markdown reference edges", async () => {
   const repoRoot = await createTempRepo();
   const dbPath = path.join(repoRoot, ".kb.sqlite");
