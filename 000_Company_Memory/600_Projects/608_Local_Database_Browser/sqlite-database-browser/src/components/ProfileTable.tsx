@@ -373,14 +373,7 @@ export function ProfileTable({
   };
 
   const handleRowClick = (profile: SigmaProfile, event: ReactMouseEvent<HTMLTableRowElement>) => {
-    // Don't open drawer if user is clicking on a cell button or an active editor
-    const target = event.target as HTMLElement;
-    if (target.closest("input") || target.closest("a")) return;
-    
-    const button = target.closest("button");
-    if (button && !button.classList.contains("spreadsheet-cell")) return;
-    
-    onProfileSelect(profile);
+    // We've moved the drawer opening directly to the gutter click.
   };
 
   const handleGridKeyDown = async (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -761,16 +754,16 @@ export function ProfileTable({
             {profiles.map((profile, rowIndex) => (
               <tr
                 className={cn(
-                  "group/row cursor-pointer transition-colors hover:bg-primary/[0.04]",
+                  "group/row transition-colors hover:bg-primary/[0.04]",
                   rowIndex % 2 === 0 ? "bg-transparent" : "bg-background/40"
                 )}
                 key={profile.id}
-                onClick={(e) => handleRowClick(profile, e)}
               >
-                {/* Row number gutter — click = open drawer, double-click does nothing special */}
+                {/* Row number gutter — click = open drawer */}
                 <td
-                  className="sticky left-0 z-10 bg-background/[0.96] px-2 text-center text-xs font-medium text-muted-foreground group-hover/row:bg-primary/[0.06]"
+                  className="sticky left-0 z-10 bg-background/[0.96] px-2 text-center text-xs font-medium text-muted-foreground group-hover/row:bg-primary/[0.06] cursor-pointer hover:bg-primary/[0.12] transition-colors"
                   style={{ height: rowHeight, minHeight: rowHeight }}
+                  onClick={() => onProfileSelect(profile)}
                 >
                   <span className="flex h-full items-center justify-center tabular-nums">
                     {rowIndex + 1}
@@ -940,17 +933,24 @@ function Cell({
     );
   }
 
-  if (field === "linkedin_url" || field === "company_url") {
+  if (
+    field === "linkedin_url" ||
+    field === "company_url" ||
+    field === "website" ||
+    field === "domain"
+  ) {
     if (!value) return <span className="text-muted-foreground">—</span>;
+    const urlString = String(value);
+    const href = urlString.startsWith("http") ? urlString : `https://${urlString}`;
     return (
       <a
         className="focused-ring inline-flex max-w-full items-center gap-1 rounded-lg text-primary hover:underline"
-        href={String(value)}
+        href={href}
         onClick={(event) => event.stopPropagation()}
         rel="noreferrer"
         target="_blank"
       >
-        <span className="truncate">{String(value).replace(/^https?:\/\//, "")}</span>
+        <span className="truncate">{urlString.replace(/^https?:\/\//, "")}</span>
         <ExternalLink className="h-3.5 w-3.5 shrink-0" />
       </a>
     );

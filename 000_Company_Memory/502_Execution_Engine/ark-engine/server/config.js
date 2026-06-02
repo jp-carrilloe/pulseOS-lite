@@ -6,11 +6,13 @@ const dotenv = require('dotenv');
 const { preparePersistentStorage } = require('./storage');
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
+const workspaceRoot = path.resolve(__dirname, '..', '..', '..', '..', '..');
+
 dotenv.config({
-    path: path.resolve(repoRoot, '.env.local'),
+    path: path.resolve(workspaceRoot, '.env.local'),
 });
 dotenv.config({
-    path: path.resolve(repoRoot, '.env'),
+    path: path.resolve(workspaceRoot, '.env'),
     override: false,
 });
 
@@ -32,6 +34,7 @@ const config = {
     // API Keys
     openaiApiKey: process.env.OPENAI_API_KEY || '',
     apolloApiKey: process.env.APOLLO_API_KEY || '',
+    hunterApiKey: process.env.HUNTER_API_KEY || '',
     leadmagicApiKey: process.env.LEADMAGIC_API_KEY || '',
     attioApiKey: process.env.ATTIO_API_KEY || '',
     perplexityApiKey: process.env.PERPLEXITY_API_KEY || '',
