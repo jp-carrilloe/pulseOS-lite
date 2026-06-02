@@ -71,3 +71,36 @@ export function actionBlock(title: string, lines: string[], variant: Tone = "war
   const body = lines.map((line) => `${tone("→", variant)} ${line}`).join("\n");
   return `${heading}\n${body}`;
 }
+
+/**
+ * Starts a terminal spinner with a status message.
+ * Returns a stop function: call stop() to clear the spinner line.
+ * Call stop(finalLine) to replace the spinner with a final message.
+ */
+export function spinner(text: string): (finalLine?: string) => void {
+  const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+  let i = 0;
+  const isTTY = Boolean(process.stdout?.isTTY);
+
+  if (!isTTY) {
+    process.stdout.write(`${text}\n`);
+    return (finalLine?: string) => {
+      if (finalLine) process.stdout.write(`${finalLine}\n`);
+    };
+  }
+
+  process.stdout.write(`${frames[0]} ${text}`);
+  const timer = setInterval(() => {
+    process.stdout.write(`\r${frames[i % frames.length]} ${text}`);
+    i++;
+  }, 80);
+
+  return (finalLine?: string) => {
+    clearInterval(timer);
+    if (finalLine) {
+      process.stdout.write(`\r${finalLine}\n`);
+    } else {
+      process.stdout.write("\r\x1b[K"); // clear line
+    }
+  };
+}

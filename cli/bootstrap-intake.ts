@@ -36,6 +36,7 @@ export interface IntakeReport {
   localSources: IntakeSource[];
   externalSources: IntakeSource[];
   companyMemorySources: IntakeSource[];
+  companyMemoryScanned: number;
   parsedReferences: ExternalReferenceNote[];
   warnings: string[];
 }
@@ -58,12 +59,16 @@ export async function collectBootstrapIntake(repoRoot: string, companyName: stri
     localSources,
     externalSources,
     companyMemorySources,
+    companyMemoryScanned: companyMemorySources.length + countCompanyMemorySkipped,
     parsedReferences,
     warnings,
   };
 }
 
+let countCompanyMemorySkipped = 0;
+
 async function collectCompanyMemorySources(repoRoot: string, warnings: string[]): Promise<IntakeSource[]> {
+  countCompanyMemorySkipped = 0;
   return collectSupportedFiles(path.join(repoRoot, COMPANY_MEMORY_DIR), "company_memory", warnings, repoRoot);
 }
 
@@ -123,6 +128,7 @@ async function collectSupportedFiles(
         const normalizedText = normalizeText(text);
         if (!normalizedText) continue;
         if (sourceType === "company_memory" && !isUsableCompanyMemoryEvidence(fullPath, normalizedText, repoRoot)) {
+          countCompanyMemorySkipped++;
           continue;
         }
         results.push({

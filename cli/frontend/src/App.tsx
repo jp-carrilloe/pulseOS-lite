@@ -9,6 +9,26 @@ import type { ApiKnowledgeGraphSnapshot, DocumentReadResponse, FileTreeNode, Gra
 
 const REQUIRED_UI_API_VERSION = 1;
 
+// Token injected by daemon into index.html at serve time
+declare global {
+  interface Window {
+    __PULSEOS_TOKEN__?: string;
+    __PULSEOS_REATTACH_PATH__?: string;
+  }
+}
+
+/** If the daemon has injected a token and this URL differs from ?token=<token>, redirect to reattach. */
+function autoReattachIfStale(): boolean {
+  const token = window.__PULSEOS_TOKEN__;
+  const reattachPath = window.__PULSEOS_REATTACH_PATH__ ?? "/ui";
+  if (!token) return false;
+  const current = new URLSearchParams(window.location.search).get("token");
+  if (current === token) return false; // already has the right token
+  // Reattach: navigate to the tokenised URL which sets a fresh cookie
+  window.location.replace(`${reattachPath}?token=${encodeURIComponent(token)}`);
+  return true;
+}
+
 interface OpenDocumentTab {
   path: string;
   document: DocumentReadResponse | null;
@@ -204,6 +224,13 @@ export function App() {
       try {
         capabilities = await api.getUiCapabilities();
       } catch (nextError) {
+        // If the session is stale (401), try auto-reattaching with the injected token
+        const msg = nextError instanceof Error ? nextError.message : "";
+        const isSessionError = msg.toLowerCase().includes("session") || msg.toLowerCase().includes("link") || msg.toLowerCase().includes("unauthorized");
+        if (isSessionError && autoReattachIfStale()) {
+          // Redirect is happening — stop loading so the UI doesn't flash an error
+          return;
+        }
         setCompatibilityError(
           nextError instanceof Error
             ? nextError.message

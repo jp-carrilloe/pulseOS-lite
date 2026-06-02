@@ -117,6 +117,7 @@ ${section("Usage")}
 ${section("Chat Commands")}
   /model auto                  — auto-pick the first configured provider
   /model openai gpt-5.4        — switch provider and model id
+  /auth                        — show auth method per provider + how to change it
   /ui                          — build the browser UI and print the local URL
   /models                      — list configured provider examples
   /reset                       — clear conversation history
@@ -443,6 +444,20 @@ async function runInteractiveChat(
   }
   process.stdout.write("\n");
 
+  // ── Auth method warning ────────────────────────────────────────────────────
+  const activeAuthStatus = await getModelCredentialStatus(selection.provider, env);
+  if (activeAuthStatus.method === "codex_cli_session" || activeAuthStatus.method === "claude_cli_session") {
+    const cliTool = activeAuthStatus.method === "codex_cli_session" ? "Codex" : "Claude";
+    const envVar =
+      activeAuthStatus.method === "codex_cli_session" ? "PULSEOS_OPENAI_AUTH_MODE" : "PULSEOS_CLAUDE_AUTH_MODE";
+    process.stdout.write(
+      `\n${section("Auth Warning")}\n` +
+      `${bullet(`Using ${cliTool} CLI session auth — chat responses may hang if the ${cliTool} subprocess stalls.`, "warning")}\n` +
+      `${bullet(`To switch to direct API key: add ${bold(`${envVar}=api_key`)} to .env.local, then restart chat.`, "muted")}\n` +
+      `${bullet("Or type /auth inside chat to see all auth options and copy-paste instructions.", "muted")}\n`,
+    );
+  }
+
   const sessionId = "main";
 
   const rl = createInterface({
@@ -527,15 +542,24 @@ async function runInteractiveChat(
 
       // send to AI
       process.stdout.write("Thinking...\n");
+      const slowWarningTimer = setTimeout(() => {
+        process.stdout.write(
+          `\n${tone("!", "warning")} Still waiting after 25s — the AI provider may be stuck.\n` +
+          `${dim(`If this keeps happening, type /auth to check your auth method.`)}\n` +
+          `${dim(`CLI session auth (codex/claude) can stall — switching to api_key mode fixes it.`)}\n`,
+        );
+      }, 25_000);
       try {
         const result = await daemonCommand<{ reply: string; model: ModelName; modelId: string; messageCount: number }>(
           state,
           "chat",
           { message: line, model: selection.provider, model_id: selection.modelId, session_id: sessionId },
         );
+        clearTimeout(slowWarningTimer);
         process.stdout.write(`\n${result.reply}\n`);
         process.stdout.write(`\n— ${result.model}:${result.modelId} · ${result.messageCount / 2} exchanges\n`);
       } catch (err) {
+        clearTimeout(slowWarningTimer);
         process.stderr.write(`\nThat request could not be completed.\n${err instanceof Error ? err.message : String(err)}\n`);
       }
     }
@@ -635,6 +659,34 @@ async function handleReplCommand(
       return null;
     }
 
+    case "auth": {
+      const [oa, ca, ga] = await Promise.all([
+        getModelCredentialStatus("openai", env),
+        getModelCredentialStatus("claude", env),
+        getModelCredentialStatus("gemini", env),
+      ]);
+      const authTone = (method: string, ok: boolean) =>
+        !ok ? "danger" : method.includes("cli") ? "warning" : "success";
+      const authLabel = (method: string, ok: boolean) =>
+        !ok ? "unavailable" : method.includes("cli") ? `${method} ${tone("(can hang!)", "warning")}` : method;
+      process.stdout.write(`\n${section("Auth Status")}\n`);
+      process.stdout.write(`${kv("OpenAI", authLabel(oa.method, oa.ok), authTone(oa.method, oa.ok))}\n`);
+      process.stdout.write(`${kv("Claude", authLabel(ca.method, ca.ok), authTone(ca.method, ca.ok))}\n`);
+      process.stdout.write(`${kv("Gemini", authLabel(ga.method, ga.ok), authTone(ga.method, ga.ok))}\n`);
+      process.stdout.write(`\n${section("How to Change Auth")}\n`);
+      process.stdout.write(`${bullet("Add one of these to .env.local, then run: npm run daemon:stop && npm run chat", "info")}\n\n`);
+      process.stdout.write(`  ${bold("OpenAI — API key (recommended)")}\n`);
+      process.stdout.write(`  ${dim("PULSEOS_OPENAI_AUTH_MODE=api_key")}\n\n`);
+      process.stdout.write(`  ${bold("OpenAI — Codex CLI session")}\n`);
+      process.stdout.write(`  ${dim("PULSEOS_OPENAI_AUTH_MODE=codex_cli_session  # run: codex login")}\n\n`);
+      process.stdout.write(`  ${bold("Claude — API key (recommended)")}\n`);
+      process.stdout.write(`  ${dim("PULSEOS_CLAUDE_AUTH_MODE=api_key")}\n\n`);
+      process.stdout.write(`  ${bold("Claude — Claude CLI session")}\n`);
+      process.stdout.write(`  ${dim("PULSEOS_CLAUDE_AUTH_MODE=claude_cli_session  # run: claude auth login")}\n\n`);
+      process.stdout.write(`  ${dim("Leave these unset to let the system auto-detect (api_key preferred over CLI).")}\n`);
+      return null;
+    }
+
     default:
       process.stdout.write(`I don't recognize \`${commandPrefix}${cmd}\`.\nType \`/help\` to see the available chat commands.\n`);
       return null;
@@ -651,7 +703,7 @@ function printWelcome(selection: ChatModelSelection) {
     `directory; ${directory}`,
     "vibe;      caffeinated company memory",
     "workflow;  chat refreshes 000_Company_Memory into the SQL graph/index",
-    "commands;  /help /model /models /files /status /reload /reset /exit",
+    `commands;  /help /auth /model /models /retrieve /files /status /reload /reset /exit`,
     "",
     "☕ made with much coffee by jp-carrilloe",
     "   https://github.com/jp-carrilloe",

@@ -16,9 +16,9 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { generateClaudeText, generateOpenAiText, validateClaudeAccess, validateOpenAiAccess } from "./auth.js";
+import { generateClaudeText, generateOpenAiText, getModelCredentialStatus, validateClaudeAccess, validateOpenAiAccess } from "./auth.js";
 import { buildBootstrapEvidenceBlock, collectBootstrapIntake } from "./bootstrap-intake.js";
-import { actionBlock, bold, bullet, dim, kv, section, tone } from "./terminal-format.js";
+import { actionBlock, bold, bullet, dim, kv, section, spinner, tone } from "./terminal-format.js";
 import { buildUiBundle, ensureUiReady } from "./ui-runtime.js";
 import {
   ensureCliWorkspaceReady,
@@ -309,8 +309,15 @@ async function main() {
       `${bullet("Bootstrap seeds documents in dependency order.")}\n${bullet("It reads raw source material from 001_Data_Souces and checks existing curated docs in 000_Company_Memory.")}\n`,
     );
 
-    // Discover and sort template files
-    process.stdout.write(`\n${section("Template Scan")}\n${bullet("Scanning for unfilled template files...", "info")}\n`);
+    // ── Step 1: Model & Auth Selection ──────────────────────────────────────
+    process.stdout.write(`\n${section("Step 1 — Select Model & Authentication")}\n`);
+    process.stdout.write(`${bullet("Choose which AI provider and authentication method to use for this bootstrap run.", "info")}\n\n`);
+    await showAuthStatus(process.env);
+    const provider = await createBootstrapProvider(rl, process.env);
+    process.stdout.write(`${kv("Provider confirmed", `${provider.name} (${provider.model})`, "success")}\n`);
+
+    // ── Step 2: Discover and sort template files ─────────────────────────────
+    process.stdout.write(`\n${section("Step 2 — Template Scan")}\n${bullet("Scanning for unfilled template files...", "info")}\n`);
     const raw: TemplateFile[] = [];
     await findTemplateFiles(REPO_ROOT, REPO_ROOT, raw);
     const templateFiles = sortByDependencyOrder(raw);
@@ -380,9 +387,32 @@ async function main() {
       process.stdout.write(`${bullet(tone(f.relativePath, "info"))}\n`);
     }
 
-    process.stdout.write(`${kv("Local intake files", String(intakeReport.localSources.length), "success")}\n`);
-    process.stdout.write(`${kv("External reference files", String(intakeReport.externalSources.length), intakeReport.externalSources.length > 0 ? "success" : "muted")}\n`);
-    process.stdout.write(`${kv("Existing Company Memory docs", String(intakeReport.companyMemorySources.length), intakeReport.companyMemorySources.length > 0 ? "success" : "muted")}\n`);
+    process.stdout.write(`\n${section("Sources & Evidence")}\n`);
+    // Company Memory breakdown
+    const memUsable = intakeReport.companyMemorySources.length;
+    const memScanned = intakeReport.companyMemoryScanned;
+    const memSkipped = memScanned - memUsable;
+    process.stdout.write(
+      `${kv("Company Memory", `${memScanned} files scanned`, memScanned > 0 ? "info" : "muted")}\n`,
+    );
+    process.stdout.write(
+      `  ${tone("✓", "success")} ${bold(String(memUsable))} usable as evidence   ${dim(`(${memSkipped} skipped — templates / agent files / READMEs)`)}\n`,
+    );
+    // Raw intake
+    process.stdout.write(
+      `${kv("Local intake files", String(intakeReport.localSources.length), intakeReport.localSources.length > 0 ? "success" : "muted")}\n`,
+    );
+    const refCount = intakeReport.parsedReferences.filter((r) => r.valid).length;
+    process.stdout.write(
+      `${kv("External references", `${intakeReport.externalSources.length} files from ${refCount} reference source(s)`, intakeReport.externalSources.length > 0 ? "success" : "muted")}\n`,
+    );
+    const totalEvidence = memUsable + intakeReport.localSources.length + intakeReport.externalSources.length;
+    process.stdout.write(
+      `${kv("Total evidence pool", `${totalEvidence} sources available to ground generation`, totalEvidence > 0 ? "success" : "warning")}\n`,
+    );
+    process.stdout.write(
+      `  ${dim(`Up to 8 most-relevant sources are selected per document during generation.`)}\n`,
+    );
     if (intakeReport.warnings.length > 0) {
       process.stdout.write(`${actionBlock("Intake warnings", intakeReport.warnings, "warning")}\n`);
     }
@@ -410,9 +440,7 @@ async function main() {
       }
     }
 
-    process.stdout.write(`\n${section("Model Validation")}\n${bullet("Validating available model providers for bootstrap...", "info")}\n`);
-    const provider = await createBootstrapProvider();
-    process.stdout.write(`${kv("Bootstrap model provider", `${provider.name} (${provider.model})`, "success")}\n`);
+
 
     bootstrapStartedAt = new Date().toISOString();
     bootstrapCompanyName = profile.name;
@@ -469,36 +497,49 @@ async function main() {
     for (let i = 0; i < templateFiles.length; i++) {
       const file = templateFiles[i];
       const pct = Math.round(((i + 1) / templateFiles.length) * 100);
-      process.stdout.write(`${dim(`[${i + 1}/${templateFiles.length}] ${pct}%`)} ${tone(file.relativePath, "info")} ... `);
+      const label = `[${i + 1}/${templateFiles.length}] ${pct}%`;
+      const shortName = file.relativePath.split("/").slice(-2).join("/");
+
+      const stopSpinner = spinner(`${dim(label)} ${tone(shortName, "info")}`);
+      const t0 = Date.now();
 
       try {
         const evidenceBlock = buildBootstrapEvidenceBlock(intakeReport, file.relativePath);
         const filled = await fillTemplate(provider, profile, file, generated, evidenceBlock);
         await fsp.writeFile(file.absolutePath, filled, "utf8");
 
-        // Accumulate for subsequent docs
+        const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+        stopSpinner(
+          `${tone("✓", "success")} ${dim(label)} ${tone(shortName, "info")} ${dim(`(${elapsed}s)`)}`,
+        );
         generated.push({ relativePath: file.relativePath, content: filled });
-
-        process.stdout.write(`${tone("done", "success")}\n`);
         succeeded++;
       } catch (err) {
-        process.stdout.write(`${tone("FAILED", "danger")}\n${bullet(err instanceof Error ? err.message : String(err), "danger")}\n`);
-        // Still add original to context so later docs have something to reference
+        const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+        stopSpinner(
+          `${tone("✗", "danger")} ${dim(label)} ${tone(shortName, "danger")} ${dim(`(${elapsed}s)`)}`,
+        );
+        process.stdout.write(`  ${bullet(err instanceof Error ? err.message : String(err), "danger")}\n`);
         generated.push({ relativePath: file.relativePath, content: file.content });
         failed++;
       }
     }
 
     process.stdout.write(`\n${section("Bootstrap Complete")}\n`);
-    process.stdout.write(`${kv("Filled", `${succeeded} files`, "success")}\n`);
-    if (failed > 0) process.stdout.write(`${kv("Failed", `${failed} files (originals preserved)`, "danger")}\n`);
+    process.stdout.write(`${kv("Documents filled", `${succeeded} of ${templateFiles.length}`, succeeded === templateFiles.length ? "success" : "warning")}\n`);
+    if (failed > 0) process.stdout.write(`${kv("Failed", `${failed} (originals preserved on disk)`, "danger")}\n`);
 
-    process.stdout.write(`\n${section("Index Refresh")}\n${bullet("Refreshing Company Memory graph/index from `000_Company_Memory`...", "info")}\n`);
+    process.stdout.write(`\n${section("Index & Embeddings")}\n`);
+    process.stdout.write(
+      `${bullet(`Scanning 000_Company_Memory and building vector index — this may take a moment...`, "info")}\n`,
+    );
+    const stopIndex = spinner("Indexing company memory files and computing embeddings...");
     const indexRefresh = await refreshCompanyMemoryIndex(process.env);
-    process.stdout.write(`${kv("Indexed", `${indexRefresh.fileCount} Company Memory docs (${indexRefresh.charCount.toLocaleString()} chars)`, "success")}\n`);
-    process.stdout.write(`${kv("Embeddings", `${indexRefresh.embeddingModel} [${indexRefresh.embeddingMode}]`, "info")}\n`);
+    stopIndex(
+      `${tone("✓", "success")} Indexed ${bold(String(indexRefresh.fileCount))} files  ${dim(`(${indexRefresh.charCount.toLocaleString()} chars · ${indexRefresh.embeddingModel})`)}`,
+    );
     if (indexRefresh.refreshedViaDaemon) {
-      process.stdout.write(`${kv("Daemon graph cache", "refreshed", "success")}\n`);
+      process.stdout.write(`  ${tone("✓", "success")} Daemon graph cache refreshed\n`);
     }
 
     let uiUrl: string | null = null;
@@ -612,30 +653,166 @@ async function refreshCompanyMemoryIndex(env: NodeJS.ProcessEnv): Promise<Bootst
   }
 }
 
-async function createBootstrapProvider(env: NodeJS.ProcessEnv = process.env): Promise<BootstrapProvider> {
-  const candidates = buildBootstrapProviders(env);
-  const failures: string[] = [];
+async function showAuthStatus(env: NodeJS.ProcessEnv): Promise<void> {
+  process.stdout.write(`${bullet("Checking available credentials...", "info")}\n`);
+  // Probe all providers in parallel using auto mode so we see the full picture
+  const probeEnv = { ...env, PULSEOS_OPENAI_AUTH_MODE: "auto", PULSEOS_CLAUDE_AUTH_MODE: "auto" };
+  const [openai, claude, gemini] = await Promise.all([
+    getModelCredentialStatus("openai", probeEnv).catch(() => ({
+      ok: false,
+      message: "Credential probe failed.",
+      method: "none" as const,
+      keyName: "",
+    })),
+    getModelCredentialStatus("claude", probeEnv).catch(() => ({
+      ok: false,
+      message: "Credential probe failed.",
+      method: "none" as const,
+      keyName: "",
+    })),
+    getModelCredentialStatus("gemini", probeEnv).catch(() => ({
+      ok: false,
+      message: "Credential probe failed.",
+      method: "none" as const,
+      keyName: "",
+    })),
+  ]);
 
-  for (const candidate of candidates) {
-    try {
-      await candidate.validate();
-      return candidate;
-    } catch (error) {
-      failures.push(
-        `${candidate.name} (${candidate.model}): ${error instanceof Error ? error.message : String(error)}`,
-      );
+  const row = (ok: boolean, label: string, msg: string): string =>
+    `  ${ok ? tone("✓", "success") : tone("✗", "muted")}  ${bold(label.padEnd(10))}  ${dim(msg)}\n`;
+
+  process.stdout.write(row(openai.ok, "OpenAI", openai.message));
+  process.stdout.write(row(claude.ok, "Claude", claude.message));
+  process.stdout.write(row(gemini.ok, "Gemini", gemini.message));
+  process.stdout.write("\n");
+}
+
+async function createBootstrapProvider(
+  rl: ReturnType<typeof createInterface>,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<BootstrapProvider> {
+  while (true) {
+    process.stdout.write(`\n${section("Model & Authentication Selection")}\n`);
+    process.stdout.write("Please select your preferred AI model provider for bootstrapping:\n");
+    process.stdout.write(`  ${bold("1")} - OpenAI (default: gpt-5.4)\n`);
+    process.stdout.write(`  ${bold("2")} - Anthropic Claude (default: claude-opus-4-6)\n`);
+    process.stdout.write(`  ${bold("3")} - Google Gemini (default: gemini-2.0-flash)\n`);
+    
+    const providerChoice = (await rl.question(`Select provider [1-3, default: 1]: `)).trim();
+    const providerIndex = providerChoice === "" ? "1" : providerChoice;
+
+    if (providerIndex === "1") {
+      process.stdout.write(`\n${bold("OpenAI Authentication")}\n`);
+      process.stdout.write("Please select your preferred authentication method:\n");
+      process.stdout.write(`  ${bold("1")} - Local signed-in Codex CLI session (via \`codex login\`)\n`);
+      process.stdout.write(`  ${bold("2")} - Direct API Key (via \`OPENAI_API_KEY\`)\n`);
+      
+      const authChoice = (await rl.question(`Select auth [1-2, default: 1]: `)).trim();
+      const authIndex = authChoice === "" ? "1" : authChoice;
+      
+      if (authIndex === "1") {
+        env.PULSEOS_OPENAI_AUTH_MODE = "codex_cli_session";
+      } else if (authIndex === "2") {
+        env.PULSEOS_OPENAI_AUTH_MODE = "api_key";
+      } else {
+        process.stdout.write(`${tone("Invalid choice, starting selection over.", "warning")}\n`);
+        continue;
+      }
+
+      // Rebuild providers and validate
+      const candidates = buildBootstrapProviders(env);
+      const openaiProvider = candidates.find((c) => c.name === "openai");
+      if (!openaiProvider) {
+        process.stdout.write(`${tone("Error building OpenAI provider candidates.", "danger")}\n`);
+        continue;
+      }
+      
+      process.stdout.write(`${bullet(`Validating OpenAI access via ${env.PULSEOS_OPENAI_AUTH_MODE === "api_key" ? "API Key" : "Codex CLI"}...`, "info")}\n`);
+      try {
+        await openaiProvider.validate();
+        return openaiProvider;
+      } catch (error) {
+        process.stdout.write(`\n${tone("OpenAI Validation Failed!", "danger")}\n`);
+        process.stdout.write(`${bullet(error instanceof Error ? error.message : String(error), "danger")}\n`);
+        const retry = await rl.question(`\nWould you like to try another provider/auth method? [y/n] `);
+        if (retry.trim().toLowerCase() === "n") {
+          throw error;
+        }
+        continue;
+      }
+    } else if (providerIndex === "2") {
+      process.stdout.write(`\n${bold("Anthropic Claude Authentication")}\n`);
+      process.stdout.write("Please select your preferred authentication method:\n");
+      process.stdout.write(`  ${bold("1")} - Direct API Key (via \`ANTHROPIC_API_KEY\`)\n`);
+      process.stdout.write(`  ${bold("2")} - Local signed-in Claude CLI session (via \`claude auth login\`)\n`);
+      
+      const authChoice = (await rl.question(`Select auth [1-2, default: 1]: `)).trim();
+      const authIndex = authChoice === "" ? "1" : authChoice;
+      
+      if (authIndex === "1") {
+        env.PULSEOS_CLAUDE_AUTH_MODE = "api_key";
+      } else if (authIndex === "2") {
+        env.PULSEOS_CLAUDE_AUTH_MODE = "claude_cli_session";
+      } else {
+        process.stdout.write(`${tone("Invalid choice, starting selection over.", "warning")}\n`);
+        continue;
+      }
+
+      // Rebuild providers and validate
+      const candidates = buildBootstrapProviders(env);
+      const anthropicProvider = candidates.find((c) => c.name === "anthropic");
+      if (!anthropicProvider) {
+        process.stdout.write(`${tone("Error building Anthropic provider candidates.", "danger")}\n`);
+        continue;
+      }
+      
+      process.stdout.write(`${bullet(`Validating Claude access via ${env.PULSEOS_CLAUDE_AUTH_MODE === "api_key" ? "API Key" : "Claude CLI"}...`, "info")}\n`);
+      try {
+        await anthropicProvider.validate();
+        return anthropicProvider;
+      } catch (error) {
+        process.stdout.write(`\n${tone("Anthropic Validation Failed!", "danger")}\n`);
+        process.stdout.write(`${bullet(error instanceof Error ? error.message : String(error), "danger")}\n`);
+        const retry = await rl.question(`\nWould you like to try another provider/auth method? [y/n] `);
+        if (retry.trim().toLowerCase() === "n") {
+          throw error;
+        }
+        continue;
+      }
+    } else if (providerIndex === "3") {
+      process.stdout.write(`\n${bold("Google Gemini Authentication")}\n`);
+      process.stdout.write(`${bullet("Gemini authentication is direct via API key.", "info")}\n`);
+      
+      // Rebuild providers and validate
+      const candidates = buildBootstrapProviders(env);
+      const geminiProvider = candidates.find((c) => c.name === "gemini");
+      if (!geminiProvider) {
+        process.stdout.write(`${tone("Error building Gemini provider candidates or key is missing. Add GEMINI_API_KEY/GOOGLE_API_KEY.", "danger")}\n`);
+        const retry = await rl.question(`\nWould you like to try another provider/auth method? [y/n] `);
+        if (retry.trim().toLowerCase() === "n") {
+          throw new Error("Gemini API key is not configured.");
+        }
+        continue;
+      }
+      
+      process.stdout.write(`${bullet("Validating Gemini access via API key...", "info")}\n`);
+      try {
+        await geminiProvider.validate();
+        return geminiProvider;
+      } catch (error) {
+        process.stdout.write(`\n${tone("Gemini Validation Failed!", "danger")}\n`);
+        process.stdout.write(`${bullet(error instanceof Error ? error.message : String(error), "danger")}\n`);
+        const retry = await rl.question(`\nWould you like to try another provider/auth method? [y/n] `);
+        if (retry.trim().toLowerCase() === "n") {
+          throw error;
+        }
+        continue;
+      }
+    } else {
+      process.stdout.write(`${tone("Invalid provider choice, please select 1, 2, or 3.", "warning")}\n`);
+      continue;
     }
   }
-
-  throw new Error(
-    [
-      "Bootstrap could not validate any usable model provider.",
-      "Checked providers in this order: OpenAI, Anthropic, Gemini.",
-      "Validation failures:",
-      ...failures.map((failure) => `- ${failure}`),
-      "Run `codex login`, add `OPENAI_API_KEY`, run `claude auth login`, add `ANTHROPIC_API_KEY`, or configure `GEMINI_API_KEY` / `GOOGLE_API_KEY`, then run `npm run bootstrap` again.",
-    ].join("\n"),
-  );
 }
 
 function buildBootstrapProviders(env: NodeJS.ProcessEnv = process.env): BootstrapProvider[] {

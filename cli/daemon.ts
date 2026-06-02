@@ -391,7 +391,7 @@ export function createDaemonApp(options: {
       return ctx.html(renderGraphUnauthorizedPage(), 401);
     }
     resetIdleTimer();
-    return serveGraphIndex(ctx);
+    return serveGraphIndex(ctx, token);
   });
 
   app.get("/ui", (ctx) => {
@@ -401,7 +401,7 @@ export function createDaemonApp(options: {
       return ctx.html(renderGraphUnauthorizedPage(), 401);
     }
     resetIdleTimer();
-    return serveGraphIndex(ctx);
+    return serveGraphIndex(ctx, token);
   });
 
   app.get("/ui/*", async (ctx) => {
@@ -915,9 +915,12 @@ function serializeGraphSessionCookie(token: string): string {
   ].join("; ");
 }
 
-async function serveGraphIndex(ctx: Context) {
+async function serveGraphIndex(ctx: Context, token: string) {
   try {
-    const html = await fsp.readFile(path.join(FRONTEND_DIST, "index.html"), "utf8");
+    let html = await fsp.readFile(path.join(FRONTEND_DIST, "index.html"), "utf8");
+    // Inject the current daemon token so the frontend can auto-reattach on 401
+    const tokenScript = `<script>window.__PULSEOS_TOKEN__=${JSON.stringify(token)};window.__PULSEOS_REATTACH_PATH__=${JSON.stringify("/ui")}</script>`;
+    html = html.replace("</head>", `${tokenScript}</head>`);
     return ctx.html(html);
   } catch {
     return ctx.html(renderGraphBuildMissingPage(), 503);
