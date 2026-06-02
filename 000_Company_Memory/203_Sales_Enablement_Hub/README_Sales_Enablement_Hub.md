@@ -1,9 +1,9 @@
 # 📂 203 Sales Enablement Hub
 
-**Version:** 1.0
-**Last Updated:** 2026-03-09
-**Author/Editor:** @ARK
-**Status:** Template
+**Version:** 1.0  
+**Last Updated:** 2026-03-09  
+**Author/Editor:** @ARK  
+**Status:** Template  
 
 ---
 
@@ -13,7 +13,7 @@ The **Sales Enablement Hub** is the operational domain responsible for bridging 
 ## 203.2. Directory Structure
 
 ### [203.1 Core Pitch Decks](./203.1_Core_Pitch_Decks/)
-- **Purpose:** Master templates for strategic presentations and first-meeting decks.
+- **Purpose:** Customer-facing templates for strategic presentations, first-meeting decks, and discovery conversations.
 - **Owner:** 203_Sales_Enablement_Agent
 
 ### [203.2 Sales Playbooks](./203.2_Sales_Playbooks/)
@@ -40,16 +40,13 @@ The **Sales Enablement Hub** is the operational domain responsible for bridging 
 - **Purpose:** Internal reference library for technical and operational support.
 - **Owner:** 203_Sales_Enablement_Agent
 
-### [203.8 CRM and Revenue Data](./203.8_CRM_and_Revenue_Data/)
-- **Purpose:** Provider-neutral CRM sync model, revenue object definitions, and local SQLite landing-table governance.
-- **Owner:** 203_Sales_Enablement_Agent
-
 ---
 
 ## 🤖 Governance & Agency
 - **Primary Agent:** [203_Sales_Enablement_Agent.md](./203_Sales_Enablement_Agent.md)
 - **Scope:** Full ownership of all revenue execution assets and logic-mapping within this directory.
 - **Alignment:** Directly dependent on Strategy (102) for positioning and Market Intel (201) for persona targets.
+- **Boundary:** Investor teaser and full fundraising decks live in `402_Fundraising/`; pitch decks in this folder are customer-facing sales assets.
 
 ---
 
@@ -57,20 +54,3 @@ The **Sales Enablement Hub** is the operational domain responsible for bridging 
 - **Domain:** Sales Enablement & Revenue Operations
 - **Category:** Middle-Funnel Execution
 - **Priority:** High (Pipeline & Conversion)
-
-## Template Inputs
-- Company Name: [CLIENT_NAME]
-
----
-
-## Related Documents
-- [Standard Document Format](../101_System_Overview/Standard_Document_Format.md)
-
-## Operational Metadata
-- **Owner Agent:** 03_Sales_Enablement_Agent
-- **Upstream Dependencies:**
-  - [System Overview](../101_System_Overview/README_System_Overview.md)
-- **Downstream Dependencies:**
-  - [Execution Engine](../502_Execution_Engine/README_Execution_Engine.md)
-- **Document Role:** Core documentation for 📂 203 Sales Enablement Hub
-- **Update Trigger:** Update when directory structure, folder logic, or category definitions change

@@ -1,14 +1,18 @@
 const express = require('express');
 const router = express.Router();
+const config = require('../config');
 
 /**
- * Basic health check endpoint
+ * Get internal system and integration statuses
  */
-router.get('/api/system/health', (req, res) => {
+router.get('/api/system/status', (req, res) => {
     res.json({
-        status: 'UP',
-        timestamp: new Date().toISOString(),
-        version: '1.0.0',
+        openai: !!config.openaiApiKey,
+        apollo: !!config.apolloApiKey,
+        attio: !!config.attioApiKey,
+        perplexity: !!config.perplexityApiKey,
+        exa: !!config.exaApiKey,
+        clickup: !!config.clickupToken
     });
 });
 

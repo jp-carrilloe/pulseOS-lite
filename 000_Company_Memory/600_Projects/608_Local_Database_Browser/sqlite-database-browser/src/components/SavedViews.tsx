@@ -50,7 +50,7 @@ export function SavedViews({
 
   return (
     <section className="px-3 py-3">
-      <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
         <BookmarkCheck className="h-3 w-3" />
         Saved Views
         <div className="ml-auto flex items-center gap-0.5">
@@ -108,7 +108,7 @@ export function SavedViews({
           onClick={onResetView}
           type="button"
         >
-          <span className="flex-1 text-left truncate text-xs font-semibold">
+          <span className="flex-1 text-left truncate text-[13px] font-semibold">
             {activeViewId === null ? <Check className="inline h-3 w-3 mr-0.5 align-[-1px]" /> : null}
             Default View
           </span>
@@ -142,7 +142,7 @@ export function SavedViews({
               <div className="flex items-center gap-2">
                 {isEditing ? (
                   <input
-                    className="input-shell focused-ring flex-1 rounded-lg px-2 py-1 text-xs text-foreground"
+                    className="input-shell focused-ring flex-1 rounded-lg px-2 py-1.5 text-[13px] text-foreground"
                     onBlur={() => {
                       if (draftName.trim()) onRenameView(view.id, draftName.trim());
                       setEditingId(null);
@@ -166,14 +166,14 @@ export function SavedViews({
                   >
                     <span
                       className={cn(
-                        "truncate text-xs font-semibold",
+                        "truncate text-[13px] font-semibold",
                         isActive ? "text-primary" : "text-foreground"
                       )}
                     >
                       {isActive ? <Check className="inline h-3 w-3 mr-0.5 align-[-1px]" /> : null}
                       {view.name}
                     </span>
-                    <span className="mt-0.5 text-[10px] text-muted-foreground">
+                    <span className="mt-0.5 text-[11px] text-muted-foreground">
                       {view.tableName}
                       {activeFilterCount > 0 ? ` · ${activeFilterCount} filter${activeFilterCount > 1 ? "s" : ""}` : ""}
                       {" · "}

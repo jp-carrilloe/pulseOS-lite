@@ -1,6 +1,7 @@
 import { Check, Database, Plus, Search, SlidersHorizontal, TableProperties, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { registerDatabase } from "../lib/api";
 import type { DatabaseSource, ProfileFilters, Table } from "../lib/types";
 import { cn, formatTableName, sortTablesForDisplay } from "../lib/utils";
 
@@ -59,6 +60,12 @@ export function TableSidebar({
   const hasFacets = Object.keys(facets).length > 0;
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
+  useEffect(() => {
+    customDatabases.forEach((database) => {
+      void registerDatabase(database);
+    });
+  }, [customDatabases]);
+
   // Merge server databases with custom ones
   const allDatabases: DatabaseSource[] = [
     ...databases,
@@ -85,7 +92,7 @@ export function TableSidebar({
     }
   }, [showAddForm]);
 
-  const handleAddDatabase = () => {
+  const handleAddDatabase = async () => {
     const trimmedLabel = addLabel.trim();
     const trimmedPath = addPath.trim();
 
@@ -107,13 +114,18 @@ export function TableSidebar({
     };
 
     const next = [...customDatabases, newDb];
-    setCustomDatabases(next);
-    saveCustomDatabases(next);
-    setAddSuccess(true);
-    setTimeout(() => {
-      setShowAddForm(false);
-      onDatabaseSelect(key);
-    }, 700);
+    try {
+      await registerDatabase(newDb);
+      setCustomDatabases(next);
+      saveCustomDatabases(next);
+      setAddSuccess(true);
+      setTimeout(() => {
+        setShowAddForm(false);
+        onDatabaseSelect(key);
+      }, 700);
+    } catch (error) {
+      setAddError(error instanceof Error ? error.message : "Database registration failed.");
+    }
   };
 
   const removeCustomDatabase = (key: string) => {

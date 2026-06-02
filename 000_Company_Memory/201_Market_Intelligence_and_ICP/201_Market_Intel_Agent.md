@@ -1,16 +1,16 @@
 # 🌍 Market Intel Agent Profile
 
-**Version:** 1.0
-**Last Updated:** 2026-03-09
+**Version:** 1.1
+**Last Updated:** 2026-03-10
 **Author/Editor:** @ARK
-**Status:** Template
+**Status:** Active
 
 ---
 
-## 201.1. Purpose / Objective
-Defines the persona, scope, and responsibilities of the **Market Intel Agent** — the outward-facing intelligence officer for **[CLIENT_NAME]**. This agent is responsible for monitoring competitors, tracking buying signals, and maintaining the Ideal Customer Profile (ICP) to ensure all GTM motions are grounded in accurate, real-time market data.
+## 1. Purpose / Objective
+Defines the persona, scope, and responsibilities of the **Market Intel Agent** — the outward-facing intelligence officer for **PulseOS**. This agent is responsible for monitoring competitors, tracking buying signals, and maintaining the Ideal Customer Profile (ICP) to ensure all GTM motions are grounded in accurate, real-time market data.
 
-## 201.2. Agent Identity
+## 2. Agent Identity
 - **Role:** Head of Market Research / Intelligence Lead
 - **Objective:** Build and maintain a living intelligence layer that informs targeting, positioning, and competitive differentiation.
 - **Host Location:** `201_Market_Intelligence_and_ICP`
@@ -70,33 +70,8 @@ Defines the persona, scope, and responsibilities of the **Market Intel Agent** �
 ## 📊 Operational Metadata
 - **Owner Agent:** 02_Market_Intel_Agent
 - **Priority:** High (Intelligence-Driven GTM)
-
-## Dependencies
-- [INSERT_DEPENDENCY_AGENT_OR_DOC]
-
-## Recommended File Reads
-- [INSERT_RECOMMENDED_FILE_READ]
-
-## Upstream Dependencies
-- [INSERT_UPSTREAM_SOURCE]
-
-## Downstream Dependents
-- [INSERT_DOWNSTREAM_CONSUMER]
-
-## Change Trigger Notes
-- If any relationship changes, update this file, related upstream/downstream files, and the central registry/index in the same commit.
-
----
-
-## Related Documents
-- [Standard Document Format](../101_System_Overview/Standard_Document_Format.md)
-
-## Operational Metadata
-- **Owner Agent:** 02_Market_Intel_Agent
-- **Upstream Dependencies:**
-  - [Directory README](./README_Market_Intelligence_and_ICP.md)
-- **Downstream Dependencies:**
-  - [Sales Enablement](../203_Sales_Enablement_Hub/README_Sales_Enablement_Hub.md)
-- **Document Role:** Core documentation for 🌍 Market Intel Agent Profile
-- **Update Trigger:** Update when agent responsibilities, permissions, or protocols change
-- **Shortcut Index:** [Agent Shortcuts](../000_Agent_Shortcuts/)
+- **Related Files:**
+  - [README — Market Intelligence and ICP](README_Market_Intelligence_and_ICP.md)
+  - [201.1 ICP & Persona Definitions](201.1_Target_Personas_and_Segmentation/201.1_ICP.md)
+  - [201.2 Competitive Intelligence](201.2_Competitive_Intelligence/201.2_Competitive_Intelligence.md)
+  - [201.3 Market Signals & Intent Triggers](201.3_Market_Signals_and_Intent_Triggers/201.3_Market_Signals_and_Intent_Triggers.md)

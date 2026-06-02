@@ -1,14 +1,14 @@
-# 🤖 [CLIENT_NAME] GTM — System Overview & Architecture
+# 🤖 PulseOS GTM — System Overview & Architecture
 
-**Version:** 101.1
-**Last Updated:** 2026-04-14
+**Version:** 1.2
+**Last Updated:** 2026-04-28
 **Author/Editor:** @ARK
-**Status:** Template
+**Status:** Active
 
 ---
 
 ## 🎯 Purpose
-This directory (`101_System_Overview`) serves as the central nervous system for **[CLIENT_NAME]**. It defines the core governance model, agent protocols, and the architectural blueprint for an **Agent Economy Platform** that coordinates specialized execution engines into a unified growth organism.
+This directory (`101_System_Overview`) serves as the central nervous system for **PulseOS**. It defines the core governance model, agent protocols, and the architectural blueprint for the **PulseOS Agent Economy Platform** — an AI-native SaaS infrastructure that allows companies to orchestrate internal and external AI agents, test workflows in simulation, verify agents via trust/certification, and optionally manage a financial float layer.
 
 This repository is organized into a scalable **Hybrid 100s Framework** that separates high-level strategy from autonomous execution.
 
@@ -31,7 +31,7 @@ This repository is organized into a scalable **Hybrid 100s Framework** that sepa
 │           │                             │                   │
 │  ┌────────▼─────────┐      ┌────────────▼────────────┐      │
 │  │ 103 Legal & Ops  │      │ 202 GTM Strategy Engine │      │
-│  │ (Compliance Layer)│      └────────────┬────────────┘      │
+│  │(Compliance Layer)│      └────────────┬────────────┘      │
 │  └──────────────────┘                   │                   │
 │  ┌──────────────────┐      ┌────────────▼────────────┐      │
 │  │ 104 Finance      │      │ 203 Sales Enablement    │      │
@@ -80,13 +80,6 @@ The directory utilizes the **Hybrid 100s Framework**, heavily inspired by a blen
 Every subfolder and file uses a decimal notation linked to its parent directory to ensure absolute referencing.
 *   *Correct:* `102.1_Mission_and_Vision.md` inside `102_Corporate_Strategy_and_Foundation`.
 
-### Relationship Update Rule (Mandatory)
-When any agent-to-agent or agent-to-file relationship changes, all linked documentation must be updated in the same commit.
-*   Update the source agent file and all directly affected upstream/downstream agent files.
-*   Update dependency lists and recommended file reads for each affected agent.
-*   Update the central registry/agent index in `501_Agents_and_Workflows`.
-*   Do not leave one-sided references; relationship changes must be bidirectional and auditable.
-
 ---
 
 ## 📊 Directory Index & Capabilities
@@ -94,20 +87,20 @@ When any agent-to-agent or agent-to-file relationship changes, all linked docume
 | Folder | Name | Role | Owner Agent |
 |:-------|:-----|:-----|:------------|
 | **101** | [System Overview](./) | Control Layer | @ARK |
-| **102** | [Corporate Strategy & Foundation](../102_Corporate_Strategy_and_Foundation) | Foundation (Strategy Spine) | @Strategy |
-| **103** | [Corporate Operations](../103_Corporate_Operations) | Operational Backbone | @Operations |
-| **104** | [Finance & Financial Planning](../104_Finance_and_Financial_Planning) | Economy (Fund Handling) | @Finance |
-| **105** | [Technical Infrastructure & Security](../105_Technical_Infrastructure_and_Security) | Risk Ops Layer | @Infrastructure |
-| **106** | [Legal & Compliance](../106_Legal_and_Compliance) | Compliance Layer | @Legal |
-| **201** | [Market Intelligence & ICP](../201_Market_Intelligence_and_ICP) | Intelligence (Dossiers) | @MarketIntel |
-| **202** | [Go-to-Market Strategy](../202_Go-to-Market_Strategy) | GTM Strategy Engine | @GTM |
-| **203** | [Sales Enablement Hub](../203_Sales_Enablement_Hub) | Execution Prep (Sequencing) | @Sales |
-| **301** | [Client Delivery & Onboarding](../301_Client_Delivery_and_Onboarding) | Delivery Layer | @Delivery |
-| **302** | [Analytics & Performance Intelligence](../302_Analytics_and_Performance_Intelligence) | Insights (Analytics) | @Analytics |
-| **401** | [Strategic Partnerships](../401_Strategic_Partnerships) | Expansion (Partnerships) | @Partnerships |
-| **402** | [Fundraising](../402_Fundraising) | Expansion (Cap Raise) | @Fundraising |
-| **501** | [Agents & Workflows](../501_Agents_and_Workflows) | Registry & Protocols | @ARK |
-| **502** | [Execution Engine](../502_Execution_Engine) | Autonomous Execution + Agent Hub | @AUTONOMOUS |
+| **102** | [Corporate Strategy & Foundation](../102_Corporate_Strategy_and_Foundation) | Foundation (Strategy Spine) | 01_Strategy_Agent |
+| **103** | [Corporate Operations](../103_Corporate_Operations) | Operational Backbone | 103_Operations_Agent |
+| **104** | [Finance & Financial Planning](../104_Finance_and_Financial_Planning) | Economy (Fund Handling) | @ARK |
+| **105** | [Technical Infrastructure & Security](../105_Technical_Infrastructure_and_Security) | Risk Ops Layer | 08_Infrastructure_Agent |
+| **106** | [Legal & Compliance](../106_Legal_and_Compliance) | Compliance Layer | 106_Legal_Agent |
+| **201** | [Market Intelligence & ICP](../201_Market_Intelligence_and_ICP) | Intelligence (Dossiers) | 02_Market_Intel_Agent |
+| **202** | [Go-to-Market Strategy](../202_Go-to-Market_Strategy) | GTM Strategy Engine | 01_Strategy_Agent |
+| **203** | [Sales Enablement Hub](../203_Sales_Enablement_Hub) | Execution Prep (Sequencing) | 03_Sales_Enablement_Agent |
+| **301** | [Client Delivery & Onboarding](../301_Client_Delivery_and_Onboarding) | Delivery Layer | 05_Delivery_Agent |
+| **302** | [Analytics & Performance Intelligence](../302_Analytics_and_Performance_Intelligence) | Insights (Analytics) | 07_Analytics_Agent |
+| **401** | [Strategic Partnerships](../401_Strategic_Partnerships) | Expansion (Partnerships) | 06_Partnership_Agent |
+| **402** | [Fundraising](../402_Fundraising) | Expansion (Cap Raise) | 11_Fundraising_Agent |
+| **501** | [Agents & Workflows](../501_Agents_and_Workflows) | Orchestration (Protocols) | @ARK |
+| **502** | [Execution Engine](../502_Execution_Engine) | Autonomous Execution | @AUTONOMOUS |
 
 ---
 
@@ -115,80 +108,68 @@ When any agent-to-agent or agent-to-file relationship changes, all linked docume
 
 Strategic coherence is enforced through a mandatory sequential planning process. Never build collateral (203) before the Strategy Spine (102) and Intel Dossiers (201) are approved.
 
-1.  **[102_Corporate_Strategy](../102_Corporate_Strategy_and_Foundation):** Define **[CLIENT_NAME]'s** identity, mission, and Portfolio Engine.
-2.  **[201_Market_Intel](../201_Market_Intelligence_and_ICP):** Build Intelligence Dossiers on target evidence, signals, and ICP.
-3.  **[202_GTM_Strategy](../202_Go-to-Market_Strategy):** Design positioning and channel motions (The GTM Spine).
+1.  **[102_Corporate_Strategy](../102_Corporate_Strategy_and_Foundation):** Define **PulseOS's** identity, mission, and platform value proposition (orchestration + simulation + trust + optional float).
+2.  **[201_Market_Intel](../201_Market_Intelligence_and_ICP):** Build Intelligence Dossiers on target evidence, signals, and ICP (AI-first enterprise companies and AI providers as distribution partners).
+3.  **[202_GTM_Strategy](../202_Go-to-Market_Strategy):** Design positioning and channel motions — simulation-first adoption, AI provider partnerships (The GTM Spine).
 4.  **[203_Sales_Enablement](../203_Sales_Enablement_Hub):** Build high-conversion assets and internal agent logic.
 5.  **[501/502_Execution](../502_Execution_Engine):** Deploy high-velocity autonomous workflows.
 
-**Shortcut:** Run `cd cli && npm run bootstrap` to execute this sequence automatically. Bootstrap now asks only for the company name, then uses source material from `001_Data_Souces` to fill every template document in the order above, with each document grounded in intake evidence and the output of all prior generated documents.
+---
+
+## 🤖 Agent System
+
+The system is orchestrated by **@ARK**.
+
+*   **@ARK (Master Orchestrator):** Chief of Staff; routes requests, enforces Strategic Coherence, and monitors agent reputation scores.
+*   **Specialized Agents:** Domain specialists (e.g., 01_Strategy_Agent, 02_Market_Intel_Agent) who own specific folders and work within the infrastructure.
+*   **Autonomous Loops:** Designed for scale, moving from sandbox simulations (GTM Discovery) to live execution (Delivery).
+
+---
+---
+
+## 🧩 Platform Core Pillars (from Init Docs)
+
+PulseOS's platform is built on four integrated layers. Every module in this repository maps to one or more of these pillars:
+
+- **Orchestration Engine (PulseOS SaaS Control Plane)** — Internal/external agent coordination, task decomposition, asynchronous event-driven execution, UI, and context memory (vector DB + structured data). PulseOS owns company understanding and governance here.
+- **Hybrid Secure Runtime (Customer Private VPC Runner)** — The execution layer deployed inside the customer's cloud account. It handles sensitive job execution, connects to internal APIs and customer-managed secrets, and eliminates enterprise data exfiltration risk. The customer runner owns sensitive execution.
+- **Simulation Layer** — Sandboxed risk-free testing of workflows and financial implications before live execution. Scenario modeling, ROI prediction, and feedback loops.
+- **Trust & Certification** — KYC/AML onboarding, agent security assessment, performance scoring, and auditability for certified agent interactions.
+- **Financial Infrastructure / Float (Optional)** — Escrow microservice, ledger and audit trails, and optional yield generation from idle funds. Premium enterprise feature.
+
+## 🕸️ Canonical Graph Model
+
+PulseOS's machine-readable company layer should be described consistently across the repository as a **Company Intelligence Graph** composed of two complementary graphs:
+
+- **Company Memory Graph** — the durable record of what has happened in the company across documents, decisions, workflows, provenance, and accumulated operating history.
+- **Company Reality Graph** — the live representation of what is true in the company right now across active workflows, ownership, constraints, approvals, and current system state.
+- **Governed Runtime (Private VPC)** — the execution boundary that ensures agents operate under strict policy within the customer's infrastructure, resolving secrets locally and never exposing internal APIs to the public internet.
+
+Together, these graphs and the private runtime let PulseOS reason over historical continuity, current operational reality, and execute safely without data exfiltration risk.
+
+## 💰 Revenue Model Summary
+
+- Subscriptions — Platform access and orchestration
+- Assurance/Risk Fees — Verified execution and certified agent interactions
+- Float Yield (Optional) — Revenue from managed idle funds (enterprise tier)
+
+## 🎯 Strategic Differentiators
+
+- Simulation-first adoption: clients prove value before committing to live execution
+- Trust moat: certified agent ecosystem creates switching costs
+- Optional float: continuous revenue independent of transaction volume
+- Data flywheel: aggregated agent interaction data optimizes routing and risk scoring
+
+*Powered by the PulseOS Agent Economy Platform — Orchestrate, Simulate, Certify, Scale.*
 
 ---
 
-## 🖥️ CLI Ops Daemon
-
-The [`cli/`](../cli/) directory is a local AI daemon that connects this repo to OpenAI, Claude, and Gemini. It indexes all `.md` files on startup and provides an interactive REPL for natural-language querying and editing.
-
-**Quick start:**
-```bash
-cd cli
-npm install              # first time only
-npm run bootstrap        # seed all templates from 001_Data_Souces (one run)
-npm run chat             # interactive REPL (starts daemon automatically)
-```
-
-**Architecture:**
-```
-cli/
-  index.ts      — REPL entry + daemon lifecycle
-  daemon.ts     — Hono HTTP server, AI provider routing, session store
-  shared.ts     — state file, IPC helpers, health probing
-  bootstrap.ts  — company-name prompt + source-driven intake → AI fills all template docs in order
-```
-
-- Daemon runs detached in the background; persists across terminal sessions (1hr idle timeout)
-- OpenAI is the default chat model; Claude and Gemini remain available via `:model`
-- Bootstrap respects the planning sequence above: 102.x → 103.x → 104-106.x → 201.x → 202.x → 203.x → 301.x+
-
----
-
-## 🤖 Agent Economy & "Double Link" System
-Strategic clarity is enforced through specialized agents. We use a **Double Link** architecture to balance local autonomy with central orchestration.
-
-### The Two-Layer Model
-1.  **Domain Hubs:** Every domain folder (100s–400s) contains a canonical agent definition.
-2.  **Agent Shortcuts:** `000_Agent_Shortcuts/` contains symlinks to canonical domain agents for rapid task-scoped access.
-3.  **Execution Tooling:** `502_Execution_Engine/` contains daemon and integration scaffolding, not private task-agent prompts.
-
-### Canonical Access Points
-- **@ARK (Master Orchestrator):** Chief of Staff; routes requests and enforces Strategic Coherence.
-- **Local AGENT.md:** Every domain has an `AGENT.md` symlink for local context loading.
-- **Priority Links:** `000_Agent_Shortcuts` symlinks (e.g., `102_Strategy.md`) for instant terminal reference.
-
----
-
-## ⚡ 100x Methodology
-This system is built for **100s Strategy** met with **High-Velocity Execution**.
-
-- **Boil the Lake:** We don't ship shells; we ship complete, audited documents.
-- **Search Before Building:** Validate against established patterns in the 100s framework.
-- **Multi-Model Prompting:** Use `:model` in the CLI to route logic vs. strategy to the optimal AI.
-
-Refer to [HOW_TO_PROMPT.md](../HOW_TO_PROMPT.md) for execution details.
-
----
-*Powered by [CORE_CATEGORY_DEFINITION] — Strategic Clarity at Scale.*
-
----
-
-## Related Documents
-- [Standard Document Format](Standard_Document_Format.md)
-
-## Operational Metadata
+## 📊 Operational Metadata
 - **Owner Agent:** @ARK
-- **Upstream Dependencies:**
-  - [Primary README](../README.md)
-- **Downstream Dependencies:**
-  - TBD — Based on implementation requirements
-- **Document Role:** Core documentation for System Overview & Architecture
-- **Update Trigger:** Update when directory structure, folder logic, or category definitions change
+- **Upstream Dependencies:** None — this is the governance root of the repository
+- **Downstream Dependents:** All folders (101–502) — this document defines the structural and governance rules every folder must conform to
+- **Related Files:**
+  - [ARK Master Orchestrator](Ark_Master_Agent/ARK_Master_Orchestrator.md)
+  - [Standard Document Format](Standard_Document_Format.md)
+  - [102 Corporate Strategy & Foundation](../102_Corporate_Strategy_and_Foundation/README_Corporate_Strategy_and_Foundation.md)
+  - [201 Market Intelligence & ICP](../201_Market_Intelligence_and_ICP/README_Market_Intelligence_and_ICP.md)

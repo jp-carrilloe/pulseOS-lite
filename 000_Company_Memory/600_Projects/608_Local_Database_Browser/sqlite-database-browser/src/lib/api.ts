@@ -127,6 +127,43 @@ export async function fetchTables(databaseKey: string = "crm"): Promise<Table[]>
   }
 }
 
+export async function registerDatabase(params: {
+  key: string;
+  label: string;
+  path: string;
+  description?: string;
+}): Promise<DatabaseSource> {
+  const response = await fetch(`${API_URL}/api/databases`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      key: params.key,
+      label: params.label,
+      path: params.path,
+      description: params.description || "Custom database"
+    })
+  });
+
+  if (!response.ok && response.status !== 409) {
+    throw new Error(`Database registration failed: ${response.status}`);
+  }
+
+  if (response.status === 409) {
+    return {
+      key: params.key,
+      label: params.label,
+      path: params.path,
+      description: params.description || "Custom database",
+      exists: true,
+      tableCount: 0
+    };
+  }
+
+  return response.json();
+}
+
 export async function fetchProfiles(params: {
   query: string;
   filters: ProfileFilters;

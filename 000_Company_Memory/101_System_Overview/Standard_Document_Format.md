@@ -1,6 +1,6 @@
-# 📄 [COMPANY_NAME] GTM - Standard Document Format
+# 📄 PulseOS GTM - Standard Document Format
 
-This document defines the mandatory structure and formatting standards for all Markdown (`.md`) files within the [COMPANY_NAME] GTM repository. **@ARK** and all Sub-Agents must strictly adhere to this format to ensure consistency, readability, and efficient parsing.
+This document defines the mandatory structure and formatting standards for all Markdown (`.md`) files within the PulseOS GTM repository. **@ARK** and all Sub-Agents must strictly adhere to this format to ensure consistency, readability, and efficient parsing.
 
 ---
 
@@ -11,9 +11,9 @@ Every document must begin with the following metadata block. This ensures versio
 ```markdown
 # [Document Title]
 
-**Version:** [X.Y] (e.g., 1.0)
+**Version:** [X.Y] (e.g., 1.0)  
 **Last Updated:** 2026-03-09
-**Author/Editor:** [Agent Name] (e.g., @ARK, 01_Strategy_Agent)
+**Author/Editor:** [Agent Name] (e.g., @ARK, 01_Strategy_Agent)  
 **Status:** Template
 
 ---
@@ -48,7 +48,7 @@ Following the header, documents should organize content into these core sections
 
 1.  **Dates:** ISO 8601 Format (`YYYY-MM-DD`).
 2.  **Links:** Relative paths are preferred over absolute paths.
-    *   *Good:* `[Strategy](../102_Corporate_Strategy_and_Foundation/strategy.md)`
+    *   *Good:* `[Strategy](../01_Corporate_Strategy_and_Foundation/strategy.md)`
     *   *Bad:* `[USER_HOME]/...`
 3.  **Lists:** Use hyphens (`-`) for unordered lists and numbers (`1.`) for ordered lists.
 4.  **Bullet Points over Tables:** **Strictly prefer bullet points and sub-bullet points over table formats.** Tables can be difficult to read and parse; bulleted lists provide better clarity and visual flow.
@@ -59,11 +59,11 @@ Following the header, documents should organize content into these core sections
 ## 5. Example Template
 
 ```markdown
-# [COMPANY_NAME] Master Sales Script
+# PulseOS Master Sales Script
 
-**Version:** 1.2
+**Version:** 1.2  
 **Last Updated:** 2026-03-09
-**Author/Editor:** 03_Sales_Enablement_Agent
+**Author/Editor:** 03_Sales_Enablement_Agent  
 **Status:** Template
 
 ---
@@ -78,17 +78,3 @@ To provide a standardized script for the initial discovery call with prospective
 ## Related Files
 *   [Objection Handling](objections.md)
 ```
-
----
-
-## Related Documents
-- [Standard Document Format](Standard_Document_Format.md)
-
-## Operational Metadata
-- **Owner Agent:** @ARK
-- **Upstream Dependencies:**
-  - [Directory README](./README_Document_Governance.md)
-- **Downstream Dependencies:**
-  - TBD — Based on implementation requirements
-- **Document Role:** Core documentation for 📄 [COMPANY_NAME] GTM - Standard Document Format
-- **Update Trigger:** Update when the standard format, required components, or boilerplate content changes

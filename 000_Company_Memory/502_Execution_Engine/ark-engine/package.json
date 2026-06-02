@@ -5,7 +5,9 @@
     "main": "server/index.js",
     "scripts": {
         "dev": "node server/index.js",
-        "start": "node server/index.js"
+        "start": "node server/index.js",
+        "prospecting": "node tools/run_prospecting.js",
+        "prospecting:priority": "node tools/run_prospecting.js --profile priority_scaleups"
     },
     "dependencies": {
         "better-sqlite3": "^11.7.0",

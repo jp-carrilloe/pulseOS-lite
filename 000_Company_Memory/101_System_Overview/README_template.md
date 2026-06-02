@@ -1,15 +1,15 @@
-# [CLIENT_NAME] — GTM Operating System
+# PulseOS — GTM Operating System
 
-**Version:** 101.0
+**Version:** 101.1
 **Last Updated:** 2026-03-09
 **Author/Editor:** @ARK
-**Status:** Template
+**Status:** Active
 
 ---
 
 ## 🎯 Purpose
 
-This repository is the complete **[CORE_CATEGORY_DEFINITION]** for **[CLIENT_NAME]**. It is organized into a scalable **Hybrid 100s Framework** that separates high-level strategy from autonomous execution:
+This repository is the complete **Agent Economy Platform GTM Operating System** for **PulseOS**. It is organized into a scalable **Hybrid 100s Framework** that separates high-level strategy from autonomous execution:
 
 - **100s Foundation:** The "Spine." Corporate strategy, legal, finance, and technical risk infrastructure.
 - **200s Discovery & GTM:** The "Intelligence." Market dossiers, ICP definition, and sales enablement assets.
@@ -62,28 +62,6 @@ This repository is the complete **[CORE_CATEGORY_DEFINITION]** for **[CLIENT_NAM
 
 ## 🚀 How to Use This Repository
 
-### First time: seed all documents in one run
-
-```bash
-cd cli
-npm install
-npm run bootstrap
-```
-
-Bootstrap asks only for the company name, then reads source material from `001_Data_Souces` and fills every template document in dependency order — foundation docs first, each subsequent document grounded in intake evidence and what was generated before it. Safe to re-run.
-
-### Talk to the repo
-
-```bash
-cd cli && npm run chat                   # OpenAI (default)
-npm run chat -- --model claude          # Claude
-npm run chat -- --model gemini          # Gemini Flash
-```
-
-The daemon indexes all `.md` files and maintains conversation history. Switch models mid-session with `:model <name>`. Type `:reload` after editing files to refresh context.
-
-### Manual workflow (without CLI)
-
 1. **Strategic Discovery (100s/200s):** Work through Corporate Strategy (102) and Market Intel (201) to establish the "Strategic Spine."
 2. **Asset Creation (200s):** Configure Sales Enablement (203) with the intelligence dossiers from 201.
 3. **Autonomous Activation (500s):** Deploy the Execution Engine (502) using the system prompts and agent protocols defined in 501.
@@ -111,18 +89,4 @@ The daemon indexes all `.md` files and maintains conversation history. Switch mo
 | **502** | Execution Engine | Execution | @AUTONOMOUS |
 
 ---
-*Powered by [CORE_CATEGORY_DEFINITION] — Strategic Clarity at Scale.*
-
----
-
-## Related Documents
-- [Standard Document Format](Standard_Document_Format.md)
-
-## Operational Metadata
-- **Owner Agent:** @ARK
-- **Upstream Dependencies:**
-  - [Primary README](../README.md)
-- **Downstream Dependencies:**
-  - TBD — Based on implementation requirements
-- **Document Role:** Core documentation for GTM Operating System
-- **Update Trigger:** Update when directory structure, folder logic, or category definitions change
+*Powered by the PulseOS Agent Economy Platform — Orchestrate, Simulate, Certify, Scale.*

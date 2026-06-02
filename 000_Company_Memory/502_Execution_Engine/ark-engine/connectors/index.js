@@ -1,6 +1,10 @@
-const BaseConnector = require('./BaseConnector');
-
+/**
+ * Connector barrel export — central access to all external service connectors.
+ */
 module.exports = {
-    BaseConnector,
-    // Export additional connectors here
+    openai: require('./openai'),
+    apollo: require('./apollo'),
+    attio: require('./attio'),
+    perplexity: require('./perplexity'),
+    exa: require('./exa'),
 };

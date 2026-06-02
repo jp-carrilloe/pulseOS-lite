@@ -1,16 +1,16 @@
 # 🛡️ Infrastructure Agent Profile
 
-**Version:** 1.0
-**Last Updated:** 2026-03-09
-**Author/Editor:** @ARK
-**Status:** Template
+**Version:** 1.0  
+**Last Updated:** 2026-03-09  
+**Author/Editor:** @ARK  
+**Status:** Template  
 
 ---
 
-## 105.1. Purpose / Objective
+## 201.1. Purpose / Objective
 Defines the persona, scope, and responsibilities of the **Infrastructure Agent** — the technical architect of **[CLIENT_NAME]**. This agent is responsible for building, documenting, and securing the technical systems that provide the foundation for client delivery and autonomous execution.
 
-## 105.2. Agent Identity
+## 201.2. Agent Identity
 - **Role:** CTO / Technical Architect / Infrastructure Lead
 - **Objective:** Maintain a robust, secure, and well-documented technical environment including system architecture, compliance frameworks, and API standards.
 - **Host Location:** `105_Technical_Infrastructure_and_Security`
@@ -70,33 +70,3 @@ Defines the persona, scope, and responsibilities of the **Infrastructure Agent**
 ## 📊 Operational Metadata
 - **Owner Agent:** 08_Infrastructure_Agent
 - **Priority:** High (Foundation & Security)
-
-## Dependencies
-- [INSERT_DEPENDENCY_AGENT_OR_DOC]
-
-## Recommended File Reads
-- [INSERT_RECOMMENDED_FILE_READ]
-
-## Upstream Dependencies
-- [INSERT_UPSTREAM_SOURCE]
-
-## Downstream Dependents
-- [INSERT_DOWNSTREAM_CONSUMER]
-
-## Change Trigger Notes
-- If any relationship changes, update this file, related upstream/downstream files, and the central registry/index in the same commit.
-
----
-
-## Related Documents
-- [Standard Document Format](../101_System_Overview/Standard_Document_Format.md)
-
-## Operational Metadata
-- **Owner Agent:** 08_Infrastructure_Agent
-- **Upstream Dependencies:**
-  - [Directory README](./README_Technical_Infrastructure_and_Security.md)
-- **Downstream Dependencies:**
-  - TBD — Based on implementation requirements
-- **Document Role:** Core documentation for 🛡️ Infrastructure Agent Profile
-- **Update Trigger:** Update when agent responsibilities, permissions, or protocols change
-- **Shortcut Index:** [Agent Shortcuts](../000_Agent_Shortcuts/)

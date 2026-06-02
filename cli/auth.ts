@@ -49,12 +49,26 @@ function defaultExecRunner(
   command: string,
   args: string[],
   options?: { env?: NodeJS.ProcessEnv; cwd?: string; timeoutMs?: number },
-) {
-  return execFileAsync(command, args, {
-    env: options?.env ?? process.env,
-    cwd: options?.cwd,
-    timeout: options?.timeoutMs,
-    maxBuffer: 8 * 1024 * 1024,
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = execFile(
+      command,
+      args,
+      {
+        env: options?.env ?? process.env,
+        cwd: options?.cwd,
+        timeout: options?.timeoutMs,
+        maxBuffer: 8 * 1024 * 1024,
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve({ stdout, stderr });
+        }
+      },
+    );
+    child.stdin?.end();
   });
 }
 

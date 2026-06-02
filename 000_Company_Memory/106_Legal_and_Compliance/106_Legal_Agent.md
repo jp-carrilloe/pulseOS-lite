@@ -85,33 +85,6 @@ Defines the persona, scope, and responsibilities of the **Legal Agent** — the 
 - **Partnerships Layer:** `401_Strategic_Partnerships` (agreement review)
 - **Fundraising Layer:** `402_Fundraising` (investor terms and due diligence)
 
-
-## Dependencies
-- [INSERT_DEPENDENCY_AGENT_OR_DOC]
-
-## Recommended File Reads
-- [INSERT_RECOMMENDED_FILE_READ]
-
-## Upstream Dependencies
-- [INSERT_UPSTREAM_SOURCE]
-
-## Downstream Dependents
-- [INSERT_DOWNSTREAM_CONSUMER]
-
-## Change Trigger Notes
-- If any relationship changes, update this file, related upstream/downstream files, and the central registry/index in the same commit.
-
----
-
-## Related Documents
-- [Standard Document Format](../101_System_Overview/Standard_Document_Format.md)
-
 ## Operational Metadata
 - **Owner Agent:** 106_Legal_Agent
-- **Upstream Dependencies:**
-  - [Directory README](./README_Legal_and_Compliance.md)
-- **Downstream Dependencies:**
-  - TBD — Based on implementation requirements
-- **Document Role:** Core documentation for Legal Agent Profile
-- **Update Trigger:** Update when agent responsibilities, permissions, or protocols change
-- **Shortcut Index:** [Agent Shortcuts](../000_Agent_Shortcuts/)
+- **Priority:** Critical (Risk and Compliance)

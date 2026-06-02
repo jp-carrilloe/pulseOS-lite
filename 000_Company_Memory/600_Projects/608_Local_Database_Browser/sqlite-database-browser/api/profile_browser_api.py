@@ -33,6 +33,20 @@ DATABASES: dict[str, dict[str, Any]] = {
             Path.home() / ".pulseos" / "research-agent" / "databases" / "research_agent.db",
         ),
     },
+    "tintto_investors": {
+        "label": "Tintto Investors",
+        "description": "Tintto fundraising investor CRM",
+        "path": resolve_path(
+            "PULSEOS_DB_BROWSER_TINTTO_INVESTORS_DB_PATH",
+            Path.home()
+            / "DevProjects"
+            / "tintto - GTM Sales"
+            / "11_Fundraising"
+            / "11.3_Investor_CRM"
+            / "data"
+            / "tintto_investors.db",
+        ),
+    },
 }
 
 # Runtime-registered custom databases (persists for the lifetime of the server process)
@@ -53,9 +67,10 @@ def quote_identifier(identifier: str) -> str:
 
 
 def get_database_config(database: str) -> dict[str, Any]:
-    if database not in DATABASES:
+    all_databases = {**DATABASES, **CUSTOM_DATABASES}
+    if database not in all_databases:
         raise HTTPException(status_code=404, detail=f'Database "{database}" is not configured')
-    return DATABASES[database]
+    return all_databases[database]
 
 
 def get_db(database: str) -> sqlite3.Connection:
@@ -70,14 +85,21 @@ def get_db(database: str) -> sqlite3.Connection:
 
 def table_exists(conn: sqlite3.Connection, table: str) -> bool:
     return conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name=?",
         (table,),
     ).fetchone() is not None
 
 
 def list_table_names(conn: sqlite3.Connection) -> list[str]:
     rows = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'v_%' ORDER BY name"
+        """
+        SELECT name
+        FROM sqlite_master
+        WHERE type IN ('table', 'view')
+          AND name NOT LIKE 'sqlite_%'
+          AND name NOT LIKE 'v_%'
+        ORDER BY type, name
+        """
     ).fetchall()
     return [row["name"] for row in rows]
 
@@ -239,7 +261,12 @@ def list_databases() -> list[dict[str, Any]]:
             try:
                 with sqlite3.connect(db_path) as conn:
                     source["tableCount"] = conn.execute(
-                        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                        """
+                        SELECT COUNT(*)
+                        FROM sqlite_master
+                        WHERE type IN ('table', 'view')
+                          AND name NOT LIKE 'sqlite_%'
+                        """
                     ).fetchone()[0]
             except sqlite3.Error:
                 source["tableCount"] = 0
@@ -277,13 +304,28 @@ def register_database(payload: RegisterDatabaseRequest) -> dict[str, Any]:
         "description": payload.description,
         "path": db_path,
     }
+    table_count = 0
+    if db_path.exists():
+        try:
+            with sqlite3.connect(db_path) as conn:
+                table_count = conn.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM sqlite_master
+                    WHERE type IN ('table', 'view')
+                      AND name NOT LIKE 'sqlite_%'
+                    """
+                ).fetchone()[0]
+        except sqlite3.Error:
+            table_count = 0
+
     return {
         "key": payload.key,
         "label": payload.label,
         "description": payload.description,
         "path": str(db_path),
         "exists": db_path.exists(),
-        "tableCount": 0,
+        "tableCount": table_count,
     }
 
 

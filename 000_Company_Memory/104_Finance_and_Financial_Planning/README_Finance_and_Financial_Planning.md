@@ -1,9 +1,9 @@
 # 104. Finance & Financial Planning
 
-**Version:** 1.0
-**Last Updated:** 2026-03-09
-**Author/Editor:** @ARK
-**Status:** Template
+**Version:** 1.0  
+**Last Updated:** 2026-03-09  
+**Author/Editor:** @ARK  
+**Status:** Template  
 
 ---
 
@@ -23,20 +23,3 @@ Contains standard Profit & Loss statement templates, historic tracking models, a
 
 ---
 *Note: Ensure all sensitive financial documents conform to the company's data privacy and security policies before sharing.*
-
-## Template Inputs
-- Company Name: [CLIENT_NAME]
-
----
-
-## Related Documents
-- [Standard Document Format](../101_System_Overview/Standard_Document_Format.md)
-
-## Operational Metadata
-- **Owner Agent:** 104_Finance_Agent
-- **Upstream Dependencies:**
-  - [System Overview](../101_System_Overview/README_System_Overview.md)
-- **Downstream Dependencies:**
-  - TBD — Based on implementation requirements
-- **Document Role:** Core documentation for 104. Finance & Financial Planning
-- **Update Trigger:** Update when directory structure, folder logic, or category definitions change

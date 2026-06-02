@@ -1,7 +1,7 @@
 # 502 Execution Engine
 
 **Version:** 1.0
-**Last Updated:** 2026-03-09
+**Last Updated:** 2026-05-06
 **Author/Editor:** @ARK
 **Status:** Template
 
@@ -42,10 +42,10 @@ This folder contains two layers:
 
 | Agent | File | Role |
 | :--- | :--- | :--- |
-| AI Sales Agent | `agents/502.1_AI_Sales_Agent_Prompt.md` | Voice/chat qualification and handover |
-| Ad Generation Agent | `agents/502.2_Ad_Generation_Agent.md` | Multi-variant ad copy from pain point research |
-| Insight Research Agent | `agents/502.3_Insight_Research_Agent.md` | Market and account intelligence briefs |
-| LinkedIn Post Agent | `agents/502.4_LinkedIn_Post_Agent.md` | Thought leadership content from GTM signals |
+| AI Sales Agent | `agents/AI_Sales_Agent_Prompt.md` | Voice/chat qualification and handover |
+| Ad Generation Agent | `agents/Ad_Generation_Agent.md` | Multi-variant ad copy from pain point research |
+| Insight Research Agent | `agents/Insight_Research_Agent.md` | Market and account intelligence briefs |
+| LinkedIn Post Agent | `agents/LinkedIn_Post_Agent.md` | Thought leadership content from GTM signals |
 
 ---
 
@@ -110,28 +110,13 @@ node server/index.js
 
 - **Orchestration:** Workflows trigger via REST or conversational chat. Streaming progress is delivered via Server-Sent Events (SSE) at `GET /api/workflows/stream/:id`.
 - **Intelligence layer:** Agents use OpenAI (structured JSON output) with Perplexity/Exa as research waterfalls.
-- **Data layer:** The repo's main local CLI SQLite database now includes `crm_objects` and `crm_sync_runs` as a provider-neutral CRM landing layer for synced revenue data. The legacy `crm.db` note here should be treated as older execution-engine context rather than the current canonical CLI schema.
+- **Data layer:** Local SQLite databases now live in persistent storage under `~/.pulseos/ark-engine/databases/`. The CRM store is `crm.db` there, and new execution-engine databases should follow the same pattern. Attio sync is triggered manually via `POST /api/sync/attio`.
 - **Vault layer:** The knowledge base files in this repo are readable/writable via `GET|POST /api/file` — agents pull strategic context (ICP, brand voice, objection handling) directly from the KB at runtime.
 
-The canonical CRM sync and revenue data model is documented in [`../203_Sales_Enablement_Hub/203.8_CRM_and_Revenue_Data/`](../203_Sales_Enablement_Hub/203.8_CRM_and_Revenue_Data/).
-
 ---
-
-
-## Template Inputs
-- Company Name: [CLIENT_NAME]
-
----
-
-## Related Documents
-- [Standard Document Format](../101_System_Overview/Standard_Document_Format.md)
 
 ## Operational Metadata
-- **Owner Agent:** @AUTONOMOUS
-- **Upstream Dependencies:**
-  - [System Overview](../101_System_Overview/README_System_Overview.md)
-  - [Sales Enablement Prep](../203_Sales_Enablement_Hub/README_Sales_Enablement_Hub.md)
-- **Downstream Dependencies:**
-  - TBD — Based on implementation requirements
-- **Document Role:** Core documentation for 502 Execution Engine
-- **Update Trigger:** Update when directory structure, folder logic, or category definitions change
+- **Owner Agent:** @ARK
+- **Related Files:**
+  - [Agents & Workflows Protocols](../501_Agents_and_Workflows/README_Agents_and_Workflows.md)
+  - [Technical Infrastructure](../105_Technical_Infrastructure_and_Security/README_Technical_Infrastructure_and_Security.md)

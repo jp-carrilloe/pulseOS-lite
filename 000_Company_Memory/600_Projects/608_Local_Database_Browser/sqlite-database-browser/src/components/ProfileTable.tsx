@@ -468,12 +468,12 @@ export function ProfileTable({
           </colgroup>
 
           {/* ── Table head ── */}
-          <thead className="sticky top-0 z-10 bg-background/[0.92] text-xs uppercase tracking-[0.18em] text-muted-foreground backdrop-blur-xl">
+          <thead className="sticky top-0 z-10 bg-background/[0.92] text-[13px] uppercase tracking-[0.18em] text-muted-foreground backdrop-blur-xl">
             <tr>
               {/* Row number gutter header */}
               <th className="group/row-gutter sticky left-0 z-20 bg-background/[0.96] px-0 py-0">
                 <div className="relative flex h-full min-h-[52px] items-center justify-center">
-                  <span className="text-[10px] font-semibold tracking-[0.16em]">#</span>
+                  <span className="text-[11px] font-semibold tracking-[0.16em]">#</span>
                   <span
                     aria-hidden="true"
                     className="absolute inset-x-0 bottom-0 h-3 translate-y-1/2 cursor-row-resize row-boundary-handle"
@@ -643,7 +643,7 @@ export function ProfileTable({
                                   )}
                                   <div className="flex gap-2">
                                     <button
-                                      className="flex-1 rounded-md bg-primary px-2 py-1.5 text-[10px] font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                                      className="flex-1 rounded-md bg-primary px-2 py-1.5 text-[11px] font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
                                       onClick={() => {
                                         onFilterChange(field.key as keyof ProfileFilters, { operator: draftFilterOperator, value: draftFilterValue });
                                         setOpenFilterKey(null);
@@ -654,7 +654,7 @@ export function ProfileTable({
                                     </button>
                                     {activeFilterValue && (
                                       <button
-                                        className="rounded-md bg-background/80 px-2 py-1.5 text-[10px] font-semibold text-foreground hover:bg-primary/10 transition-colors"
+                                        className="rounded-md bg-background/80 px-2 py-1.5 text-[11px] font-semibold text-foreground hover:bg-primary/10 transition-colors"
                                         onClick={() => {
                                           onFilterChange(field.key as keyof ProfileFilters, null);
                                           setOpenFilterKey(null);
@@ -726,7 +726,7 @@ export function ProfileTable({
                     {/* Active filter pill under header */}
                     {activeFilterValue ? (
                       <div className="mt-1 flex items-center gap-1">
-                        <span className="truncate rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold text-primary">
+                        <span className="truncate rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
                           {activeFilterValue.operator === "empty"
                             ? "Empty"
                             : activeFilterValue.operator === "not_empty"
@@ -734,7 +734,7 @@ export function ProfileTable({
                               : activeFilterValue.value}
                         </span>
                         <button
-                          className="text-[9px] text-muted-foreground hover:text-primary shrink-0"
+                          className="text-[10px] text-muted-foreground hover:text-primary shrink-0"
                           onClick={() => onFilterChange?.(field.key as keyof ProfileFilters, null)}
                           type="button"
                         >
@@ -769,7 +769,7 @@ export function ProfileTable({
               >
                 {/* Row number gutter — click = open drawer, double-click does nothing special */}
                 <td
-                  className="sticky left-0 z-10 bg-background/[0.96] px-2 text-center text-[11px] font-medium text-muted-foreground group-hover/row:bg-primary/[0.06]"
+                  className="sticky left-0 z-10 bg-background/[0.96] px-2 text-center text-xs font-medium text-muted-foreground group-hover/row:bg-primary/[0.06]"
                   style={{ height: rowHeight, minHeight: rowHeight }}
                 >
                   <span className="flex h-full items-center justify-center tabular-nums">

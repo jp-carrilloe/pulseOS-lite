@@ -1,8 +1,8 @@
 # 302 Analytics and KPIs
 
-**Version:** 102.0
+**Version:** 102.0  
 **Last Updated:** 2026-03-09
-**Author/Editor:** @ARK
+**Author/Editor:** @ARK  
 **Status:** Template
 
 ---
@@ -29,17 +29,3 @@ Data-driven insights into the efficiency of [CLIENT_NAME]'s GTM operations and t
 - [ ] Define the core KPI set (pipeline, revenue, conversion, CAC)
 - [ ] Build the baseline waste audit template
 - [ ] Establish a weekly optimization log cadence
-
----
-
-## Related Documents
-- [Standard Document Format](../101_System_Overview/Standard_Document_Format.md)
-
-## Operational Metadata
-- **Owner Agent:** 07_Analytics_Agent
-- **Upstream Dependencies:**
-  - [System Overview](../101_System_Overview/README_System_Overview.md)
-- **Downstream Dependencies:**
-  - TBD — Based on implementation requirements
-- **Document Role:** Core documentation for 302 Analytics and KPIs
-- **Update Trigger:** Update when directory structure, folder logic, or category definitions change
