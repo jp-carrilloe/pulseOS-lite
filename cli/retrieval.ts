@@ -1511,6 +1511,10 @@ function scoreDocumentKeywordMatch(
   }
 
   if (isOverviewDocumentPath(relativePath)) score += 0.32;
+  if (queryAsksForAgents(query)) {
+    if (isAgentDefinitionPath(relativePath)) score += 1.35;
+    if (relativePath.includes("/600_Projects/") && !isAgentDefinitionPath(relativePath)) score -= 0.45;
+  }
   if (isGeneratedRuntimeArtifactPath(relativePath) && !queryAsksForRuntimeArtifact(query)) score -= 1.2;
 
   return score;
@@ -1535,6 +1539,23 @@ function isOverviewDocumentPath(relativePath: string): boolean {
 
 function isGeneratedRuntimeArtifactPath(relativePath: string): boolean {
   return /\/runtime\/data\/(compiled|input|reports)\//.test(relativePath);
+}
+
+function isAgentDefinitionPath(relativePath: string): boolean {
+  const basename = path.posix.basename(relativePath).toLowerCase();
+  return (
+    relativePath.includes("/501_Agents_and_Workflows/") ||
+    relativePath.includes("/502_Execution_Engine/agents/") ||
+    relativePath.includes("/000_Agent_Shortcuts/") ||
+    basename === "agent.md" ||
+    basename === "readme_agents.md" ||
+    basename.endsWith("_agent.md") ||
+    basename.endsWith("_agent_prompt.md")
+  );
+}
+
+function queryAsksForAgents(query: string): boolean {
+  return /\bagents?\b/i.test(query) && !/\b(research agent|content agent|sales agent|linkedin agent|ad agent)\b/i.test(query);
 }
 
 function queryAsksForRuntimeArtifact(query: string): boolean {

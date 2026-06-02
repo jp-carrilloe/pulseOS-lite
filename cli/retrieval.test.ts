@@ -347,6 +347,47 @@ Generated runtime prompt audit for research agent discovery. This is operational
   kbIndex.close();
 });
 
+test("agent inventory queries prefer agent definition files over project docs", async () => {
+  const repoRoot = await createTempRepo();
+  await fsp.mkdir(path.join(repoRoot, "000_Company_Memory", "501_Agents_and_Workflows", "Sub_Agents"), { recursive: true });
+  await fsp.mkdir(path.join(repoRoot, "000_Company_Memory", "600_Projects", "602_GTM_Research_Agent"), { recursive: true });
+
+  await fsp.writeFile(
+    path.join(repoRoot, "000_Company_Memory", "501_Agents_and_Workflows", "Sub_Agents", "README_Agents.md"),
+    `# Sub-Agents - Specialty Execution Agents
+
+This folder contains specialty agents invoked by ARK for execution tasks such as content generation, sales conversations, and research.
+`,
+  );
+  await fsp.writeFile(
+    path.join(repoRoot, "000_Company_Memory", "501_Agents_and_Workflows", "Sub_Agents", "Insight_Research_Agent.md"),
+    `# Insight Research Agent Profile
+
+The Insight Research Agent conducts deep-research tasks on companies, markets, and individuals.
+`,
+  );
+  await fsp.writeFile(
+    path.join(repoRoot, "000_Company_Memory", "600_Projects", "602_GTM_Research_Agent", "601.5_Research_Agent_PRD.md"),
+    `# Tintto - Research Agent PRD
+
+This project document defines the research agent product roadmap and runtime scope.
+`,
+  );
+
+  const dbPath = path.join(repoRoot, ".kb.sqlite");
+  const kbIndex = new KnowledgeBaseIndex({ repoRoot, dbPath, env: {} });
+
+  await kbIndex.ensureCurrent();
+  const matches = await kbIndex.retrieve("what are the agents of my project?", 3);
+  const paths = matches.map((match) => match.document.relativePath);
+
+  assert.ok(paths[0]?.includes("501_Agents_and_Workflows"));
+  assert.ok(paths.some((file) => file.endsWith("501_Agents_and_Workflows/Sub_Agents/README_Agents.md")));
+  assert.ok(paths.some((file) => file.endsWith("501_Agents_and_Workflows/Sub_Agents/Insight_Research_Agent.md")));
+
+  kbIndex.close();
+});
+
 test("buildGraphSnapshot returns folder, document, and markdown reference edges", async () => {
   const repoRoot = await createTempRepo();
   const dbPath = path.join(repoRoot, ".kb.sqlite");
