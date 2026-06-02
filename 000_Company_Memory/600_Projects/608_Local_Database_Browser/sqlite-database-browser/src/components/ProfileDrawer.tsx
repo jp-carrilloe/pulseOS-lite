@@ -18,6 +18,7 @@ interface ProfileDrawerProps {
   hasNext?: boolean;
   currentIndex?: number;
   totalCount?: number;
+  onCellUpdate?: (rowId: string | number, field: string, value: unknown) => Promise<void>;
 }
 
 export function ProfileDrawer({
@@ -29,6 +30,7 @@ export function ProfileDrawer({
   hasNext = false,
   currentIndex,
   totalCount,
+  onCellUpdate,
 }: ProfileDrawerProps) {
   const [drawerWidth, setDrawerWidth] = useState(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem(DRAWER_WIDTH_KEY) : null;
@@ -37,6 +39,38 @@ export function ProfileDrawer({
   });
   const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [isResizing, setIsResizing] = useState(false);
+
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [draftValue, setDraftValue] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const beginEditing = (key: string, value: unknown) => {
+    if (!onCellUpdate) return;
+    setEditingField(key);
+    setDraftValue(value == null ? "" : String(value));
+  };
+
+  const cancelEditing = () => {
+    setEditingField(null);
+    setDraftValue("");
+  };
+
+  const commitEditing = async (key: string) => {
+    if (!profile || !onCellUpdate) return;
+    const currentValue = profile[key as keyof SigmaProfile];
+    const nextValue = draftValue === "" ? null : draftValue;
+    if (String(currentValue ?? "") === String(nextValue ?? "")) {
+      cancelEditing();
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await onCellUpdate(profile.id, key, nextValue);
+      cancelEditing();
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   useEffect(() => {
     localStorage.setItem(DRAWER_WIDTH_KEY, String(Math.round(drawerWidth)));
@@ -187,14 +221,49 @@ export function ProfileDrawer({
               <div className="grid gap-3">
                 {Object.entries(profile)
                   .filter(([key]) => key !== "id")
-                  .map(([key, value]) => (
-                    <section className="panel-muted rounded-2xl px-4 py-4" key={key}>
-                      <h4 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        {key.replace(/_/g, " ")}
-                      </h4>
-                      <div className="mt-2 whitespace-pre-wrap text-sm leading-7 text-foreground">{formatValue(value)}</div>
-                    </section>
-                  ))}
+                  .map(([key, value]) => {
+                    const isEditing = editingField === key;
+                    const saving = isSaving && isEditing;
+
+                    return (
+                      <section
+                        className={cn(
+                          "panel-muted rounded-2xl px-4 py-4 transition-colors",
+                          onCellUpdate && !isEditing && "cursor-pointer hover:bg-primary/[0.04]",
+                          saving && "opacity-50 cursor-progress"
+                        )}
+                        key={key}
+                        onDoubleClick={() => beginEditing(key, value)}
+                      >
+                        <h4 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                          {key.replace(/_/g, " ")}
+                        </h4>
+                        <div className="mt-2 text-sm leading-7 text-foreground">
+                          {isEditing ? (
+                            <textarea
+                              autoFocus
+                              className="w-full resize-y bg-transparent outline-none focus:ring-0 min-h-[60px]"
+                              value={draftValue}
+                              onChange={(e) => setDraftValue(e.target.value)}
+                              onBlur={() => { void commitEditing(key); }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                  e.preventDefault();
+                                  void commitEditing(key);
+                                }
+                                if (e.key === "Escape") {
+                                  e.preventDefault();
+                                  cancelEditing();
+                                }
+                              }}
+                            />
+                          ) : (
+                            <div className="whitespace-pre-wrap">{formatValue(value)}</div>
+                          )}
+                        </div>
+                      </section>
+                    );
+                  })}
               </div>
             </div>
           </motion.aside>

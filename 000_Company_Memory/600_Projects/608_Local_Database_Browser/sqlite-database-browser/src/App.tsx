@@ -39,6 +39,7 @@ const COLUMN_WIDTHS_STORAGE_KEY = "pulseos-db-browser-column-widths";
 const SIDEBAR_WIDTH_STORAGE_KEY = "pulseos-db-browser-sidebar-width";
 const ROW_HEIGHT_STORAGE_KEY = "pulseos-db-browser-row-height";
 const DEFAULT_VIEW_STORAGE_KEY = "sigma-table-default-view";
+const TABLE_ORDER_STORAGE_KEY = "pulseos-db-browser-table-order";
 
 const DEFAULT_FILTERS: ProfileFilters = {};
 
@@ -125,6 +126,60 @@ function App() {
     return Number.isFinite(parsedWidth) ? parsedWidth : 320;
   });
   const sidebarResizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const [tableOrder, setTableOrder] = useState<Record<string, string[]>>(() => {
+    const saved = typeof window !== "undefined" ? window.localStorage.getItem(TABLE_ORDER_STORAGE_KEY) : null;
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  useEffect(() => {
+    localStorage.setItem(TABLE_ORDER_STORAGE_KEY, JSON.stringify(tableOrder));
+  }, [tableOrder]);
+
+  const orderedTables = useMemo(() => {
+    const order = tableOrder[activeDatabase] || [];
+    return [...tables].sort((a, b) => {
+      const idxA = order.indexOf(a.name);
+      const idxB = order.indexOf(b.name);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return 0;
+    });
+  }, [tables, tableOrder, activeDatabase]);
+
+  const handleTabDragStart = (e: React.DragEvent, tableName: string) => {
+    e.dataTransfer.setData("text/plain", tableName);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleTabDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleTabDrop = (e: React.DragEvent, targetTableName: string) => {
+    e.preventDefault();
+    const sourceTableName = e.dataTransfer.getData("text/plain");
+    if (sourceTableName === targetTableName || !sourceTableName) return;
+
+    setTableOrder(prev => {
+      const order = prev[activeDatabase] || orderedTables.map(t => t.name);
+      const sourceIdx = order.indexOf(sourceTableName);
+      const targetIdx = order.indexOf(targetTableName);
+      
+      if (sourceIdx === -1 || targetIdx === -1) return prev;
+      
+      const newOrder = [...order];
+      newOrder.splice(sourceIdx, 1);
+      newOrder.splice(targetIdx, 0, sourceTableName);
+      
+      return {
+        ...prev,
+        [activeDatabase]: newOrder
+      };
+    });
+  };
 
   const loadTables = async (databaseKey = activeDatabase) => {
     const data = await fetchTables(databaseKey);
@@ -344,7 +399,6 @@ function App() {
   };
 
   const updateFilter = (key: keyof ProfileFilters, filter: AdvancedFilter | null) => {
-    setActiveViewId(null);
     setFilters((current) => {
       const next = { ...current };
       if (!filter) {
@@ -357,12 +411,10 @@ function App() {
   };
 
   const handleClearFilters = () => {
-    setActiveViewId(null);
     setFilters({});
   };
 
   const resetFilters = () => {
-    setActiveViewId(null);
     setFilters(DEFAULT_FILTERS);
   };
 
@@ -440,6 +492,12 @@ function App() {
     ? JSON.stringify(activeView.filters) !== JSON.stringify(filters) || 
       JSON.stringify(activeView.visibleFields) !== JSON.stringify(visibleFields)
     : false;
+
+  useEffect(() => {
+    if (activeViewId && isViewDirty) {
+      handleUpdateView(activeViewId);
+    }
+  }, [activeViewId, isViewDirty, filters, visibleFields]);
 
   const stats = useMemo(
     () => [
@@ -567,9 +625,13 @@ function App() {
             
             {/* Top Level Table Tabs */}
             <div className="flex items-center gap-2 overflow-x-auto px-2 pb-3 scrollbar-none">
-              {tables.map((table) => (
+              {orderedTables.map((table) => (
                 <button
                   key={table.name}
+                  draggable
+                  onDragStart={(e) => handleTabDragStart(e, table.name)}
+                  onDragOver={handleTabDragOver}
+                  onDrop={(e) => handleTabDrop(e, table.name)}
                   onClick={() => handleTableSelect(table.name)}
                   className={cn(
                     "flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-medium transition-all",
@@ -696,6 +758,7 @@ function App() {
           onPrevious={goToPreviousProfile}
           profile={selectedProfile}
           totalCount={selectedProfile ? profiles.length : undefined}
+          onCellUpdate={handleCellUpdate}
         />
       </div>
     </div>
