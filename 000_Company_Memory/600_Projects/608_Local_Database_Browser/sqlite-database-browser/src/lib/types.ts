@@ -38,7 +38,14 @@ export interface SigmaProfile {
   [key: string]: unknown;
 }
 
-export type ProfileFilters = Record<string, string>;
+export type FilterOperator = "eq" | "contains" | "empty" | "not_empty";
+
+export interface AdvancedFilter {
+  operator: FilterOperator;
+  value: string;
+}
+
+export type ProfileFilters = Record<string, AdvancedFilter>;
 
 export interface ProfileResponse {
   profiles: SigmaProfile[];

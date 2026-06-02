@@ -95,6 +95,11 @@
     user-select: none;
   }
 
+  body.is-drawer-resizing {
+    cursor: col-resize;
+    user-select: none;
+  }
+
   body.is-sidebar-split-resizing {
     cursor: row-resize;
     user-select: none;
@@ -150,17 +155,13 @@
     @apply border shadow-[0_30px_80px_-48px_rgba(15,23,42,0.75)] backdrop-blur-2xl;
     border-color: hsl(var(--border) / 0.8);
     background-color: hsl(var(--card) / 0.8);
-    box-shadow:
-      0 30px 80px -48px rgba(15, 23, 42, 0.75),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    box-shadow: 0 30px 80px -48px rgba(15, 23, 42, 0.75);
   }
 
   .dark .panel-surface {
     border-color: hsl(var(--border) / 0.95);
     background-color: hsl(var(--card) / 0.88);
-    box-shadow:
-      0 32px 70px -42px rgba(2, 6, 23, 0.92),
-      inset 0 1px 0 rgba(148, 163, 184, 0.04);
+    box-shadow: 0 32px 70px -42px rgba(2, 6, 23, 0.92);
   }
 
   .panel-muted {
@@ -178,13 +179,11 @@
     @apply border backdrop-blur-xl;
     border-color: hsl(var(--border) / 0.8);
     background-color: hsl(var(--background) / 0.7);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 
   .dark .input-shell {
     border-color: hsl(var(--border) / 0.95);
     background-color: hsl(var(--background) / 0.9);
-    box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.03);
   }
 
   .icon-button {
@@ -251,8 +250,8 @@
 
   .spreadsheet-shell {
     background-image:
-      linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+      linear-gradient(hsl(var(--border) / 0.4) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.4) 1px, transparent 1px);
     background-size: 100% 1px, 1px 100%;
   }
 

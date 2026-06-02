@@ -1,7 +1,13 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, ExternalLink, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import type { SigmaProfile } from "../lib/types";
 import { cn, formatValue, statusTone } from "../lib/utils";
+
+const DRAWER_WIDTH_KEY = "pulseos-db-browser-drawer-width";
+const MIN_DRAWER_WIDTH = 360;
+const MAX_DRAWER_WIDTH = 900;
 
 interface ProfileDrawerProps {
   profile: SigmaProfile | null;
@@ -22,13 +28,56 @@ export function ProfileDrawer({
   hasPrevious = false,
   hasNext = false,
   currentIndex,
-  totalCount
+  totalCount,
 }: ProfileDrawerProps) {
+  const [drawerWidth, setDrawerWidth] = useState(() => {
+    const saved = typeof window !== "undefined" ? localStorage.getItem(DRAWER_WIDTH_KEY) : null;
+    const parsed = saved ? Number(saved) : NaN;
+    return Number.isFinite(parsed) ? Math.max(MIN_DRAWER_WIDTH, Math.min(MAX_DRAWER_WIDTH, parsed)) : 520;
+  });
+  const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem(DRAWER_WIDTH_KEY, String(Math.round(drawerWidth)));
+  }, [drawerWidth]);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const state = resizeStateRef.current;
+      if (!state) return;
+      const delta = state.startX - event.clientX; // left-edge: moving left = wider
+      const next = Math.max(MIN_DRAWER_WIDTH, Math.min(MAX_DRAWER_WIDTH, state.startWidth + delta));
+      setDrawerWidth(next);
+    };
+    const stopResizing = () => {
+      if (!resizeStateRef.current) return;
+      resizeStateRef.current = null;
+      setIsResizing(false);
+      document.body.classList.remove("is-drawer-resizing");
+    };
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResizing);
+    window.addEventListener("pointercancel", stopResizing);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResizing);
+      window.removeEventListener("pointercancel", stopResizing);
+    };
+  }, []);
+
+  const startResizing = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    resizeStateRef.current = { startX: event.clientX, startWidth: drawerWidth };
+    setIsResizing(true);
+    document.body.classList.add("is-drawer-resizing");
+  };
+
   const title =
     profile?.name ||
     profile?.full_name ||
     profile?.company_name ||
-    profile?.name ||
     profile?.title ||
     profile?.domain ||
     profile?.website ||
@@ -52,12 +101,26 @@ export function ProfileDrawer({
             type="button"
           />
           <motion.aside
-            className="panel-surface fixed right-3 top-3 z-40 flex h-[calc(100vh-1.5rem)] w-[min(560px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-[32px]"
+            className="panel-surface fixed right-3 top-3 z-40 flex h-[calc(100vh-1.5rem)] flex-col overflow-hidden rounded-[32px]"
             initial={{ opacity: 0, x: 80, scale: 0.98 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 80, scale: 0.98 }}
             transition={{ type: "spring", damping: 28, stiffness: 250 }}
+            style={{ width: `min(${drawerWidth}px, calc(100vw - 1.5rem))` }}
           >
+            {/* ── Resize handle on the left edge ── */}
+            <div
+              aria-hidden="true"
+              className={cn(
+                "absolute inset-y-0 left-0 z-50 w-3 cursor-col-resize rounded-l-[32px]",
+                "before:absolute before:inset-y-[15%] before:left-1/2 before:w-0.5 before:-translate-x-1/2 before:rounded-full before:bg-border/50 before:content-[''] before:transition-all",
+                "hover:before:bg-primary/60",
+                isResizing && "before:bg-primary/80"
+              )}
+              onPointerDown={startResizing}
+            />
+
+            {/* ── Header ── */}
             <div className="border-b border-border/70 px-6 py-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-4">
@@ -72,7 +135,8 @@ export function ProfileDrawer({
                   <div>
                     <h2 className="font-identity text-3xl font-bold tracking-[-0.04em]">{String(title)}</h2>
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      Review the full metadata for this row without losing your table context.
+                      Full record metadata.
+                      <span className="ml-1 text-muted-foreground/60 text-xs">Drag the left edge to resize.</span>
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -82,12 +146,7 @@ export function ProfileDrawer({
                       </span>
                     ) : null}
                     {profile.profile_completion_status ? (
-                      <span
-                        className={cn(
-                          "rounded-full border px-3 py-1 text-xs font-semibold",
-                          statusTone(profile.profile_completion_status)
-                        )}
-                      >
+                      <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", statusTone(profile.profile_completion_status))}>
                         {profile.profile_completion_status}
                       </span>
                     ) : null}
@@ -118,6 +177,7 @@ export function ProfileDrawer({
               </div>
             </div>
 
+            {/* ── Body ── */}
             <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <ProfileLink label="LinkedIn" value={linkedInUrl} />

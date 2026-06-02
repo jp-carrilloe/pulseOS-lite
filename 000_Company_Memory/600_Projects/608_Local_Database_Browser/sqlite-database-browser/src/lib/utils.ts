@@ -103,6 +103,9 @@ export function sortTablesForDisplay(tables: Table[]) {
   });
 }
 
+// Matches ISO 8601 datetime strings like "2026-04-10T14:32:00Z" or "2026-04-10 14:32:00"
+const ISO_DATETIME_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/;
+
 export function formatValue(value: unknown) {
   if (value === null || value === undefined || value === "") {
     return "—";
@@ -112,7 +115,14 @@ export function formatValue(value: unknown) {
     return Number.isInteger(value) ? value.toString() : value.toFixed(1);
   }
 
-  return String(value);
+  const str = String(value);
+
+  // Format datetime strings as date-only (YYYY-MM-DD)
+  if (ISO_DATETIME_RE.test(str)) {
+    return str.slice(0, 10);
+  }
+
+  return str;
 }
 
 export function statusTone(value?: string | null) {

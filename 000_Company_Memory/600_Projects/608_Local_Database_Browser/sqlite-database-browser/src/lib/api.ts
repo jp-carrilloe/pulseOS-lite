@@ -149,8 +149,10 @@ export async function fetchProfiles(params: {
     if (params.query) url.searchParams.set("query", params.query);
     if (params.tableName) url.searchParams.set("table", params.tableName);
 
-    Object.entries(params.filters).forEach(([key, value]) => {
-      if (value) url.searchParams.set(key, value);
+    Object.entries(params.filters).forEach(([key, filter]) => {
+      if (filter && filter.operator) {
+        url.searchParams.set(`${key}__${filter.operator}`, filter.value);
+      }
     });
 
     const response = await fetch(url);
@@ -173,10 +175,23 @@ function filterMockProfiles(params: {
 }): ProfileResponse {
   const query = params.query.toLowerCase().trim();
   let profiles = MOCK_PROFILES.filter((profile) => {
-    const filterMatches = Object.entries(params.filters).every(([key, value]) => {
-      if (!value) return true;
+    const filterMatches = Object.entries(params.filters).every(([key, filter]) => {
+      if (!filter || !filter.operator) return true;
       const field = filterKeyToProfileField(key);
-      return String(profile[field] || "") === value;
+      const cellValue = String(profile[field] || "");
+      
+      switch (filter.operator) {
+        case "eq":
+          return cellValue === filter.value;
+        case "contains":
+          return cellValue.toLowerCase().includes(filter.value.toLowerCase());
+        case "empty":
+          return !cellValue;
+        case "not_empty":
+          return !!cellValue;
+        default:
+          return true;
+      }
     });
 
     if (!filterMatches) return false;
@@ -227,6 +242,28 @@ export async function updateCell(params: {
 
   const data = await response.json();
   return data.row as SigmaProfile;
+}
+
+export async function fetchSavedViews() {
+  try {
+    const response = await fetch(`${API_URL}/api/views`);
+    if (!response.ok) return [];
+    return response.json();
+  } catch {
+    return [];
+  }
+}
+
+export async function saveViews(views: any[]) {
+  try {
+    await fetch(`${API_URL}/api/views`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(views)
+    });
+  } catch (error) {
+    console.error("Failed to save views:", error);
+  }
 }
 
 function filterKeyToProfileField(key: string): keyof SigmaProfile {

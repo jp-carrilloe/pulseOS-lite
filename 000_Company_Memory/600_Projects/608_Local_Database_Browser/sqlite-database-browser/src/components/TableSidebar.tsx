@@ -1,282 +1,268 @@
-import { Search, SlidersHorizontal, TableProperties } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import { Check, Database, Plus, Search, SlidersHorizontal, TableProperties, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { DatabaseSource, ProfileFilters, Table } from "../lib/types";
 import { cn, formatTableName, sortTablesForDisplay } from "../lib/utils";
 
-const FILTERS_HEIGHT_MIN = 180;
-const FILTERS_HEIGHT_DEFAULT = 300;
-const FILTERS_HEIGHT_MAX = 520;
+const CUSTOM_DATABASES_KEY = "pulseos-db-browser-custom-databases";
+
+interface CustomDatabase {
+  key: string;
+  label: string;
+  path: string;
+  description: string;
+}
+
+function loadCustomDatabases(): CustomDatabase[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_DATABASES_KEY);
+    return raw ? (JSON.parse(raw) as CustomDatabase[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomDatabases(databases: CustomDatabase[]) {
+  localStorage.setItem(CUSTOM_DATABASES_KEY, JSON.stringify(databases));
+}
 
 interface TableSidebarProps {
   databases: DatabaseSource[];
   activeDatabase: string;
   onDatabaseSelect: (databaseKey: string) => void;
-  tables: Table[];
-  activeTable: string;
-  onTableSelect: (tableName: string) => void;
   facets: Record<string, string[]>;
   filters: ProfileFilters;
-  onFilterChange: (key: keyof ProfileFilters, value: string) => void;
+  onFilterChange: (key: keyof ProfileFilters, filter: import("../lib/types").AdvancedFilter | null) => void;
   onResetFilters: () => void;
+  onDatabasesChange?: (databases: DatabaseSource[]) => void;
+  children?: ReactNode;
 }
 
 export function TableSidebar({
   databases,
   activeDatabase,
   onDatabaseSelect,
-  tables,
-  activeTable,
-  onTableSelect,
   facets,
   filters,
   onFilterChange,
-  onResetFilters
+  onResetFilters,
+  children,
 }: TableSidebarProps) {
-  const [search, setSearch] = useState("");
-  const [filtersHeight, setFiltersHeight] = useState(() => {
-    const savedHeight = typeof window !== "undefined"
-      ? window.localStorage.getItem("pulseos-db-browser-filters-height")
-      : null;
-    const parsedHeight = savedHeight ? Number(savedHeight) : NaN;
-    return Number.isFinite(parsedHeight) ? parsedHeight : FILTERS_HEIGHT_DEFAULT;
-  });
-  const splitResizeStateRef = useRef<{ startY: number; startHeight: number } | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addLabel, setAddLabel] = useState("");
+  const [addPath, setAddPath] = useState("");
+  const [addError, setAddError] = useState("");
+  const [addSuccess, setAddSuccess] = useState(false);
+  const [customDatabases, setCustomDatabases] = useState<CustomDatabase[]>(loadCustomDatabases);
+  const labelInputRef = useRef<HTMLInputElement>(null);
 
-  const filteredTables = useMemo(
-    () =>
-      sortTablesForDisplay(tables).filter((table) =>
-        formatTableName(table.name).toLowerCase().includes(search.toLowerCase())
-      ),
-    [search, tables]
-  );
-
+  const hasFacets = Object.keys(facets).length > 0;
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
-  const resizePresets = [
-    { label: "More filters", height: 420 },
-    { label: "Balanced", height: FILTERS_HEIGHT_DEFAULT },
-    { label: "More tables", height: 220 }
-  ] as const;
+
+  // Merge server databases with custom ones
+  const allDatabases: DatabaseSource[] = [
+    ...databases,
+    ...customDatabases
+      .filter((custom) => !databases.some((db) => db.key === custom.key))
+      .map((custom) => ({
+        key: custom.key,
+        label: custom.label,
+        description: custom.description || "Custom database",
+        path: custom.path,
+        exists: true,
+        tableCount: 0,
+      })),
+  ];
 
   useEffect(() => {
-    localStorage.setItem("pulseos-db-browser-filters-height", String(Math.round(filtersHeight)));
-  }, [filtersHeight]);
+    if (showAddForm) {
+      setTimeout(() => labelInputRef.current?.focus(), 60);
+    } else {
+      setAddLabel("");
+      setAddPath("");
+      setAddError("");
+      setAddSuccess(false);
+    }
+  }, [showAddForm]);
 
-  useEffect(() => {
-    const handlePointerMove = (event: PointerEvent) => {
-      const resizeState = splitResizeStateRef.current;
-      if (!resizeState) {
-        return;
-      }
+  const handleAddDatabase = () => {
+    const trimmedLabel = addLabel.trim();
+    const trimmedPath = addPath.trim();
 
-      const delta = event.clientY - resizeState.startY;
-      setFiltersHeight(Math.max(FILTERS_HEIGHT_MIN, Math.min(FILTERS_HEIGHT_MAX, resizeState.startHeight + delta)));
+    if (!trimmedLabel) {
+      setAddError("Name is required.");
+      return;
+    }
+    if (!trimmedPath) {
+      setAddError("Path is required.");
+      return;
+    }
+
+    const key = `custom-${trimmedLabel.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`;
+    const newDb: CustomDatabase = {
+      key,
+      label: trimmedLabel,
+      path: trimmedPath,
+      description: "Custom database",
     };
 
-    const stopResizing = () => {
-      if (!splitResizeStateRef.current) {
-        return;
-      }
-
-      splitResizeStateRef.current = null;
-      document.body.classList.remove("is-sidebar-split-resizing");
-    };
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", stopResizing);
-    window.addEventListener("pointercancel", stopResizing);
-
-    return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", stopResizing);
-      window.removeEventListener("pointercancel", stopResizing);
-      document.body.classList.remove("is-sidebar-split-resizing");
-    };
-  }, []);
-
-  const startSplitResizing = (event: ReactPointerEvent<HTMLSpanElement>) => {
-    event.preventDefault();
-    splitResizeStateRef.current = {
-      startY: event.clientY,
-      startHeight: filtersHeight
-    };
-    document.body.classList.add("is-sidebar-split-resizing");
+    const next = [...customDatabases, newDb];
+    setCustomDatabases(next);
+    saveCustomDatabases(next);
+    setAddSuccess(true);
+    setTimeout(() => {
+      setShowAddForm(false);
+      onDatabaseSelect(key);
+    }, 700);
   };
 
-  const applyFiltersHeight = (nextHeight: number) => {
-    setFiltersHeight(Math.max(FILTERS_HEIGHT_MIN, Math.min(FILTERS_HEIGHT_MAX, nextHeight)));
+  const removeCustomDatabase = (key: string) => {
+    const next = customDatabases.filter((db) => db.key !== key);
+    setCustomDatabases(next);
+    saveCustomDatabases(next);
+    if (activeDatabase === key && databases.length > 0) {
+      onDatabaseSelect(databases[0].key);
+    }
   };
 
   return (
     <aside className="panel-surface flex h-full flex-col overflow-hidden rounded-[28px]">
-      <div className="border-b border-border/70 px-4 py-4">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">Control rail</div>
-        <h2 className="mt-2 text-sm font-semibold tracking-tight">Sources, filters, and tables</h2>
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between gap-2 px-4 py-4">
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+            Navigator
+          </div>
+          <h2 className="mt-0.5 text-sm font-bold tracking-tight text-foreground">
+            Databases & Tables
+          </h2>
+        </div>
+        <button
+          className={cn(
+            "focused-ring flex h-8 w-8 items-center justify-center rounded-xl border transition",
+            showAddForm
+              ? "border-primary/40 bg-primary/10 text-primary"
+              : "border-border/70 bg-background/45 text-muted-foreground hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+          )}
+          onClick={() => setShowAddForm((v) => !v)}
+          title={showAddForm ? "Cancel" : "Add custom database"}
+          type="button"
+        >
+          {showAddForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+        </button>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <section className="border-b border-border/70 px-4 py-3">
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Database</div>
-          <div className="space-y-2">
-            {databases.map((database) => (
+      {/* ── Add Database form ── */}
+      {showAddForm ? (
+        <div className="mx-3 mb-3 rounded-2xl border border-border/70 bg-background/50 px-4 py-4">
+          <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+            <Database className="h-3.5 w-3.5" />
+            Add Database
+          </div>
+          <div className="space-y-2.5">
+            <div>
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Name
+              </label>
+              <input
+                className="input-shell focused-ring w-full rounded-xl px-3 py-2 text-xs text-foreground"
+                onChange={(e) => setAddLabel(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddDatabase();
+                  if (e.key === "Escape") setShowAddForm(false);
+                }}
+                placeholder="e.g. Sales Pipeline"
+                ref={labelInputRef}
+                type="text"
+                value={addLabel}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                SQLite path
+              </label>
+              <input
+                className="input-shell focused-ring w-full rounded-xl px-3 py-2 font-mono text-xs text-foreground"
+                onChange={(e) => setAddPath(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddDatabase();
+                  if (e.key === "Escape") setShowAddForm(false);
+                }}
+                placeholder="~/.pulseos/my-db.sqlite"
+                type="text"
+                value={addPath}
+              />
+            </div>
+            {addError ? (
+              <p className="text-[11px] text-destructive">{addError}</p>
+            ) : null}
+            <button
+              className={cn(
+                "focused-ring flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition",
+                addSuccess
+                  ? "border-success/30 bg-success/10 text-success"
+                  : "border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
+              )}
+              onClick={handleAddDatabase}
+              type="button"
+            >
+              {addSuccess ? (
+                <>
+                  <Check className="h-3.5 w-3.5" /> Added
+                </>
+              ) : (
+                <>
+                  <Plus className="h-3.5 w-3.5" /> Add
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+
+        {/* ── Database switcher ── */}
+        <section className="px-3 py-3">
+          <div className="mb-1.5 flex items-center justify-between px-1">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Source
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              className="input-shell focused-ring w-full rounded-xl px-3 py-2 text-xs font-semibold"
+              onChange={(e) => onDatabaseSelect(e.target.value)}
+              value={activeDatabase}
+            >
+              {allDatabases.map((database) => (
+                <option key={database.key} value={database.key}>
+                  {database.label}
+                </option>
+              ))}
+            </select>
+            {customDatabases.some((c) => c.key === activeDatabase) ? (
               <button
-                className={cn(
-                  "focused-ring w-full rounded-xl border px-3 py-2 text-left text-xs transition",
-                  activeDatabase === database.key
-                    ? "border-primary/40 bg-primary/10 text-primary"
-                    : "border-border/70 bg-background/45 text-muted-foreground hover:text-foreground"
-                )}
-                key={database.key}
-                onClick={() => onDatabaseSelect(database.key)}
+                className="focused-ring flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-destructive/40 bg-destructive/10 text-destructive transition hover:bg-destructive/20"
+                onClick={() => removeCustomDatabase(activeDatabase)}
+                title="Remove custom database"
                 type="button"
               >
-                <span className="flex items-center justify-between gap-2">
-                  <span className="font-semibold">{database.label}</span>
-                  <span className="rounded-full bg-background/60 px-2 py-0.5 text-[10px] tabular-nums">
-                    {database.tableCount} tables
-                  </span>
-                </span>
-                <span className="mt-1 block truncate text-[10px] opacity-75">{database.path}</span>
+                <X className="h-3.5 w-3.5" />
               </button>
-            ))}
+            ) : null}
+          </div>
+          <div className="mt-2 px-1 text-[10px] text-muted-foreground truncate">
+            {allDatabases.find((db) => db.key === activeDatabase)?.description}
           </div>
         </section>
 
-        <section className="relative flex min-h-0 flex-col border-b border-border/70" style={{ height: `${filtersHeight}px` }}>
-          <div className="flex items-center justify-between gap-3 px-4 py-3">
-            <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              <SlidersHorizontal className="h-3.5 w-3.5" />
-              Filters
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="inline-flex items-center rounded-full border border-border/70 bg-background/[0.6] p-0.5 text-[10px] font-semibold text-muted-foreground">
-                {resizePresets.map((preset) => (
-                  <button
-                    className={cn(
-                      "rounded-full px-2 py-1 transition",
-                      Math.abs(filtersHeight - preset.height) <= 18 ? "bg-primary/10 text-primary" : "hover:text-foreground"
-                    )}
-                    key={preset.label}
-                    onClick={() => applyFiltersHeight(preset.height)}
-                    type="button"
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-              {activeFilterCount > 0 ? (
-                <button
-                  className="focused-ring rounded-full border border-border/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground transition hover:border-primary/30 hover:text-primary"
-                  onClick={onResetFilters}
-                  type="button"
-                >
-                  Clear {activeFilterCount}
-                </button>
-              ) : null}
-            </div>
-          </div>
 
-          <div className="min-h-0 space-y-3 overflow-y-auto px-4 pb-4">
-            {Object.keys(facets).length > 0 ? (
-              Object.entries(facets).map(([key, options]) => (
-                <label className="block" key={key}>
-                  <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    {key.replace(/_/g, " ")}
-                  </span>
-                  <select
-                    className="input-shell focused-ring w-full rounded-xl px-3 py-2 text-xs"
-                    onChange={(event) => onFilterChange(key as keyof ProfileFilters, event.target.value)}
-                    value={filters[key as keyof ProfileFilters] || ""}
-                  >
-                    <option value="">All</option>
-                    {options.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ))
-            ) : (
-              <div className="rounded-xl border border-dashed border-border/80 px-3 py-3 text-xs leading-5 text-muted-foreground">
-                This table does not expose filter facets yet.
-              </div>
-            )}
-          </div>
-          <span
-            aria-hidden="true"
-            className="absolute inset-x-8 bottom-0 z-10 h-4 translate-y-1/2 cursor-row-resize rounded-full sidebar-split-handle"
-            onPointerDown={startSplitResizing}
-          />
-        </section>
 
-        <section className="flex min-h-0 flex-1 flex-col">
-          <div className="space-y-3 border-b border-border/70 px-4 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                <TableProperties className="h-3.5 w-3.5" />
-                Tables
-              </div>
-              <div className="inline-flex items-center rounded-full border border-border/70 bg-background/[0.6] p-0.5 text-[10px] font-semibold text-muted-foreground">
-                {resizePresets.map((preset) => (
-                  <button
-                    className={cn(
-                      "rounded-full px-2 py-1 transition",
-                      Math.abs(filtersHeight - preset.height) <= 18 ? "bg-primary/10 text-primary" : "hover:text-foreground"
-                    )}
-                    key={`tables-${preset.label}`}
-                    onClick={() => applyFiltersHeight(preset.height)}
-                    type="button"
-                  >
-                    {preset.label === "More tables" ? "Expand" : preset.label === "More filters" ? "Shorten" : "Balanced"}
-                  </button>
-                ))}
-              </div>
-            </div>
 
-            <label className="input-shell focused-ring flex items-center gap-2 rounded-xl px-3 py-2 text-xs">
-              <Search className="h-3.5 w-3.5 text-muted-foreground" />
-              <input
-                className="w-full bg-transparent outline-none placeholder:text-muted-foreground"
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Find table..."
-                value={search}
-              />
-            </label>
-          </div>
 
-          <div className="min-h-0 overflow-y-auto px-2 py-2">
-            <div className="space-y-0.5">
-              {filteredTables.map((table) => (
-                <button
-                  className={cn(
-                    "focused-ring flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-xs transition-colors",
-                    activeTable === table.name
-                      ? "bg-primary/10 font-semibold text-primary"
-                      : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
-                  )}
-                  key={table.name}
-                  onClick={() => onTableSelect(table.name)}
-                  type="button"
-                >
-                  <span className="min-w-0 truncate">{formatTableName(table.name)}</span>
-                  <span
-                    className={cn(
-                      "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] tabular-nums",
-                      activeTable === table.name ? "bg-primary/15 text-primary" : "bg-background/60 text-muted-foreground"
-                    )}
-                  >
-                    {table.rowCount.toLocaleString()}
-                  </span>
-                </button>
-              ))}
-
-              {filteredTables.length === 0 ? (
-                <div className="px-2.5 py-3 text-xs text-muted-foreground">No tables match that search.</div>
-              ) : null}
-            </div>
-          </div>
-        </section>
+        {/* Saved views slot */}
+        {children}
       </div>
     </aside>
   );

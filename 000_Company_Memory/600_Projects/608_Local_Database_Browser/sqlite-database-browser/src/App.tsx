@@ -11,10 +11,16 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { FieldPicker } from "./components/FieldPicker";
+import { FilterBar } from "./components/FilterBar";
 import { ProfileDrawer } from "./components/ProfileDrawer";
 import { ProfileTable } from "./components/ProfileTable";
+import {
+  SaveViewButton,
+  SavedViews,
+} from "./components/SavedViews";
+import type { SavedView } from "./components/SavedViews";
 import { TableSidebar } from "./components/TableSidebar";
-import { fetchDatabases, fetchFields, fetchProfiles, fetchTables, updateCell } from "./lib/api";
+import { fetchDatabases, fetchFields, fetchProfiles, fetchTables, updateCell, fetchSavedViews, saveViews } from "./lib/api";
 import type {
   DatabaseSource,
   FieldResponse,
@@ -23,14 +29,16 @@ import type {
   ProfileFilters,
   SigmaProfile,
   SortDirection,
-  Table
+  Table,
+  AdvancedFilter
 } from "./lib/types";
 import { cn, formatTableName } from "./lib/utils";
 
-const VISIBLE_FIELDS_STORAGE_KEY = "pulseos-db-browser-visible-fields";
+const VISIBLE_FIELDS_STORAGE_KEY = "pulseos-db-browser-visible-fields-v2";
 const COLUMN_WIDTHS_STORAGE_KEY = "pulseos-db-browser-column-widths";
 const SIDEBAR_WIDTH_STORAGE_KEY = "pulseos-db-browser-sidebar-width";
 const ROW_HEIGHT_STORAGE_KEY = "pulseos-db-browser-row-height";
+const DEFAULT_VIEW_STORAGE_KEY = "sigma-table-default-view";
 
 const DEFAULT_FILTERS: ProfileFilters = {};
 
@@ -103,6 +111,9 @@ function App() {
   const [tables, setTables] = useState<Table[]>([]);
   const [activeTable, setActiveTable] = useState("Companies");
   const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const [defaultViewId, setDefaultViewId] = useState<string | null>(null);
   const [rowHeight, setRowHeight] = useState(() => {
     const savedHeight = typeof window !== "undefined" ? window.localStorage.getItem(ROW_HEIGHT_STORAGE_KEY) : null;
     const parsedHeight = savedHeight ? Number(savedHeight) : NaN;
@@ -195,7 +206,9 @@ function App() {
           )
         : [];
       const nextVisibleFields =
-        restoredVisibleFields.length > 0 ? restoredVisibleFields : data.fields.map((field) => field.key);
+        restoredVisibleFields.length > 0
+          ? restoredVisibleFields
+          : data.fields.filter((field) => field.defaultVisible).map((field) => field.key);
 
       setVisibleFields(nextVisibleFields);
 
@@ -218,6 +231,29 @@ function App() {
       localStorage.setItem(`${COLUMN_WIDTHS_STORAGE_KEY}-${activeDatabase}-${activeTable}`, JSON.stringify(columnWidths));
     }
   }, [activeDatabase, activeTable, columnWidths, fieldData.fields.length]);
+
+  useEffect(() => {
+    fetchSavedViews().then((views) => {
+      if (Array.isArray(views) && views.length > 0) {
+        setSavedViews(views);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    const savedDefault = localStorage.getItem(`${DEFAULT_VIEW_STORAGE_KEY}-${activeDatabase}-${activeTable}`);
+    setDefaultViewId(savedDefault || null);
+    
+    // If no view is active, and we have a default view, load it
+    if (!activeViewId && savedDefault) {
+      const defView = savedViews.find(v => v.id === savedDefault);
+      if (defView) {
+        setActiveViewId(defView.id);
+        setFilters(defView.filters);
+        setVisibleFields(defView.visibleFields);
+      }
+    }
+  }, [activeDatabase, activeTable, savedViews]);
 
   useEffect(() => {
     let ignore = false;
@@ -256,30 +292,154 @@ function App() {
     };
   }, [query, filters, sortBy, sortDirection, activeDatabase, activeTable]);
 
-  const handleSort = (fieldKey: string) => {
-    if (sortBy === fieldKey) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-      return;
-    }
-
-    setSortBy(fieldKey);
-    setSortDirection("asc");
+  const handleHideColumn = (fieldKey: ProfileFieldKey) => {
+    setVisibleFields((prev) => prev.filter((key) => key !== fieldKey));
   };
 
-  const updateFilter = (key: keyof ProfileFilters, value: string) => {
-    setFilters((current) => ({ ...current, [key]: value }));
+  const handleMoveColumn = (fieldKey: ProfileFieldKey, direction: "left" | "right") => {
+    setVisibleFields(prev => {
+      const idx = prev.indexOf(fieldKey);
+      if (idx === -1) return prev;
+      if (direction === "left" && idx === 0) return prev;
+      if (direction === "right" && idx === prev.length - 1) return prev;
+      
+      const next = [...prev];
+      const targetIdx = direction === "left" ? idx - 1 : idx + 1;
+      
+      const temp = next[idx];
+      next[idx] = next[targetIdx];
+      next[targetIdx] = temp;
+      
+      return next;
+    });
+  };
+
+  const handleReorderColumn = (sourceKey: ProfileFieldKey, targetKey: ProfileFieldKey) => {
+    setVisibleFields((prev) => {
+      const sourceIdx = prev.indexOf(sourceKey);
+      const targetIdx = prev.indexOf(targetKey);
+      if (sourceIdx === -1 || targetIdx === -1 || sourceIdx === targetIdx) return prev;
+
+      const next = [...prev];
+      // Remove source
+      next.splice(sourceIdx, 1);
+      // Re-insert at target
+      next.splice(targetIdx, 0, sourceKey);
+      return next;
+    });
+  };
+
+  const handleSort = (fieldKey: ProfileFieldKey, forceDirection?: "asc" | "desc") => {
+    if (forceDirection) {
+      setSortBy(fieldKey);
+      setSortDirection(forceDirection);
+    } else {
+      if (sortBy === fieldKey) {
+        setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+      } else {
+        setSortBy(fieldKey);
+        setSortDirection("asc");
+      }
+    }
+  };
+
+  const updateFilter = (key: keyof ProfileFilters, filter: AdvancedFilter | null) => {
+    setActiveViewId(null);
+    setFilters((current) => {
+      const next = { ...current };
+      if (!filter) {
+        delete next[key];
+      } else {
+        next[key] = filter;
+      }
+      return next;
+    });
+  };
+
+  const handleClearFilters = () => {
+    setActiveViewId(null);
+    setFilters({});
   };
 
   const resetFilters = () => {
+    setActiveViewId(null);
     setFilters(DEFAULT_FILTERS);
   };
 
-  const activeFilterCount = Object.values(filters).filter(Boolean).length;
+  const handleSaveView = (view: SavedView) => {
+    const next = [...savedViews, view];
+    setSavedViews(next);
+    saveViews(next);
+    setActiveViewId(view.id);
+  };
+
+  const handleDeleteView = (id: string) => {
+    const next = savedViews.filter((v) => v.id !== id);
+    setSavedViews(next);
+    saveViews(next);
+    if (activeViewId === id) setActiveViewId(null);
+  };
+
+  const handleRenameView = (id: string, name: string) => {
+    const next = savedViews.map((v) => (v.id === id ? { ...v, name } : v));
+    setSavedViews(next);
+    saveViews(next);
+  };
+
+  const handleUpdateView = (id: string) => {
+    const next = savedViews.map((v) => (v.id === id ? { ...v, filters: { ...filters }, visibleFields: [...visibleFields] } : v));
+    setSavedViews(next);
+    saveViews(next);
+  };
+
+  const handleCreateView = () => {
+    const newView: SavedView = {
+      id: `view-${Date.now()}`,
+      name: `${activeTableLabel} view`,
+      databaseKey: activeDatabase,
+      tableName: activeTable,
+      filters: { ...filters },
+      visibleFields: [...visibleFields],
+      createdAt: new Date().toISOString(),
+    };
+    handleSaveView(newView);
+  };
+
+  const handleSetDefaultView = (id: string | null) => {
+    setDefaultViewId(id);
+    if (id) {
+      localStorage.setItem(`${DEFAULT_VIEW_STORAGE_KEY}-${activeDatabase}-${activeTable}`, id);
+    } else {
+      localStorage.removeItem(`${DEFAULT_VIEW_STORAGE_KEY}-${activeDatabase}-${activeTable}`);
+    }
+  };
+
+  const handleApplyView = (view: SavedView) => {
+    setActiveViewId(view.id);
+    setFilters(view.filters);
+    setVisibleFields(view.visibleFields);
+    if (view.databaseKey !== activeDatabase) setActiveDatabase(view.databaseKey);
+    if (view.tableName !== activeTable) setActiveTable(view.tableName);
+  };
+
+  const handleResetView = () => {
+    setActiveViewId(null);
+    setFilters(DEFAULT_FILTERS);
+    setVisibleFields(fieldData.fields.filter((field) => field.defaultVisible).map((field) => field.key));
+  };
+
+  const activeFilterCount = Object.keys(filters).length;
   const visibleFieldCount = visibleFields.length;
   const activeTableLabel = formatTableName(activeTable);
   const activeDatabaseSource = databaseSources.find((source) => source.key === activeDatabase);
   const selectedProfileIndex = selectedProfile ? profiles.findIndex((profile) => profile.id === selectedProfile.id) : -1;
   const activeTableCount = tables.find((table) => table.name === activeTable)?.rowCount ?? total;
+
+  const activeView = savedViews.find(v => v.id === activeViewId);
+  const isViewDirty = activeView 
+    ? JSON.stringify(activeView.filters) !== JSON.stringify(filters) || 
+      JSON.stringify(activeView.visibleFields) !== JSON.stringify(visibleFields)
+    : false;
 
   const stats = useMemo(
     () => [
@@ -320,6 +480,20 @@ function App() {
     );
   };
 
+  const handleCrossLinkNavigation = (targetTable: string, targetFilterKey: string, targetFilterValue: string) => {
+    setActiveTable(targetTable);
+    setFilters({ [targetFilterKey]: { operator: "eq", value: targetFilterValue } });
+    setQuery("");
+    setActiveViewId(null);
+  };
+
+  const handleTableSelect = (tableName: string) => {
+    setActiveTable(tableName);
+    setFilters(DEFAULT_FILTERS);
+    setQuery("");
+    setActiveViewId(null);
+  };
+
   const startSidebarResizing = (event: ReactPointerEvent<HTMLSpanElement>) => {
     event.preventDefault();
     sidebarResizeStateRef.current = {
@@ -342,16 +516,42 @@ function App() {
         >
           <TableSidebar
             activeDatabase={activeDatabase}
-            activeTable={activeTable}
             databases={databaseSources}
             facets={fieldData.facets}
             filters={filters}
             onDatabaseSelect={setActiveDatabase}
             onFilterChange={updateFilter}
             onResetFilters={resetFilters}
-            onTableSelect={setActiveTable}
-            tables={tables}
-          />
+          >
+            <div className="flex flex-col flex-1 min-h-0">
+              <div className="flex-1 overflow-y-auto">
+                <SavedViews
+                  activeViewId={activeViewId}
+                  onApplyView={handleApplyView}
+                  onDeleteView={handleDeleteView}
+                  onRenameView={handleRenameView}
+                  onResetView={handleResetView}
+                  isViewDirty={isViewDirty}
+                  onUpdateView={handleUpdateView}
+                  onCreateView={handleCreateView}
+                  defaultViewId={defaultViewId}
+                  onSetDefaultView={handleSetDefaultView}
+                  views={savedViews.filter(
+                    (v) => v.databaseKey === activeDatabase && v.tableName === activeTable
+                  )}
+                />
+              </div>
+              <div className="p-3 pt-0">
+                <SaveViewButton
+                  databaseKey={activeDatabase}
+                  filters={filters}
+                  onSave={handleSaveView}
+                  tableName={activeTable}
+                  visibleFields={visibleFields}
+                />
+              </div>
+            </div>
+          </TableSidebar>
           <span
             aria-hidden="true"
             className="absolute inset-y-6 right-0 z-30 w-4 translate-x-1/2 cursor-col-resize rounded-full sidebar-resize-handle"
@@ -363,128 +563,114 @@ function App() {
           className="relative z-10 flex h-full flex-col lg:pl-[calc(var(--sidebar-width)+12px)]"
           style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
         >
-          <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-visible p-3">
-            <header className="panel-surface relative z-40 overflow-visible rounded-[26px] px-5 py-4">
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
+          <main className="flex min-h-0 flex-1 flex-col overflow-visible px-2 pt-2 pb-3">
+            
+            {/* Top Level Table Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto px-2 pb-3 scrollbar-none">
+              {tables.map((table) => (
+                <button
+                  key={table.name}
+                  onClick={() => handleTableSelect(table.name)}
+                  className={cn(
+                    "flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-medium transition-all",
+                    activeTable === table.name
+                      ? "bg-primary/15 text-primary shadow-sm"
+                      : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                  )}
+                >
+                  {formatTableName(table.name)}
+                  <span className="ml-1 rounded-full bg-background/60 px-1.5 py-0.5 text-[9px] tabular-nums text-muted-foreground">
+                    {table.rowCount.toLocaleString()}
+                  </span>
+                </button>
+              ))}
+            </div>
 
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="min-w-0 space-y-2">
-                    <div className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-primary">
-                      <Sparkles className="h-3.5 w-3.5" />
-                      PulseOS Local Database Browser
-                    </div>
-                    <div className="space-y-1">
-                      <h1 className="font-identity text-2xl font-bold tracking-[-0.04em] md:text-4xl">
-                        Screen CRM and research-agent tables from persistent storage.
-                      </h1>
-                      <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-                        Switch between local SQLite sources, inspect every table, search across columns, filter small-cardinality fields, and edit cells with primary keys.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {stats.map((stat) => (
-                      <div className="panel-muted rounded-2xl px-3 py-2.5" key={stat.label}>
-                        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                          {stat.label}
-                        </div>
-                        <div className="mt-1 text-xl font-semibold tracking-tight text-foreground">{stat.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-                  <label className="input-shell flex flex-1 items-center gap-3 rounded-2xl px-4 py-3">
-                    <Search className="h-4.5 w-4.5 text-primary" />
+            <div className="flex flex-col min-h-0 flex-1 gap-2">
+              {/* Slim Toolbar */}
+              <div className="relative z-50 flex flex-wrap items-center justify-between gap-3 bg-background/50 backdrop-blur-sm rounded-xl px-3 py-2">
+                
+                {/* Left side: Search & Connection */}
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <label className="flex items-center gap-2 bg-background/80 rounded-lg px-3 py-1.5 shadow-sm focus-within:ring-1 focus-within:ring-primary/40 flex-1 max-w-sm transition-shadow">
+                    <Search className="h-3.5 w-3.5 text-primary/70" />
                     <input
-                      className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                      className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
                       onChange={(event) => setQuery(event.target.value)}
-                      placeholder={`Search across ${activeTableLabel}...`}
+                      placeholder={`Search ${activeTableLabel}...`}
                       value={query}
                     />
                   </label>
+                  
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium whitespace-nowrap",
+                      loading
+                        ? "bg-primary/10 text-primary"
+                        : error
+                          ? "bg-red-500/10 text-red-400"
+                          : "bg-emerald-500/10 text-emerald-400"
+                    )}
+                  >
+                    <RefreshCw className={cn("h-3 w-3", loading && "animate-spin")} />
+                    {loading ? "Refreshing" : error ? "Error" : "Live"}
+                  </span>
+                </div>
 
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="panel-muted flex items-center gap-2 rounded-2xl px-3 py-2 text-xs">
-                      <PanelLeftClose className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground">Sidebar</span>
-                      <span className="font-semibold text-foreground">{Math.round(sidebarWidth)}px</span>
-                    </div>
+                {/* Right side: Stats & Actions */}
+                <div className="flex items-center gap-3">
+                  <div className="hidden lg:flex items-center gap-4 text-[11px]">
+                    {stats.map((stat) => (
+                      <div className="flex items-center gap-1.5" key={stat.label}>
+                        <span className="text-muted-foreground">{stat.label}:</span>
+                        <span className="font-semibold text-foreground">{stat.value}</span>
+                      </div>
+                    ))}
+                  </div>
 
-                    <div className="panel-muted flex items-center gap-2 rounded-2xl px-3 py-2 text-xs">
-                      <LayoutPanelLeft className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground">Table</span>
-                      <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 font-semibold text-primary">
-                        {activeTableLabel}
-                      </span>
-                    </div>
+                  <div className="h-4 w-px bg-border/40 hidden lg:block"></div>
 
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-medium",
-                        loading
-                          ? "bg-primary/10 text-primary"
-                          : error
-                            ? "bg-red-500/10 text-red-400"
-                            : "bg-emerald-500/10 text-emerald-400"
-                      )}
-                    >
-                      <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
-                      {loading ? "Refreshing" : error ? "Connection error" : "Live browser"}
-                    </span>
-
+                  <div className="flex items-center gap-1.5">
                     <button
-                      className="icon-button focused-ring h-11 w-11 rounded-2xl"
+                      className="icon-button focused-ring h-7 w-7 rounded-md"
                       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
                       title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
                       type="button"
                     >
-                      {theme === "dark" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
+                      {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
                     </button>
 
                     <FieldPicker fields={fieldData.fields} onChange={setVisibleFields} visibleFields={visibleFields} />
                   </div>
                 </div>
               </div>
-            </header>
 
-            <section className="relative z-0 min-h-0 flex-1 overflow-hidden">
-              <div className="flex h-full flex-col gap-4">
-                <div className="panel-surface rounded-[24px] px-4 py-3">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                        <Database className="h-4.5 w-4.5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                          Current source
-                        </div>
-                        <div className="mt-1 text-base font-semibold tracking-tight">
-                          {total.toLocaleString()} records in {activeDatabaseSource?.label || activeDatabase} / {activeTableLabel}
-                        </div>
-                      </div>
-                    </div>
+              <section className="relative z-0 min-h-0 flex-1 overflow-hidden">
+                <div className="flex h-full flex-col gap-2">
 
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span className="rounded-full border border-border/70 bg-background/60 px-3 py-1.5">
-                        {activeDatabaseSource?.path || "Persistent SQLite"}
-                      </span>
-                      <span className="rounded-full border border-border/70 bg-background/60 px-3 py-1.5">Direct local DB view</span>
-                    </div>
-                  </div>
-                </div>
+
+
+                <FilterBar
+                  fields={fieldData.fields}
+                  filters={filters}
+                  onFilterChange={updateFilter}
+                  onClearAll={handleClearFilters}
+                />
 
                 <div className="min-h-0 flex-1 overflow-hidden">
                   <ProfileTable
                     activeTable={activeTable}
                     columnWidths={columnWidths}
+                    facets={fieldData.facets}
                     fields={fieldData.fields}
+                    filters={filters}
                     onColumnWidthsChange={setColumnWidths}
                     onCellUpdate={handleCellUpdate}
+                    onFilterChange={updateFilter}
+                    onHideColumn={handleHideColumn}
+                    onMoveColumn={handleMoveColumn}
+                    onReorderColumn={handleReorderColumn}
+                    onNavigateToTable={handleCrossLinkNavigation}
                     onProfileSelect={setSelectedProfile}
                     onRowHeightChange={setRowHeight}
                     onSort={handleSort}
@@ -497,8 +683,9 @@ function App() {
                 </div>
               </div>
             </section>
-          </main>
-        </div>
+          </div>
+        </main>
+      </div>
 
         <ProfileDrawer
           currentIndex={selectedProfileIndex >= 0 ? selectedProfileIndex : undefined}
